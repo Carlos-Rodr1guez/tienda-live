@@ -56,3 +56,4 @@ Cómo se juega y cómo se transmite: [games/asedio/README.md](games/asedio/READM
 ## Plan
 
 - [Plan de producto](docs/plan-producto.md)
+- [Decisiones de arquitectura (ADR)](docs/adr/README.md)
