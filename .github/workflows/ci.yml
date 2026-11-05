@@ -35,6 +35,11 @@ jobs:
       - run: npm run licenses
       - name: Vulnerabilidades altas en dependencias de producción
         run: npm audit --omit=dev --audit-level=high
+      # Las dos comprobaciones siguientes son locales: no suben nada ni necesitan credenciales de Cloudflare.
+      - name: El paquete del Worker solo tiene código propio
+        run: npm run check:bundle -w @tienda/api
+      - name: Humo de D1 - las migraciones corren en SQLite real (workerd)
+        run: npm run db:migrate -w @tienda/api
 
   pruebas:
     name: Pruebas (${{ matrix.os }})

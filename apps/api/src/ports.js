@@ -47,16 +47,15 @@
  */
 
 /**
- * Todo lo que recibe `createApp`. `turnstile` y `mailer` llegan con la lista de espera (lote 4):
- * hasta entonces son opcionales y las rutas de eventos no los usan. `mailer: null` significa "sin proveedor".
+ * Todo lo que recibe `createApp`. `mailer: null` significa "sin proveedor de correo": la inscripción responde 503.
  * @typedef {object} AppPorts
  * @property {Db} db
  * @property {Clock} clock
  * @property {Random} random
  * @property {Logger} logger
  * @property {AppConfig} config
- * @property {TurnstileVerifier} [turnstile]
- * @property {Mailer | null} [mailer]
+ * @property {TurnstileVerifier} turnstile
+ * @property {Mailer | null} mailer
  */
 
 /**

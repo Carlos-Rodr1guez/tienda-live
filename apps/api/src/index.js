@@ -1,13 +1,18 @@
 // @ts-check
 // Punto de entrada del Worker: conecta el núcleo (createApp) con el mundo real. Aquí no hay lógica.
-// Rutas por ahora: solo los eventos del embudo. La lista de espera se suma en el lote siguiente.
+// Rutas: eventos del embudo, inscripción y confirmación de la lista de espera. Tarea programada: la purga.
 
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
 import { createClock } from './adapters/clock.js';
 import { createRandom } from './adapters/random.js';
 import { createLogger } from './adapters/logger.js';
+import { selectMailer } from './adapters/mailer.js';
+import { createTurnstileVerifier } from './adapters/turnstile.js';
 import { eventsRoute } from './events/track.js';
+import { waitlistRoute } from './waitlist/signup.js';
+import { confirmRoute } from './waitlist/confirm.js';
+import { purgeStale } from './waitlist/purge.js';
 
 /**
  * Lo que Wrangler le entrega al Worker: el enlace D1 y las variables.
@@ -16,15 +21,18 @@ import { eventsRoute } from './events/track.js';
 
 /** @param {Env} env */
 function buildApp(env) {
+  const config = readConfig(env);
   return createApp(
     {
       db: env.DB,
       clock: createClock(),
       random: createRandom(),
       logger: createLogger(),
-      config: readConfig(env),
+      config,
+      turnstile: createTurnstileVerifier(config.turnstile),
+      mailer: selectMailer(config),
     },
-    { routes: [eventsRoute] },
+    { routes: [eventsRoute, waitlistRoute, confirmRoute], jobs: [purgeStale] },
   );
 }
 
