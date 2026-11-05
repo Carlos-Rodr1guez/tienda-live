@@ -94,6 +94,15 @@ test('respuestas: los mensajes que no estaban en la tabla de la especificación 
   assert.equal(respuestas.origen_no_permitido, respuestas.solicitud_invalida);
 });
 
+test('respuestas: demasiados_intentos (429 del límite de Cloudflare) pide esperar, de tú y sin voseo', () => {
+  assert.equal(
+    respuestas.demasiados_intentos,
+    'Hiciste muchos intentos seguidos. Espera un momento y vuelve a intentarlo.',
+  );
+  assert.deepEqual(checkCopy(respuestas.demasiados_intentos), []);
+  assert.doesNotMatch(respuestas.demasiados_intentos, /(esperá|intentá|volvé|probá)/i);
+});
+
 test('respuestas: sin llaves sueltas ni marcadores (son texto final)', () => {
   for (const [ruta, texto] of cadenas(respuestas)) assert.doesNotMatch(texto, /[{}]/, ruta);
 });
@@ -103,14 +112,18 @@ test('respuestas: sin llaves sueltas ni marcadores (son texto final)', () => {
 test('correo: el asunto y el cuerpo se arman con marca y enlace', () => {
   const enlace = 'https://ejemplo.test/confirmar#t=' + 'a'.repeat(43);
   const asunto = fmt(correo.asunto, { marca: BRAND.name });
-  const cuerpo = fmt(correo.texto, { marca: BRAND.name, enlace });
+  const cuerpo = fmt(correo.texto, { marca: BRAND.name, enlace, vigencia: '48 horas' });
   assert.ok(asunto.includes(BRAND.name));
   assert.ok(cuerpo.includes(BRAND.name));
   assert.equal(cuerpo.split(enlace).length - 1, 1, 'el enlace aparece una sola vez');
 });
 
 test('correo: dice por qué llegó y que ignorarlo borra la solicitud a los 7 días', () => {
-  const cuerpo = fmt(correo.texto, { marca: 'X', enlace: 'https://e.test/confirmar#t=' + 'a'.repeat(43) });
+  const cuerpo = fmt(correo.texto, {
+    marca: 'X',
+    enlace: 'https://e.test/confirmar#t=' + 'a'.repeat(43),
+    vigencia: '48 horas',
+  });
   assert.match(cuerpo, /Recibimos una solicitud para anotar este correo/);
   assert.match(cuerpo, /ignora este mensaje/i);
   assert.match(cuerpo, /7 días/);
@@ -119,15 +132,16 @@ test('correo: dice por qué llegó y que ignorarlo borra la solicitud a los 7 d�
 
 test('correo: el único enlace es el de confirmación; sin imágenes ni seguimiento', () => {
   const enlace = 'https://e.test/confirmar#t=' + 'b'.repeat(43);
-  const cuerpo = fmt(correo.texto, { marca: 'X', enlace });
+  const cuerpo = fmt(correo.texto, { marca: 'X', enlace, vigencia: '48 horas' });
   assert.deepEqual(cuerpo.match(/https?:\/\/\S+/g), [enlace]);
   assert.doesNotMatch(cuerpo, /<img|<a |pixel|utm_|track/i);
   assert.doesNotMatch(correo.texto, /https?:/, 'la plantilla no trae ninguna URL fija');
 });
 
-test('correo: solo usa los marcadores marca y enlace', () => {
+test('correo: solo usa los marcadores marca, enlace y vigencia (la vigencia la fija quien manda el correo)', () => {
   const marcadores = [...(correo.asunto + correo.texto).matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(marcadores)].sort(), ['enlace', 'marca']);
+  assert.deepEqual([...new Set(marcadores)].sort(), ['enlace', 'marca', 'vigencia']);
+  assert.ok(!/48/.test(correo.texto), 'la plantilla no promete un plazo fijo');
 });
 
 // ---- consentimiento (WL-11) ----

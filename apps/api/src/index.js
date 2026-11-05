@@ -22,14 +22,15 @@ import { purgeStale } from './waitlist/purge.js';
 /** @param {Env} env */
 function buildApp(env) {
   const config = readConfig(env);
+  const logger = createLogger();
   return createApp(
     {
       db: env.DB,
       clock: createClock(),
       random: createRandom(),
-      logger: createLogger(),
+      logger,
       config,
-      turnstile: createTurnstileVerifier(config.turnstile),
+      turnstile: createTurnstileVerifier(config.turnstile, { logger }),
       mailer: selectMailer(config),
     },
     { routes: [eventsRoute, waitlistRoute, confirmRoute], jobs: [purgeStale] },

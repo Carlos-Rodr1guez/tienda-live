@@ -182,10 +182,17 @@ test('API: las cabeceras de toda respuesta de /v1 son las de la tabla y no hay S
       'Referrer-Policy': 'no-referrer',
       'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
       'Cross-Origin-Resource-Policy': 'same-origin',
+      'Strict-Transport-Security': 'max-age=31536000',
     },
   );
   assert.ok(Object.isFrozen(API_RESPONSE_HEADERS));
   const nombres = Object.keys(API_RESPONSE_HEADERS).map((n) => n.toLowerCase());
   assert.ok(!nombres.includes('set-cookie'));
   assert.ok(!nombres.some((n) => n.startsWith('access-control-')));
+});
+
+test('API: /v1 lleva el mismo HSTS que las páginas (las respuestas del Worker no pasan por _headers)', () => {
+  const paginas = cabecera(regla(buildHeaderRules(), '/*'), 'Strict-Transport-Security');
+  assert.equal(API_RESPONSE_HEADERS['Strict-Transport-Security'], paginas);
+  assert.match(paginas, /^max-age=\d{8,}$/);
 });

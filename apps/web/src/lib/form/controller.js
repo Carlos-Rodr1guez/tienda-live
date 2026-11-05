@@ -2,8 +2,10 @@
 // Controlador del formulario de la lista de espera. La lógica vive en model.js (pura y probada); acá se decide CUÁNDO:
 //  - al abrir el formulario: cuenta "form_open" (una vez por vista de página) y pinta Turnstile una sola vez;
 //  - al enviar: valida con el mismo validador de la API, exige el token de Turnstile, bloquea el botón mientras envía,
-//    pinta los errores junto a cada campo y mueve el foco al primer error o al título de éxito;
-//  - tras cada envío el token se gastó: se reinicia el widget para poder reintentar.
+//    pinta los errores junto a cada campo y mueve el foco al primer error, al resumen (si el fallo no es de un campo) o
+//    al título de éxito; el envío tiene un tiempo máximo y, vencido, se trata como "sin conexión";
+//  - tras cada envío el token se gastó: se reinicia el widget para poder reintentar;
+//  - "Intentar de nuevo" repite la carga de la verificación o, si el widget ya estaba pintado, lo reinicia.
 // Las funciones de DOM (`initFormPage`) son un pegamento mínimo; todo lo demás se prueba con una vista de mentira.
 
 import {
@@ -38,9 +40,10 @@ import { createTurnstile } from '../turnstile.js';
  *   analytics: { track: (nombre: string) => unknown },
  *   turnstile: { render: (slot: unknown, m: import('../turnstile.js').ManejadoresWidget) => Promise<string>, reset: (id: string | null | undefined) => void },
  *   fetchFn: (url: string, init: RequestInit) => Promise<{ status: number, json: () => Promise<unknown> }>,
- * }} entrada
+ *   timeoutMs?: number,
+ * }} entrada  `timeoutMs`: tiempo máximo del envío (por defecto 15 s); pasado, sigue el camino de "sin conexión"
  */
-export function createFormController({ ui, analytics, turnstile, fetchFn }) {
+export function createFormController({ ui, analytics, turnstile, fetchFn, timeoutMs }) {
   let estado = initialState();
   /** @type {string | null} */
   let token = null;
@@ -48,6 +51,9 @@ export function createFormController({ ui, analytics, turnstile, fetchFn }) {
   let widgetId = null;
   /** @type {Promise<void> | null} */
   let verificacion = null;
+  // El widget avisó un error (error-callback) y todavía no entregó un token nuevo. Evita que el final de render() esconda
+  // un error que Turnstile avisó antes de que render() devolviera el id.
+  let errorDelWidget = false;
 
   /** @param {import('./model.js').EstadoFormulario} nuevo */
   function pintar(nuevo) {
@@ -57,22 +63,28 @@ export function createFormController({ ui, analytics, turnstile, fetchFn }) {
 
   function pintarVerificacion() {
     // Una sola vez: abrir y cerrar el formulario no apila widgets
-    verificacion ??= turnstile
+    if (verificacion) return verificacion;
+    errorDelWidget = false;
+    verificacion = turnstile
       .render(ui.slot, {
         onToken: (valor) => {
           token = valor;
+          // Un token nuevo es la prueba de que la verificación volvió a funcionar
+          errorDelWidget = false;
+          ui.showVerificationError(false);
         },
         onExpire: () => {
           token = null;
         },
         onError: () => {
           token = null;
+          errorDelWidget = true;
           ui.showVerificationError(true);
         },
       })
       .then((id) => {
         widgetId = id;
-        ui.showVerificationError(false);
+        if (!errorDelWidget) ui.showVerificationError(false);
       })
       .catch(() => {
         // Se olvida el intento fallido para que "Intentar de nuevo" lo repita
@@ -80,6 +92,20 @@ export function createFormController({ ui, analytics, turnstile, fetchFn }) {
         ui.showVerificationError(true);
       });
     return verificacion;
+  }
+
+  /**
+   * "Intentar de nuevo": si el widget no llegó a pintarse, se vuelve a pedir; si ya está pintado (se pintó y después dio
+   * error), se reinicia el mismo widget. Pintarlo otra vez no serviría: la promesa de la primera vez ya está resuelta.
+   */
+  async function reintentarVerificacion() {
+    if (!verificacion) return pintarVerificacion();
+    await verificacion; // si todavía se está pintando, se espera a que termine
+    if (!widgetId) return pintarVerificacion();
+    errorDelWidget = false;
+    token = null;
+    ui.showVerificationError(false);
+    turnstile.reset(widgetId);
   }
 
   async function enviar() {
@@ -98,7 +124,7 @@ export function createFormController({ ui, analytics, turnstile, fetchFn }) {
     }
 
     pintar(reduce(estado, { type: 'enviar' }));
-    const { url, init } = buildRequest(validacion.body);
+    const { url, init } = buildRequest(validacion.body, { timeoutMs });
     try {
       const respuesta = await fetchFn(url, init);
       /** @type {unknown} */
@@ -134,23 +160,21 @@ export function createFormController({ ui, analytics, turnstile, fetchFn }) {
 
     onSubmit: enviar,
 
-    /** "Intentar de nuevo" tras un fallo al cargar la verificación. */
-    retryVerification: () => pintarVerificacion(),
+    /** "Intentar de nuevo" tras un fallo de la verificación: al cargarla o, ya pintada, un error del widget. */
+    retryVerification: reintentarVerificacion,
 
     getState: () => estado,
   };
 }
 
 /**
- * Pegamento con el DOM real de la portada. Devuelve null si la página no trae el formulario.
- * @param {Document} [doc]
- * @param {Window} [win]
+ * La vista del formulario sobre el DOM de la portada: lee los campos, pinta cada estado y mueve el foco. Es la única
+ * parte del controlador que toca elementos; las pruebas la corren con un DOM de mentira.
+ * @param {Document} doc
+ * @param {HTMLFormElement} form
+ * @returns {VistaFormulario}
  */
-export function initFormPage(doc = document, win = window) {
-  const detalles = /** @type {HTMLDetailsElement | null} */ (doc.getElementById('anotarme'));
-  const form = /** @type {HTMLFormElement | null} */ (doc.getElementById('anotarme-form'));
-  if (!detalles || !form) return null;
-
+export function createFormView(doc, form) {
   /** @param {string} id */
   const porId = (id) => {
     const el = doc.getElementById(id);
@@ -163,7 +187,6 @@ export function initFormPage(doc = document, win = window) {
   const mensajeExito = porId('anotarme-exito-mensaje');
   const slot = porId('anotarme-turnstile');
   const errorVerificacion = porId('anotarme-verificacion-error');
-  const reintentar = porId('anotarme-reintentar');
   const listaErrores = porId('anotarme-lista-errores');
 
   /** @param {string} nombre */
@@ -197,16 +220,23 @@ export function initFormPage(doc = document, win = window) {
     renderState(estado) {
       boton.disabled = isSubmitDisabled(estado);
       boton.textContent = submitLabel(estado);
-      form.toggleAttribute('aria-busy', estado.fase === 'enviando');
+      // toggleAttribute escribiría aria-busy="" (valor inválido, se lee como false): tiene que ser "true" o no estar.
+      if (estado.fase === 'enviando') form.setAttribute('aria-busy', 'true');
+      else form.removeAttribute('aria-busy');
 
-      // Errores junto a cada campo: aria-invalid en el control y aria-describedby hacia su texto
+      // Errores junto a cada campo: aria-invalid en el control y aria-describedby hacia su texto. Un grupo (radios o
+      // casillas dentro de un <fieldset>) lleva aria-describedby en el fieldset, pero aria-invalid en CADA control de
+      // adentro: el rol del grupo no admite ese atributo.
       for (const campo of camposConError) {
         const control = doc.getElementById(fieldId(campo));
         const texto = doc.getElementById(errorId(campo));
         const error = estado.errores.find((e) => e.campo === campo);
         if (control) {
-          if (error) control.setAttribute('aria-invalid', 'true');
-          else control.removeAttribute('aria-invalid');
+          const invalidables = control.localName === 'fieldset' ? [...control.querySelectorAll('input')] : [control];
+          for (const invalidable of invalidables) {
+            if (error) invalidable.setAttribute('aria-invalid', 'true');
+            else invalidable.removeAttribute('aria-invalid');
+          }
           const ref = describedBy(estado, campo);
           if (ref) control.setAttribute('aria-describedby', ref);
           else control.removeAttribute('aria-describedby');
@@ -227,6 +257,12 @@ export function initFormPage(doc = document, win = window) {
           const enlace = doc.createElement('a');
           enlace.href = `#${e.idCampo}`;
           enlace.textContent = `${fieldLabel(e.campo)}: ${e.mensaje}`;
+          // Un <fieldset> no recibe foco: el salto de ancla desplazaría la página y dejaría el foco donde estaba
+          // (WCAG 2.4.3). Se evita y el foco va al primer control del campo, con la misma lógica que tras enviar.
+          enlace.addEventListener('click', (evento) => {
+            evento.preventDefault();
+            ui.focusId(e.idCampo);
+          });
           li.append(enlace);
           return li;
         }),
@@ -250,6 +286,22 @@ export function initFormPage(doc = document, win = window) {
       errorVerificacion.hidden = !hay;
     },
   };
+  return ui;
+}
+
+/**
+ * Pegamento con el DOM real de la portada. Devuelve null si la página no trae el formulario.
+ * @param {Document} [doc]
+ * @param {Window} [win]
+ */
+export function initFormPage(doc = document, win = window) {
+  const detalles = /** @type {HTMLDetailsElement | null} */ (doc.getElementById('anotarme'));
+  const form = /** @type {HTMLFormElement | null} */ (doc.getElementById('anotarme-form'));
+  if (!detalles || !form) return null;
+
+  const ui = createFormView(doc, form);
+  const reintentar = doc.getElementById('anotarme-reintentar');
+  if (!reintentar) throw new Error('falta el elemento #anotarme-reintentar en el formulario');
 
   const analytics = createAnalytics({
     enabled: doc.documentElement.dataset.analytics === 'on' && isTrackedPath(win.location.pathname),

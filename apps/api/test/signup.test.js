@@ -10,6 +10,7 @@ import {
 } from './support/waitlist-harness.js';
 import { AHORA } from './support/harness.js';
 import { hashToken } from '../src/waitlist/tokens.js';
+import { confirmationMessage } from '../src/waitlist/mail.js';
 import { confirmByTokenHash } from '../src/waitlist/repository.js';
 import { respuestas } from '@tienda/contracts/i18n';
 import { API_RESPONSE_HEADERS } from '@tienda/contracts/security-headers';
@@ -236,19 +237,249 @@ test('signup: tope de 5 envíos en 24 horas -> deja de enviar; pasadas las 24 ho
   assert.equal(h.mailer.enviados.length, 6);
 });
 
-test('signup: volver a anotarse siendo pendiente reemplaza el perfil y el consentimiento y reinicia los 7 días', async () => {
+const DIA = 24 * 60 * MIN;
+const OTRO_PERFIL = {
+  stream_type: 'musica',
+  interests: ['relax', 'publico'],
+  country: 'AR',
+  tiktok_user: 'otra.cuenta',
+};
+
+test('signup (WL-11 enmendado): volver a anotarse siendo pendiente NO cambia perfil, consentimiento ni created_at; solo rota el token', async () => {
   const h = await armarLista();
   await firmar(h, { stream_type: 'gaming', interests: ['accion'] });
-  h.clock.advance(5 * MIN); // frenado: sin token nuevo, pero el perfil se actualiza igual
-  await firmar(h, { stream_type: 'musica', interests: ['relax', 'publico'], country: 'AR' });
+  const antes = filasDeLista(h)[0];
+  const tokenViejo = tokenDelUltimoCorreo(h);
+
+  h.clock.advance(11 * MIN); // el envío se permite
+  assert.equal((await firmar(h, OTRO_PERFIL)).status, 202);
+  await h.ctx.settle();
+
+  const [f] = filasDeLista(h);
+  assert.equal(filasDeLista(h).length, 1);
+  for (const columna of [
+    'email',
+    'stream_type',
+    'interests',
+    'country',
+    'tiktok_user',
+    'live_frequency',
+    'followers_range',
+    'consent_version',
+    'consent_at',
+    'created_at',
+  ]) {
+    assert.equal(f[columna], antes[columna], columna);
+  }
+  assert.equal(f.stream_type, 'gaming');
+  assert.equal(f.created_at, iso(AHORA), 'la ventana de 7 días no se reinicia');
+  assert.equal(f.consent_at, iso(AHORA));
+  // Lo que sí cambia: token nuevo, su vencimiento, los envíos y updated_at.
+  assert.notEqual(f.token_hash, antes.token_hash);
+  assert.equal(f.token_expires_at, iso(AHORA + 11 * MIN + 48 * 60 * MIN));
+  assert.deepEqual(JSON.parse(f.recent_sends), [iso(AHORA), iso(AHORA + 11 * MIN)]);
+  assert.equal(f.updated_at, iso(AHORA + 11 * MIN));
+  // El correo nuevo lleva el enlace nuevo; el viejo ya no sirve.
+  assert.equal(h.mailer.enviados.length, 2);
+  assert.equal((await h.post('/v1/waitlist/confirm', { token: tokenViejo })).status, 400);
+  assert.equal((await h.post('/v1/waitlist/confirm', { token: tokenDelUltimoCorreo(h) })).status, 200);
+});
+
+test('signup (WL-11 enmendado): un reenvío frenado por el enfriamiento o por el tope no escribe NADA (ni updated_at)', async () => {
+  const h = await armarLista();
+  await firmar(h);
+  const antes = filasDeLista(h)[0];
+  h.clock.advance(5 * MIN); // enfriamiento
+  assert.equal((await firmar(h, OTRO_PERFIL)).status, 202);
+  await h.ctx.settle();
+  assert.deepEqual(filasDeLista(h)[0], antes, 'enfriamiento: la fila quedó idéntica, columna por columna');
+  assert.equal(h.mailer.enviados.length, 1);
+
+  // Tope de 5 envíos en 24 horas.
+  const g = await armarLista();
+  for (let i = 0; i < 5; i += 1) {
+    await firmar(g);
+    g.clock.advance(11 * MIN);
+  }
+  const lleno = filasDeLista(g)[0];
+  assert.equal((await firmar(g, OTRO_PERFIL)).status, 202);
+  await g.ctx.settle();
+  assert.deepEqual(filasDeLista(g)[0], lleno, 'tope: la fila quedó idéntica, columna por columna');
+  assert.equal(g.mailer.enviados.length, 5);
+});
+
+test('signup (WL-11 enmendado): el vencimiento del enlace nunca pasa de created_at + 7 días', async () => {
+  const h = await armarLista();
+  await firmar(h);
+  const limite = iso(AHORA + 7 * DIA);
+  h.clock.set(AHORA + 6 * DIA); // 6 días después: ahora + 48 h se pasaría de los 7 días
+  assert.equal((await firmar(h, OTRO_PERFIL)).status, 202);
+  await h.ctx.settle();
+  const [f] = filasDeLista(h);
+  assert.equal(f.token_expires_at, limite, 'recortado a created_at + 7 días');
+  assert.equal(f.created_at, iso(AHORA));
+  assert.equal(h.mailer.enviados.length, 2);
+  // El enlace sirve hasta el límite y ni un instante más.
+  const token = tokenDelUltimoCorreo(h);
+  const hash = await hashToken(token);
+  assert.equal(await confirmByTokenHash(h.db, hash, iso(AHORA + 7 * DIA)), false);
+  assert.equal(await confirmByTokenHash(h.db, hash, iso(AHORA + 7 * DIA - 1)), true);
+});
+
+test('signup (F1): el correo dice la vigencia REAL del enlace: 48 horas en un alta; 2 horas, 1 hora o menos de una hora cerca de los 7 días', async () => {
+  const frase = (h) => {
+    const m = h.mailer.enviados.at(-1);
+    return confirmationMessage(m.link, m.validezMs).texto.match(/vence en (.+)\./)?.[1];
+  };
+  const HORA = 60 * MIN;
+  const h = await armarLista();
+  await firmar(h);
+  await h.ctx.settle();
+  assert.equal(h.mailer.enviados[0].validezMs, 48 * HORA);
+  assert.equal(frase(h), '48 horas', 'un alta nueva promete exactamente lo que dura');
+
+  // Quedan 2,5 h de la ventana de 7 días: el enlace nuevo dura eso, no 48 h.
+  h.clock.set(AHORA + 7 * DIA - 2.5 * HORA);
+  await firmar(h);
+  await h.ctx.settle();
+  assert.equal(frase(h), '2 horas');
+  assert.equal(h.mailer.enviados.at(-1).validezMs, 2.5 * HORA);
+
+  h.clock.set(AHORA + 7 * DIA - 1.5 * HORA);
+  await firmar(h);
+  await h.ctx.settle();
+  assert.equal(frase(h), '1 hora');
+
+  h.clock.set(AHORA + 7 * DIA - 30 * MIN);
+  await firmar(h);
+  await h.ctx.settle();
+  assert.equal(frase(h), 'menos de una hora');
+  // Y coincide con lo que quedó guardado: el vencimiento sale de la misma lectura del reloj.
+  const [f] = filasDeLista(h);
+  assert.equal(Date.parse(f.token_expires_at) - h.clock.now(), h.mailer.enviados.at(-1).validezMs);
+});
+
+test('signup (WL-11 enmendado): un pendiente pasado su ventana de 7 días y aún sin purgar se trata como inscripción nueva', async () => {
+  const h = await armarLista();
+  await firmar(h, { stream_type: 'gaming', interests: ['accion'] });
+  const viejo = tokenDelUltimoCorreo(h);
+  h.clock.set(AHORA + 7 * DIA); // created_at + 7 días <= ahora
+  assert.equal((await firmar(h, OTRO_PERFIL)).status, 202);
+  await h.ctx.settle();
+
   const [f] = filasDeLista(h);
   assert.equal(filasDeLista(h).length, 1);
   assert.equal(f.stream_type, 'musica');
   assert.equal(f.interests, '["publico","relax"]');
   assert.equal(f.country, 'AR');
-  assert.equal(f.created_at, iso(AHORA + 5 * MIN));
-  assert.equal(f.consent_at, iso(AHORA + 5 * MIN));
-  assert.equal(f.updated_at, iso(AHORA + 5 * MIN));
+  assert.equal(f.tiktok_user, 'otra.cuenta');
+  assert.equal(f.consent_at, iso(AHORA + 7 * DIA));
+  assert.equal(f.created_at, iso(AHORA + 7 * DIA), 'la ventana empieza de nuevo');
+  assert.equal(f.token_expires_at, iso(AHORA + 7 * DIA + 48 * 60 * MIN));
+  assert.equal(f.recent_sends, JSON.stringify([iso(AHORA + 7 * DIA)]), 'historial de envíos como el de un alta nueva');
+  assert.equal(h.mailer.enviados.length, 2);
+  assert.equal((await h.post('/v1/waitlist/confirm', { token: viejo })).status, 400);
+  assert.equal((await h.post('/v1/waitlist/confirm', { token: tokenDelUltimoCorreo(h) })).status, 200);
+});
+
+test('signup (WL-11 enmendado): un milisegundo antes de cumplirse los 7 días todavía es el mismo pendiente (no se reemplaza nada)', async () => {
+  const h = await armarLista();
+  await firmar(h, { stream_type: 'gaming' });
+  h.clock.set(AHORA + 7 * DIA - 1);
+  await firmar(h, OTRO_PERFIL);
+  await h.ctx.settle();
+  const [f] = filasDeLista(h);
+  assert.equal(f.stream_type, 'gaming');
+  assert.equal(f.created_at, iso(AHORA));
+  assert.equal(f.consent_at, iso(AHORA));
+  assert.equal(f.token_expires_at, iso(AHORA + 7 * DIA), 'y el enlace nuevo vence al cumplirse la ventana');
+});
+
+/**
+ * Hace que las búsquedas por correo de los pedidos esperen en una barrera hasta que `n` pedidos hayan leído la fila:
+ * así todos deciden con la misma lectura antes de que cualquiera escriba. Usa la base real (node:sqlite).
+ */
+function intercalarLecturas(h, n) {
+  const real = h.ports.db;
+  let llegaron = 0;
+  let abrir;
+  const barrera = new Promise((resolve) => {
+    abrir = resolve;
+  });
+  h.ports.db = {
+    sqlite: real.sqlite,
+    batch: real.batch,
+    prepare(sql) {
+      const sentencia = real.prepare(sql);
+      if (!sql.startsWith('SELECT id, confirmed_at')) return sentencia;
+      return {
+        bind: (...valores) => ({
+          first: async () => {
+            const fila = await sentencia.bind(...valores).first();
+            llegaron += 1;
+            if (llegaron >= n) abrir();
+            await barrera;
+            return fila;
+          },
+        }),
+      };
+    },
+  };
+  return () => llegaron;
+}
+
+test('signup (A2): dos pedidos del MISMO pendiente que leen antes de que alguno escriba -> UN solo correo y un solo token válido', async () => {
+  const h = await armarLista();
+  await firmar(h);
+  h.clock.advance(11 * MIN); // el envío está permitido para quien lea ahora
+  const tokenInicial = tokenDelUltimoCorreo(h);
+  assert.equal(h.mailer.enviados.length, 1);
+
+  const lecturas = intercalarLecturas(h, 2);
+  const [a, b] = await Promise.all([firmar(h, { stream_type: 'gaming' }), firmar(h, { stream_type: 'gaming' })]);
+  await h.ctx.settle();
+
+  assert.equal(lecturas(), 2, 'los dos pedidos leyeron antes de escribir');
+  assert.equal(a.status, 202);
+  assert.equal(b.status, 202);
+  assert.equal(await huella(a), await huella(b), 'misma respuesta byte a byte (WL-4)');
+  assert.equal(h.mailer.enviados.length, 2, 'el inicial y exactamente UNO más');
+  const [f] = filasDeLista(h);
+  assert.deepEqual(JSON.parse(f.recent_sends), [iso(AHORA), iso(AHORA + 11 * MIN)], 'un solo envío anotado');
+  // El único enlace enviado ahora es el que la base reconoce; el del alta ya murió.
+  const tokenNuevo = tokenDelUltimoCorreo(h);
+  assert.notEqual(tokenNuevo, tokenInicial);
+  assert.equal(f.token_hash, await hashToken(tokenNuevo));
+  assert.equal((await h.post('/v1/waitlist/confirm', { token: tokenInicial })).status, 400);
+  assert.equal((await h.post('/v1/waitlist/confirm', { token: tokenNuevo })).status, 200);
+});
+
+test('signup (A2): tres pedidos simultáneos del mismo pendiente -> sigue siendo un solo correo', async () => {
+  const h = await armarLista();
+  await firmar(h);
+  h.clock.advance(11 * MIN);
+  const lecturas = intercalarLecturas(h, 3);
+  const respuestas3 = await Promise.all([firmar(h), firmar(h), firmar(h)]);
+  await h.ctx.settle();
+  assert.equal(lecturas(), 3, 'los tres pedidos leyeron antes de escribir');
+  assert.deepEqual(
+    respuestas3.map((r) => r.status),
+    [202, 202, 202],
+  );
+  assert.equal(h.mailer.enviados.length, 2);
+});
+
+test('signup (A2): dos pedidos simultáneos de un pendiente VENCIDO (se trata como alta nueva) -> un solo correo', async () => {
+  const h = await armarLista();
+  await firmar(h);
+  h.clock.set(AHORA + 7 * DIA);
+  const lecturas = intercalarLecturas(h, 2);
+  await Promise.all([firmar(h, OTRO_PERFIL), firmar(h, OTRO_PERFIL)]);
+  await h.ctx.settle();
+  assert.equal(lecturas(), 2, 'los dos pedidos leyeron antes de escribir');
+  assert.equal(h.mailer.enviados.length, 2, 'el inicial y exactamente uno más');
+  const [f] = filasDeLista(h);
+  assert.equal(f.token_hash, await hashToken(tokenDelUltimoCorreo(h)));
 });
 
 test('signup: el mismo correo en otra escritura (mayúsculas, espacios) es la misma persona', async () => {
@@ -304,7 +535,7 @@ test('signup: carrera UNIQUE -> si otro pedido inserta el mismo correo en medio,
   await h.ctx.settle();
   const filas = filasDeLista(h);
   assert.equal(filas.length, 1);
-  assert.equal(filas[0].stream_type, 'gaming', 'el segundo pedido gana el perfil');
+  assert.equal(filas[0].stream_type, 'charla', 'gana el perfil de quien llegó primero: el segundo no lo cambia');
   assert.equal(h.mailer.enviados.length, 0, 'el otro pedido ya envió: el enfriamiento frena un segundo correo');
 });
 

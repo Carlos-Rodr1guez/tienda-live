@@ -10,8 +10,8 @@ import { confirmationMessage } from '../waitlist/mail.js';
  */
 export function createConsoleMailer(sink = console) {
   return {
-    async sendConfirmation({ link }) {
-      const { asunto } = confirmationMessage(link);
+    async sendConfirmation({ link, validezMs }) {
+      const { asunto } = confirmationMessage(link, validezMs); // la consola solo imprime el asunto: ignora la vigencia
       sink.log(`[correo de desarrollo] ${asunto}\n[correo de desarrollo] Enlace de confirmación: ${link}`);
     },
   };

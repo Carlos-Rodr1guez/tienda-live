@@ -91,6 +91,22 @@ La política (`packages/contracts/src/security-headers.js`) no tiene `unsafe-inl
 
 El archivo `dist/_headers` lo escribe la integración `integrations/security-headers.js` al terminar la construcción.
 
+## Variables de la construcción
+
+`astro build` **exige** dos variables y se detiene, con un error en español que nombra la que falta, si alguna no está puesta de forma explícita:
+
+| Variable                    | Qué es                                                                                                                                                                                                                                                                             |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SITE_URL`                  | Origen público del sitio (`https://ejemplo.com`): un origen `http` o `https` absoluto, sin ruta ni parámetros. Sale en las URL canónicas, Open Graph, sitemap y `robots.txt`. `http://localhost:8790` es válido si se escribe a propósito (lo usan la CI y la vista previa local). |
+| `PUBLIC_TURNSTILE_SITE_KEY` | Clave pública de Turnstile. Sin ella el formulario llevaría la clave de **prueba** a producción y ningún alta real se podría verificar.                                                                                                                                            |
+
+Antes, si faltaban, la construcción seguía sin avisar: dejaba `localhost:8790` en las URL públicas y la clave de prueba en el formulario. `astro dev` conserva sus valores locales por defecto (`localhost` y la clave de prueba).
+
+- **De dónde se leen.** Del entorno del proceso o de un archivo `apps/web/.env` (git lo ignora). Si una variable está en los dos, gana el entorno. Las tres piezas que las leen (la configuración de Astro, la integración que escribe `_headers` y el código del navegador por `import.meta.env`) usan la misma fuente: `integrations/env.js`, con `loadEnv` de Vite (la dependencia de Astro; no se agrega al `package.json`). Antes, un `PUBLIC_CF_BEACON_TOKEN` que solo estaba en `.env` encendía el beacon en la página pero quedaba fuera de la política CSP, y el navegador lo bloqueaba sin avisar.
+- **`PUBLIC_CF_BEACON_TOKEN`** es opcional. Sin él, la construcción no lleva analítica.
+- **Vista previa local.** `npm run preview` pasa por `scripts/preview.mjs`, que pone `SITE_URL=http://localhost:8790` y la clave pública de prueba `1x00000000000000000000AA` y después construye la web y la sirve con el Worker. Sirve igual en cmd, PowerShell y bash, y no hace falta escribir nada. Esos valores locales ganan sobre los que haya en tu entorno: es una vista previa local.
+- **Despliegue.** Pon las dos variables con los valores reales en el entorno de la construcción (o en `.env`) antes de `npm run build:web`.
+
 ## Cómo funcionan las pruebas de dist en la CI
 
 Hay dos familias de pruebas, y no se mezclan:
@@ -117,7 +133,7 @@ Los agentes no construyen ni levantan la vista previa. Estas comprobaciones las 
 npm run preview
 ```
 
-Eso construye la web y abre todo en `http://localhost:8790` (con la base local y la clave de prueba de Turnstile). La consola del servidor imprime los enlaces de confirmación.
+Eso construye la web y abre todo en `http://localhost:8790` (con la base local y la clave de prueba de Turnstile, que el comando pone solo; ver [Variables de la construcción](#variables-de-la-construcción)). La consola del servidor imprime los enlaces de confirmación.
 
 | N.º | Qué comprobar                | Cómo                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | --- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

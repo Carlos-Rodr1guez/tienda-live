@@ -16,9 +16,31 @@ test('mail: el enlace es siteUrl + /confirmar#t=<token>, sin token en la consult
   assert.equal(url.hash, `#t=${TOKEN}`);
 });
 
+const HORA = 60 * 60 * 1000;
+
+test('mail: la vigencia del enlace dice lo que queda de verdad (2 h o más: horas; de 1 a 2 h: "1 hora"; menos: "menos de una hora")', () => {
+  const enlace = confirmationLink('https://tienda.example', TOKEN);
+  const frase = (ms) => confirmationMessage(enlace, ms).texto.match(/vence en (.+)\./)?.[1];
+  assert.equal(frase(48 * HORA), '48 horas');
+  assert.equal(frase(2.5 * HORA), '2 horas');
+  assert.equal(frase(2 * HORA), '2 horas');
+  assert.equal(frase(1.5 * HORA), '1 hora');
+  assert.equal(frase(1 * HORA), '1 hora');
+  assert.equal(frase(0.5 * HORA), 'menos de una hora');
+  assert.equal(frase(1), 'menos de una hora');
+});
+
+test('mail: solo cambia la vigencia; el resto del texto es idéntico', () => {
+  const enlace = confirmationLink('https://tienda.example', TOKEN);
+  const a = confirmationMessage(enlace, 48 * HORA).texto;
+  const b = confirmationMessage(enlace, 0.5 * HORA).texto;
+  assert.equal(a.replace('48 horas', 'menos de una hora'), b);
+  assert.ok(a.includes('El enlace sirve una sola vez y vence en 48 horas.'));
+});
+
 test('mail: el mensaje tiene asunto con la marca y un texto en español neutro con el enlace', () => {
   const enlace = confirmationLink('https://tienda.example', TOKEN);
-  const { asunto, texto } = confirmationMessage(enlace);
+  const { asunto, texto } = confirmationMessage(enlace, 48 * HORA);
   assert.equal(asunto, `Confirma tu lugar en ${BRAND.name}`);
   assert.ok(texto.includes(enlace));
   assert.match(texto, /7 días/);
@@ -30,7 +52,7 @@ test('mail: el mensaje tiene asunto con la marca y un texto en español neutro c
 
 test('mail: el único enlace del texto es el de confirmación; nada de píxeles ni seguimiento (WL-15)', () => {
   const enlace = confirmationLink('https://tienda.example', TOKEN);
-  const { texto } = confirmationMessage(enlace);
+  const { texto } = confirmationMessage(enlace, 48 * HORA);
   const urls = texto.match(/https?:\/\/\S+/g);
   assert.deepEqual(urls, [enlace]);
   assert.doesNotMatch(texto, /<img|<a\s|utm_|track|pixel/i);
@@ -48,7 +70,7 @@ test('mailer-console: imprime el asunto y el enlace y nada más del pedido', asy
   const lineas = [];
   const mailer = createConsoleMailer({ log: (linea) => lineas.push(linea) });
   const enlace = confirmationLink('http://localhost:8790', TOKEN);
-  await mailer.sendConfirmation({ to: 'ana@example.com', link: enlace });
+  await mailer.sendConfirmation({ to: 'ana@example.com', link: enlace, validezMs: 48 * HORA });
   const salida = lineas.join('\n');
   assert.ok(salida.includes(`Confirma tu lugar en ${BRAND.name}`));
   assert.ok(salida.includes(enlace));

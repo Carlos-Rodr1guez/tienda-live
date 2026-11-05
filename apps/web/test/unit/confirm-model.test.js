@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { confirmar, respuestas } from '@tienda/contracts/i18n';
 import {
   CLEAN_PATH,
+  CONFIRM_TIMEOUT_MS,
   buildConfirmRequest,
   initialConfirmState,
   messageFor,
@@ -78,6 +79,33 @@ test('confirmar: red caída o error del servidor dejan reintentar con el mismo t
   }
 });
 
+test('confirmar: un 429 del límite de Cloudflare pide esperar, conserva el token y deja reintentar', () => {
+  let s = reduceConfirm(initialConfirmState(`#t=${TOKEN}`), { type: 'confirmar' });
+  s = reduceConfirm(s, { type: 'respuesta', status: 429, body: null });
+  assert.deepEqual(s, { fase: 'demasiados-intentos', token: TOKEN });
+  assert.equal(messageFor(s), respuestas.demasiados_intentos);
+  assert.notEqual(messageFor(s), confirmar.errorRed, 'no se hace pasar por un problema de conexión');
+  assert.deepEqual(viewFor(s), {
+    mensaje: respuestas.demasiados_intentos,
+    tono: 'error',
+    boton: { visible: true, deshabilitado: false, texto: confirmar.reintentar },
+    volver: false,
+  });
+  s = reduceConfirm(s, { type: 'confirmar' });
+  assert.deepEqual(s, { fase: 'enviando', token: TOKEN }, 'reintento con el mismo token');
+});
+
+test('petición: lleva un tiempo máximo (15 s) para que una conexión colgada no deje la página en "Confirmando…"', async () => {
+  assert.equal(CONFIRM_TIMEOUT_MS, 15000);
+  const { init } = buildConfirmRequest(TOKEN);
+  assert.ok(init.signal instanceof AbortSignal);
+  assert.equal(init.signal.aborted, false);
+  const corto = buildConfirmRequest(TOKEN, { timeoutMs: 10 }).init.signal;
+  await new Promise((resolver) => setTimeout(resolver, 60));
+  assert.equal(corto.aborted, true);
+  assert.equal(corto.reason.name, 'TimeoutError');
+});
+
 test('confirmar: sin enlace no se puede confirmar, y una respuesta fuera de un envío se ignora', () => {
   const sinEnlace = initialConfirmState('');
   assert.equal(reduceConfirm(sinEnlace, { type: 'confirmar' }), sinEnlace);
@@ -93,6 +121,7 @@ test('mensajes: cada estado tiene su texto del diccionario', () => {
   assert.equal(messageFor({ fase: 'confirmado', token: null }), respuestas.confirmado);
   assert.equal(messageFor({ fase: 'invalido', token: null }), respuestas.enlace_invalido);
   assert.equal(messageFor({ fase: 'error-red', token: TOKEN }), confirmar.errorRed);
+  assert.equal(messageFor({ fase: 'demasiados-intentos', token: TOKEN }), respuestas.demasiados_intentos);
 });
 
 test('petición: POST /v1/waitlist/confirm con el token en el cuerpo, nunca en la URL', () => {
@@ -115,6 +144,7 @@ const ESTADOS = {
   confirmado: { fase: 'confirmado', token: null },
   invalido: { fase: 'invalido', token: null },
   'error-red': { fase: 'error-red', token: TOKEN },
+  'demasiados-intentos': { fase: 'demasiados-intentos', token: TOKEN },
 };
 
 test('vista: listo muestra el botón Confirmar activo y nada más', () => {

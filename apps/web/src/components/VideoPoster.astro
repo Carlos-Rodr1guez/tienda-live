@@ -21,7 +21,15 @@ interface Props {
   prioridad?: boolean;
 }
 
-const { poster, video, alt, sizes = '(min-width: 860px) 330px, 54vw', prioridad = false } = Astro.props;
+// El marco mide min(54vw, 230px) por debajo de 860px (Hero.astro y juegos/[slug].astro) y 330px desde 860px: 54vw solo
+// manda hasta 425px (54vw = 230px a 426px). Con `widths` de 360/540/720/1080 hay candidatos cerca de 1x/2x/3x de ambos.
+const {
+  poster,
+  video,
+  alt,
+  sizes = '(min-width: 860px) 330px, (min-width: 426px) 230px, 54vw',
+  prioridad = false,
+} = Astro.props;
 
 const modulos = import.meta.glob<{ default: ImageMetadata }>('/src/assets/juegos/**/*.{png,jpg,jpeg,webp}', {
   eager: true,
@@ -39,7 +47,15 @@ if (video) {
 
 <div class="poster">
   {video ? (
-    <video class="poster__medio" controls preload="none" playsinline poster={posterVideo} data-seguimiento="video">
+    <video
+      class="poster__medio"
+      controls
+      preload="none"
+      playsinline
+      poster={posterVideo}
+      aria-label={alt}
+      data-seguimiento="video"
+    >
       <source src={video} type={video.endsWith('.webm') ? 'video/webm' : 'video/mp4'} />
       <track kind="captions" src={subtitulos} srclang="es" label={inicio.subtitulosEtiqueta} default />
     </video>

@@ -129,6 +129,51 @@ test('pipeline: en producción solo vale el origen del sitio, no los locales', a
   assert.equal((await h.post('/v1/eco', BUENO, { origin: 'https://www.tienda.example' })).status, 403);
 });
 
+test('pipeline: producción con SITE_URL vacío o local -> 503 no_disponible en TODA ruta de /v1, sin tocar la ruta (falla cerrada)', async () => {
+  for (const SITE_URL of ['', 'http://localhost:8790', 'https://127.0.0.1']) {
+    const h = await armar({ env: { ENVIRONMENT: 'production', SITE_URL } });
+    const pedidos = [
+      h.post('/v1/eco', BUENO),
+      h.post('/v1/eco', BUENO, { origin: 'https://malo.example' }),
+      h.post('/v1/no-existe', BUENO),
+      h.request('/v1/eco', { method: 'GET' }),
+      h.post('/v1/eco', '{no es json'),
+    ];
+    for (const res of await Promise.all(pedidos)) {
+      assert.equal(res.status, 503, SITE_URL);
+      const cuerpo = await res.json();
+      assert.deepEqual(cuerpo, { ok: false, error: 'no_disponible', mensaje: respuestas.no_disponible });
+      cabecerasDeLaApi(res);
+    }
+    assert.equal(h.llamadas.length, 0, 'ninguna ruta corre');
+  }
+});
+
+test('pipeline: la configuración inválida deja UNA línea por pedido, con el código del motivo y sin el valor', async () => {
+  const valor = 'http://secreto.localhost:1234';
+  const h = await armar({ env: { ENVIRONMENT: 'production', SITE_URL: valor } });
+  await h.post('/v1/eco', BUENO);
+  assert.equal(h.spy.lineas.length, 1);
+  assert.equal(h.spy.lineas[0].nivel, 'error');
+  assert.deepEqual(JSON.parse(h.spy.lineas[0].linea), {
+    nivel: 'error',
+    evento: 'config.invalida',
+    codigo: 'site_url',
+  });
+  assert.ok(!h.spy.texto().includes('secreto'), 'el valor de SITE_URL no se registra');
+  await h.post('/v1/eco', BUENO);
+  assert.equal(h.spy.lineas.length, 2);
+});
+
+test('pipeline: con la configuración válida (producción https o desarrollo) no se registra nada de config', async () => {
+  for (const env of [{ ENVIRONMENT: 'production', SITE_URL: 'https://tienda.example' }, undefined]) {
+    const h = await armar(env ? { env } : {});
+    const res = await h.post('/v1/eco', BUENO, { origin: env ? 'https://tienda.example' : undefined });
+    assert.equal(res.status, 200);
+    assert.ok(!h.spy.texto().includes('config.invalida'));
+  }
+});
+
 test('pipeline: Sec-Fetch-Site distinto de same-origin -> 403; ausente o same-origin pasa', async () => {
   const h = await armar();
   for (const valor of ['cross-site', 'same-site', 'none']) {

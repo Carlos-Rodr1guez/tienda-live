@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readConfig } from '../src/config.js';
 
 const API = new URL('../', import.meta.url);
 
@@ -71,8 +72,12 @@ test('wrangler: la observabilidad de la plataforma está apagada (no se guardan 
   assert.equal(config.observability.enabled, false);
 });
 
-test('wrangler: variables públicas de producción: ENVIRONMENT=production y SITE_URL vacío, sin secretos', () => {
+test('wrangler: variables públicas de producción: ENVIRONMENT=production y SITE_URL vacío A PROPÓSITO (falla cerrada), sin secretos', () => {
   assert.deepEqual(config.vars, { ENVIRONMENT: 'production', SITE_URL: '' });
+  // Vacío no cae en localhost: en producción readConfig lo marca como problema y /v1 responde 503 hasta que el dueño lo fije.
+  const efectiva = readConfig({ ...config.vars });
+  assert.deepEqual(efectiva.problems, ['site_url']);
+  assert.deepEqual(efectiva.allowedOrigins, []);
 });
 
 test('wrangler: puertos de desarrollo: API 8790 e inspector 9290, solo en localhost', () => {

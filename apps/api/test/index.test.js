@@ -46,11 +46,11 @@ test('index: GET /v1/events -> 405 y una ruta desconocida o fuera de /v1 -> 404'
   }
 });
 
-function inscribir(env, ctx = createFakeCtx()) {
+function inscribir(env, ctx = createFakeCtx(), origin = 'http://localhost:4400') {
   return worker.fetch(
     new Request('http://localhost:8790/v1/waitlist', {
       method: 'POST',
-      headers: { origin: 'http://localhost:4400', 'content-type': 'application/json' },
+      headers: { origin, 'content-type': 'application/json' },
       body: JSON.stringify({
         email: 'ana@example.com',
         live_frequency: 'semanal',
@@ -67,10 +67,43 @@ function inscribir(env, ctx = createFakeCtx()) {
 }
 
 test('index: en producción, sin proveedor de correo ni secreto, la inscripción da 503 y no escribe', async () => {
-  const env = entorno({ ENVIRONMENT: 'production', SITE_URL: 'http://localhost:4400' });
-  const res = await inscribir(env);
+  const env = entorno({ ENVIRONMENT: 'production', SITE_URL: 'https://tienda.example' });
+  const res = await inscribir(env, createFakeCtx(), 'https://tienda.example');
   assert.equal(res.status, 503);
   assert.equal((await res.json()).error, 'no_disponible');
+  assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM waitlist').first()).n, 0);
+});
+
+test('index: en producción con SITE_URL vacío o local, TODA ruta de /v1 da 503 no_disponible y no cuenta ni escribe', async () => {
+  for (const SITE_URL of ['', 'http://localhost:4400']) {
+    const env = entorno({ ENVIRONMENT: 'production', SITE_URL });
+    // El origen local ya no se acepta, y aun con un origen que antes pasaba la respuesta es el 503.
+    for (const res of [
+      await evento(env),
+      await inscribir(env),
+      await evento(env, { origin: 'https://tienda.example' }),
+    ]) {
+      assert.equal(res.status, 503, SITE_URL);
+      assert.equal((await res.json()).error, 'no_disponible');
+    }
+    assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM funnel_daily').first()).n, 0);
+    assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM waitlist').first()).n, 0);
+  }
+});
+
+test('index: la purga diaria sigue corriendo aunque SITE_URL de producción sea inválido (no lo necesita)', async () => {
+  const env = entorno({ ENVIRONMENT: 'production', SITE_URL: '' });
+  const vieja = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+  env.DB.sqlite
+    .prepare(
+      `INSERT INTO waitlist (email, live_frequency, stream_type, interests, consent_version, consent_at, created_at,
+         updated_at) VALUES ('vieja@example.com', 'diario', 'charla', '["relax"]', 'v1', ?1, ?1, ?1)`,
+    )
+    .run(vieja);
+  const ctx = createFakeCtx();
+  await worker.scheduled({ cron: '17 3 * * *' }, env, ctx);
+  assert.equal(ctx.pendientes.length, 1);
+  await ctx.settle();
   assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM waitlist').first()).n, 0);
 });
 

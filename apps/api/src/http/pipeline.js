@@ -1,5 +1,6 @@
 // @ts-check
 // Tubería común de toda ruta de /v1 (todas son POST). El orden importa y está probado:
+//   0 configuración inválida -> 503 (antes que todo; solo pasa en producción con SITE_URL mal puesto)
 //   1 ruta -> 404   2 método -> 405   3 origen -> 403   4 tipo de contenido -> 415   5 tope de cuerpo -> 413
 //   6 JSON de objeto -> 400   7 validación de contracts -> 400   8 la ruta   9 cualquier excepción -> 500 uniforme
 // El 500 no filtra nada: registra la ruta y el nombre del error, nunca su mensaje (podría traer datos del pedido).
@@ -48,6 +49,12 @@ function origenPermitido(request, origenesPermitidos) {
 export async function handleRequest({ request, ctx, ports, router }) {
   const camino = new URL(request.url).pathname;
   try {
+    // Antes de todo: sin configuración utilizable (SITE_URL inválido en producción) nada de /v1 responde con normalidad.
+    // Se registra solo el código del motivo, nunca el valor.
+    if (ports.config.problems.length > 0) {
+      ports.logger.error('config.invalida', { codigo: ports.config.problems.join(',') });
+      return errorResponse('no_disponible');
+    }
     const ruta = router.match(camino);
     if (!ruta) return errorResponse('no_encontrado');
     if (request.method !== 'POST') return methodNotAllowed();

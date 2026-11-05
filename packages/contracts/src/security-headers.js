@@ -9,6 +9,8 @@
 const TURNSTILE = 'https://challenges.cloudflare.com';
 const BEACON_SCRIPT = 'https://static.cloudflareinsights.com';
 const BEACON_CONNECT = 'https://cloudflareinsights.com';
+/** HSTS de las páginas y de /v1: el mismo valor en los dos sitios (un año, sin includeSubDomains ni preload). */
+const HSTS = 'max-age=31536000';
 
 /** Límites de Cloudflare para `_headers`. */
 export const HEADERS_FILE_LIMITS = Object.freeze({ maxRules: 100, maxLineLength: 2000 });
@@ -67,7 +69,7 @@ export function buildHeaderRules({ beacon = false } = {}) {
         ['Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'],
         ['X-Frame-Options', 'DENY'],
         ['Cross-Origin-Opener-Policy', 'same-origin'],
-        ['Strict-Transport-Security', 'max-age=31536000'],
+        ['Strict-Transport-Security', HSTS],
       ],
     },
     {
@@ -130,4 +132,5 @@ export const API_RESPONSE_HEADERS = Object.freeze({
   'Referrer-Policy': 'no-referrer',
   'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
   'Cross-Origin-Resource-Policy': 'same-origin',
+  'Strict-Transport-Security': HSTS,
 });

@@ -56,7 +56,7 @@ test('scripts raíz: dev, build, preview, base de datos y embudo', () => {
   assert.equal(scripts['dev:web'], 'npm run dev -w @tienda/web');
   assert.equal(scripts['dev:api'], 'npm run dev -w @tienda/api');
   assert.equal(scripts['build:web'], 'npm run build -w @tienda/web');
-  assert.equal(scripts.preview, 'npm run build:web && npm run preview -w @tienda/api');
+  assert.equal(scripts.preview, 'node scripts/preview.mjs');
   assert.equal(scripts['db:migrate'], 'npm run db:migrate -w @tienda/api');
   assert.equal(scripts.embudo, 'npm run embudo -w @tienda/api --');
   assert.equal(scripts.test, 'npm test --workspaces --if-present && node --test "scripts/*.test.mjs"');
@@ -104,15 +104,64 @@ function bloqueJob(yml, nombre) {
 /** Los comandos `run:` de un bloque, en orden. */
 const comandos = (bloque) => [...bloque.matchAll(/^\s*(?:- )?run: (.+)$/gm)].map((m) => m[1].trim());
 
+/**
+ * Todos los `uses:` de un workflow, con o sin guion delante (`- uses: x` y también `- name: y` seguido de `uses: x`),
+ * y la lista de lo que está mal: sin SHA completo de 40 hex o sin la versión en un comentario al lado.
+ * @param {string} yml
+ * @returns {{ usos: string[], problemas: string[] }}
+ */
+function revisarAcciones(yml) {
+  const usos = [];
+  const problemas = [];
+  for (const [, accion, resto] of yml.matchAll(/^[ \t]*(?:-[ \t]+)?uses:[ \t]*(\S+)(.*)$/gm)) {
+    usos.push(accion);
+    if (!/@[0-9a-f]{40}$/.test(accion)) problemas.push(`${accion} no está fijada por SHA`);
+    if (!/# v\d+\.\d+\.\d+/.test(resto)) problemas.push(`${accion} no lleva la versión en un comentario`);
+  }
+  return { usos, problemas };
+}
+
+const SHA = '3d3c42e5aac5ba805825da76410c181273ba90b1';
+
+test('CI: revisarAcciones también atrapa un `uses:` sin guion (tras `- name:`) y los que no están fijados', () => {
+  const muestra = [
+    'jobs:',
+    '  a:',
+    '    steps:',
+    `      - uses: actions/checkout@${SHA} # v7.0.1`,
+    '      - name: sin guion y sin fijar',
+    '        uses: org/action@v4',
+    '      - name: sin guion, con SHA pero sin versión al lado',
+    `        uses: org/otra@${SHA}`,
+    `      - name: sin guion, bien fijada`,
+    `        uses: org/buena@${SHA} # v1.2.3`,
+    '      - uses: org/con-guion@main',
+  ].join('\n');
+  const { usos, problemas } = revisarAcciones(muestra);
+  assert.deepEqual(usos, [
+    'actions/checkout@' + SHA,
+    'org/action@v4',
+    'org/otra@' + SHA,
+    'org/buena@' + SHA,
+    'org/con-guion@main',
+  ]);
+  assert.deepEqual(problemas, [
+    'org/action@v4 no está fijada por SHA',
+    'org/action@v4 no lleva la versión en un comentario',
+    'org/otra@' + SHA + ' no lleva la versión en un comentario',
+    'org/con-guion@main no está fijada por SHA',
+    'org/con-guion@main no lleva la versión en un comentario',
+  ]);
+  // Una muestra sana no da problemas.
+  assert.deepEqual(revisarAcciones(`    steps:\n      - uses: actions/checkout@${SHA} # v7.0.1\n`).problemas, []);
+});
+
 test('CI: permisos mínimos y todas las acciones fijadas por SHA completo con la versión al lado', () => {
   const yml = read('.github/workflows/ci.yml');
   assert.match(yml, /^permissions:\n {2}contents: read$/m);
-  const usos = [...yml.matchAll(/^\s*- uses: (\S+)(.*)$/gm)];
+  const { usos, problemas } = revisarAcciones(yml);
   assert.ok(usos.length >= 4, 'se esperaban checkout y setup-node en cada uno de los dos jobs');
-  for (const [, accion, resto] of usos) {
-    assert.match(accion, /@[0-9a-f]{40}$/, `${accion} no está fijada por SHA`);
-    assert.match(resto, /# v\d+\.\d+\.\d+/, `${accion} no lleva la versión en un comentario`);
-  }
+  assert.deepEqual(problemas, []);
 });
 
 test('CI: el job calidad conserva sus comprobaciones', () => {

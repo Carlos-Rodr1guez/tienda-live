@@ -12,7 +12,10 @@ export const CLEAN_PATH = '/confirmar';
 /** Ruta de la API de confirmación (mismo origen). */
 export const CONFIRM_URL = '/v1/waitlist/confirm';
 
-/** @typedef {{ fase: 'sin-enlace' | 'listo' | 'enviando' | 'confirmado' | 'invalido' | 'error-red', token: string | null }} EstadoConfirmar */
+/** Tiempo máximo de la confirmación. Pasado, se aborta y sigue el camino de "error-red": el botón vuelve a "Intentar de nuevo". */
+export const CONFIRM_TIMEOUT_MS = 15_000;
+
+/** @typedef {{ fase: 'sin-enlace' | 'listo' | 'enviando' | 'confirmado' | 'invalido' | 'error-red' | 'demasiados-intentos', token: string | null }} EstadoConfirmar */
 
 /**
  * Saca el token del fragmento. Tiene que ser exactamente `t=<43 caracteres base64url>`, con o sin el `#`.
@@ -36,7 +39,8 @@ export function initialConfirmState(fragmento) {
 
 /**
  * Acciones: confirmar (la persona pulsó el botón), respuesta (llegó la de la API) y falloRed.
- * Un enlace inválido (400) no se reintenta; un error de red o del servidor sí, con el mismo token.
+ * Un enlace inválido (400) no se reintenta; un error de red o del servidor sí, con el mismo token, y un 429 (la regla de
+ * límite de Cloudflare) también, pero con su propio mensaje: pide esperar en lugar de culpar a la conexión.
  * @param {EstadoConfirmar} estado
  * @param {{ type: string, status?: number, body?: unknown }} accion
  * @returns {EstadoConfirmar}
@@ -44,13 +48,14 @@ export function initialConfirmState(fragmento) {
 export function reduceConfirm(estado, accion) {
   switch (accion.type) {
     case 'confirmar':
-      return estado.fase === 'listo' || estado.fase === 'error-red'
+      return estado.fase === 'listo' || estado.fase === 'error-red' || estado.fase === 'demasiados-intentos'
         ? { fase: 'enviando', token: estado.token }
         : estado;
     case 'respuesta': {
       if (estado.fase !== 'enviando') return estado;
       if (accion.status === 200) return { fase: 'confirmado', token: null };
       if (accion.status === 400) return { fase: 'invalido', token: null };
+      if (accion.status === 429) return { fase: 'demasiados-intentos', token: estado.token };
       return { fase: 'error-red', token: estado.token };
     }
     case 'falloRed':
@@ -79,6 +84,8 @@ export function messageFor(estado) {
       return respuestas.enlace_invalido;
     case 'error-red':
       return confirmar.errorRed;
+    case 'demasiados-intentos':
+      return respuestas.demasiados_intentos;
   }
 }
 
@@ -114,6 +121,7 @@ export function viewFor(estado) {
     case 'confirmado':
       return { mensaje, tono: 'ok', boton: sinBoton, volver: true };
     case 'error-red':
+    case 'demasiados-intentos':
       return {
         mensaje,
         tono: 'error',
@@ -127,10 +135,12 @@ export function viewFor(estado) {
 }
 
 /**
- * El pedido de fetch de la confirmación: el token va en el cuerpo, nunca en la URL.
+ * El pedido de fetch de la confirmación: el token va en el cuerpo, nunca en la URL. Con tiempo máximo, para que una
+ * conexión colgada no deje la página en "Confirmando…".
  * @param {string} token
+ * @param {{ timeoutMs?: number }} [opciones]
  */
-export function buildConfirmRequest(token) {
+export function buildConfirmRequest(token, { timeoutMs = CONFIRM_TIMEOUT_MS } = {}) {
   return {
     url: CONFIRM_URL,
     init: {
@@ -138,6 +148,7 @@ export function buildConfirmRequest(token) {
       credentials: /** @type {RequestCredentials} */ ('omit'),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
+      signal: AbortSignal.timeout(timeoutMs),
     },
   };
 }

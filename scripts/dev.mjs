@@ -3,7 +3,7 @@
 //
 // La web corre en el puerto 4400 y reenvía /v1 a la API (8790): el navegador ve un solo origen.
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -36,6 +36,50 @@ export function createLinePrefixer(prefix, write) {
   };
 }
 
+/**
+ * Cómo se detiene un hijo con todos sus descendientes. `child.kill()` mata solo a npm: en Windows sus nietos (run.mjs,
+ * wrangler/astro, workerd) quedan vivos con los puertos 4400 y 8790, y el siguiente `npm run dev` falla.
+ * @param {string} plataforma `process.platform`
+ * @param {number} pid
+ * @returns {{ tipo: 'comando', comando: string, args: string[] } | { tipo: 'grupo', pid: number, senal: 'SIGTERM' }}
+ */
+export function planStop(plataforma, pid) {
+  if (plataforma === 'win32') return { tipo: 'comando', comando: 'taskkill', args: ['/pid', String(pid), '/T', '/F'] };
+  return { tipo: 'grupo', pid: -pid, senal: 'SIGTERM' };
+}
+
+/**
+ * Opciones de spawn que hacen posible `planStop`: fuera de Windows el hijo nace como líder de su propio grupo, para
+ * poder señalar el grupo entero. En Windows `detached` abriría otra consola, y taskkill /T no lo necesita.
+ * @param {string} plataforma
+ */
+export function spawnOptionsFor(plataforma) {
+  return { detached: plataforma !== 'win32' };
+}
+
+/**
+ * Detiene al hijo y a todo su árbol.
+ * @param {{ pid?: number, kill(): unknown }} child
+ * @param {{ plataforma?: string, spawnSync?: Function, kill?: (pid: number, senal: string) => void }} [deps] Para las pruebas.
+ */
+export function stopTree(
+  child,
+  { plataforma = process.platform, spawnSync: ejecutar = spawnSync, kill = process.kill } = {},
+) {
+  if (child.pid === undefined) return;
+  const plan = planStop(plataforma, child.pid);
+  if (plan.tipo === 'comando') {
+    // Argumentos sueltos y sin shell: el pid es un número, pero igual no se arma ninguna línea de comandos.
+    ejecutar(plan.comando, plan.args, { stdio: 'ignore', windowsHide: true });
+    return;
+  }
+  try {
+    kill(plan.pid, plan.senal);
+  } catch {
+    child.kill(); // el grupo ya no existe (o no se pudo señalar): al menos se detiene al hijo directo
+  }
+}
+
 function main() {
   // Dentro de "npm run", npm_execpath apunta al CLI de npm: se lanza con el Node actual, sin shell.
   const npmCli = process.env.npm_execpath;
@@ -49,6 +93,7 @@ function main() {
       cwd: ROOT,
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
+      ...spawnOptionsFor(process.platform),
     });
     const salida = createLinePrefixer(prefix, (l) => console.log(l));
     const errores = createLinePrefixer(prefix, (l) => console.error(l));
@@ -65,7 +110,7 @@ function main() {
   function detenerTodo(codigo) {
     if (cerrando) return;
     cerrando = true;
-    for (const { child } of hijos) child.kill();
+    for (const { child } of hijos) stopTree(child);
     setTimeout(() => process.exit(codigo), 500).unref();
   }
 

@@ -25,6 +25,8 @@
   "triggers": { "crons": ["17 3 * * *"] },
 
   // Variables públicas. Los secretos (TURNSTILE_SECRET_KEY) van con `wrangler secret put`, no acá.
+  // SITE_URL vacío es a propósito: en producción /v1 responde 503 hasta que se fije un origen https público al desplegar
+  // (por ejemplo `--var SITE_URL:https://<dominio>`). Ya no cae en localhost.
   "vars": { "ENVIRONMENT": "production", "SITE_URL": "" },
 
   // Apagada a propósito: en el H1 no se guardan metadatos de los pedidos. El dueño puede activarla tras la revisión legal.

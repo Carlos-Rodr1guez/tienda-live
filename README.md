@@ -59,6 +59,8 @@ Para un script de un paquete en particular se usa `-w` con el nombre del paquete
 | `npm run embudo`     | Informe del embudo sobre la base local (altas, intereses, eventos de los últimos 14 días; sin correos)            |
 | `npm run check`      | Lint, formato, tipos, pruebas y licencias. No construye nada                                                      |
 
+`npm run preview` pasa por `scripts/preview.mjs`: pone `SITE_URL=http://localhost:8790` y la clave pública de **prueba** de Turnstile (`1x00000000000000000000AA`) y luego construye la web y la sirve. Las pone él porque la construcción de la web las exige explícitas y se detiene si faltan; así no escribes nada a mano y funciona igual en cmd, PowerShell y bash.
+
 `npm run preview` construye la web: es cosa del dueño y de la CI, no de las herramientas automáticas. Qué comprobar en esa vista previa: la lista del [README de la web](apps/web/README.md#lista-de-comprobación-del-dueño).
 
 ### Estado de las herramientas, fuera de C:
@@ -86,7 +88,7 @@ El Worker lee sus variables de `apps/api/.dev.vars`, que git ignora. `npm run de
 
 Cloudflare publica claves de prueba que **siempre aprueban** y que solo sirven en local. No son secretos:
 
-- Clave pública (del sitio, `PUBLIC_TURNSTILE_SITE_KEY`): `1x00000000000000000000AA`. Si no defines ninguna, la web usa esta.
+- Clave pública (del sitio, `PUBLIC_TURNSTILE_SITE_KEY`): `1x00000000000000000000AA`. Con `npm run dev` la web usa esta si no defines ninguna; `npm run preview` la pone sola. Una construcción de producción no tiene respaldo: sin la variable se detiene.
 - Clave secreta (`TURNSTILE_SECRET_KEY` en `.dev.vars`): `1x0000000000000000000000000000000AA`.
 
 En producción la API rechaza la clave pública de prueba. Las claves reales se cargan solo con `wrangler secret put` y en la construcción de la web; nunca van al repositorio (ver la lista de despliegue en [apps/api/README.md](apps/api/README.md)).

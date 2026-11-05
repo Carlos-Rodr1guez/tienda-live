@@ -30,6 +30,8 @@ export const respuestas = congelar({
   origen_no_permitido: SOLICITUD_ILEGIBLE,
   verificacion_fallida: 'No pudimos verificar que eres una persona. Recarga la verificación e inténtalo de nuevo.',
   no_disponible: 'El registro no está disponible por ahora. Inténtalo de nuevo más tarde.',
+  // Lo responde la regla de límite de Cloudflare (429, cuerpo que no es JSON), no el Worker: la web lo elige por el estado.
+  demasiados_intentos: 'Hiciste muchos intentos seguidos. Espera un momento y vuelve a intentarlo.',
   confirmado: 'Listo, tu correo quedó confirmado. Te avisaremos cuando haya novedades.',
   enlace_invalido:
     'Este enlace no es válido o ya venció. Si ya confirmaste, no tienes que hacer nada más. Si no, vuelve a anotarte para recibir uno nuevo.',
@@ -47,7 +49,10 @@ export const respuestas = congelar({
   },
 });
 
-/** Correo de confirmación. Marcadores: {marca} y {enlace}. Solo lleva el enlace: sin imágenes ni seguimiento. */
+/**
+ * Correo de confirmación. Marcadores: {marca}, {enlace} y {vigencia} (lo que le queda de verdad al enlace, ver
+ * `correo.vigencia`). Solo lleva el enlace: sin imágenes ni seguimiento.
+ */
 export const correo = congelar({
   asunto: 'Confirma tu lugar en {marca}',
   texto: [
@@ -57,12 +62,18 @@ export const correo = congelar({
     '',
     '{enlace}',
     '',
-    'El enlace sirve una sola vez y vence en 48 horas.',
+    'El enlace sirve una sola vez y vence en {vigencia}.',
     '',
     'Si no fuiste tú, ignora este mensaje: tu solicitud se borra sola pasados 7 días y no recibirás nada más.',
     '',
     '{marca}',
   ].join('\n'),
+  // Cómo se dice lo que le queda al enlace (marcador {vigencia} del texto). Marcador propio: {n}.
+  vigencia: {
+    horas: '{n} horas', // 2 horas o más (se redondea hacia abajo)
+    una: '1 hora', // de 1 hora a menos de 2
+    menos: 'menos de una hora',
+  },
 });
 
 /**
@@ -220,6 +231,7 @@ export const formulario = congelar({
     'Te avisamos cuando haya novedades. Cuéntanos cómo haces LIVE y qué tipo de juegos te interesan: así decidimos cuál sigue.',
   verificacionEtiqueta: 'Verificación de seguridad',
   abrir: 'Quiero anotarme',
+  nuevaPestana: '(se abre en otra pestaña)', // aviso solo para lectores de pantalla en los enlaces target="_blank"
   opcional: '(opcional)',
   elegirOpcion: 'Elige una opción',
   enviar: 'Anotarme',

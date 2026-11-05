@@ -6,18 +6,25 @@
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { buildHeadersFile } from '@tienda/contracts/security-headers';
+import { readEnv } from './env.js';
 
 /**
- * @param {{ beacon?: boolean, escribir?: (ruta: string, texto: string) => Promise<unknown> }} [opciones]
- *   `beacon`: si no se indica, lo decide PUBLIC_CF_BEACON_TOKEN al construir. `escribir`: se inyecta en las pruebas.
+ * @param {{ beacon?: boolean, escribir?: (ruta: string, texto: string) => Promise<unknown>, root?: string }} [opciones]
+ *   `beacon`: si no se indica, lo decide PUBLIC_CF_BEACON_TOKEN al construir, leído del entorno Y del `.env` (la misma
+ *   fuente que `import.meta.env` en el navegador; si no, la página enciende el beacon y el CSP lo bloquea).
+ *   `escribir` y `root` (carpeta del proyecto, por defecto la que informa Astro): se inyectan en las pruebas.
  * @returns {import('astro').AstroIntegration}
  */
-export default function securityHeaders({ beacon, escribir = writeFile } = {}) {
+export default function securityHeaders({ beacon, escribir = writeFile, root } = {}) {
+  let raiz = root ?? process.cwd();
   return {
     name: 'cabeceras-de-seguridad',
     hooks: {
+      'astro:config:setup': ({ config }) => {
+        if (root === undefined) raiz = fileURLToPath(config.root);
+      },
       'astro:build:done': async ({ dir }) => {
-        const conBeacon = beacon ?? Boolean(process.env.PUBLIC_CF_BEACON_TOKEN);
+        const conBeacon = beacon ?? Boolean(readEnv({ mode: 'production', root: raiz }).PUBLIC_CF_BEACON_TOKEN);
         await escribir(fileURLToPath(new URL('_headers', dir)), buildHeadersFile({ beacon: conBeacon }));
       },
     },

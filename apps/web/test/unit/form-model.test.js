@@ -5,10 +5,14 @@ import { FIELD_ERROR_CODES } from '@tienda/contracts/waitlist';
 import { formulario, respuestas } from '@tienda/contracts/i18n';
 import {
   FIELD_ORDER,
+  REQUEST_TIMEOUT_MS,
+  SUCCESS_FOCUS_ID,
+  SUMMARY_FOCUS_ID,
   buildRequest,
   errorId,
   fieldId,
   fieldLabel,
+  focusTarget,
   initialState,
   interpretResponse,
   isSubmitDisabled,
@@ -252,4 +256,54 @@ test('petición: POST /v1/waitlist como JSON, mismo origen y sin cookies', () =>
   assert.equal(init.credentials, 'omit');
   assert.equal(init.headers['Content-Type'], 'application/json');
   assert.equal(init.body, '{"email":"a@b.co"}');
+});
+
+test('petición: lleva un tiempo máximo (15 s) para que una conexión colgada no deje el formulario en "Enviando…"', async () => {
+  assert.equal(REQUEST_TIMEOUT_MS, 15000);
+  const { init } = buildRequest({ email: 'a@b.co' });
+  assert.ok(init.signal instanceof AbortSignal);
+  assert.equal(init.signal.aborted, false);
+
+  const corto = buildRequest({ email: 'a@b.co' }, { timeoutMs: 10 }).init.signal;
+  assert.equal(corto.aborted, false);
+  await new Promise((resolver) => setTimeout(resolver, 60));
+  assert.equal(corto.aborted, true, 'vencido el tiempo la señal aborta el fetch');
+  assert.equal(corto.reason.name, 'TimeoutError');
+});
+
+test('respuesta: un 429 de la regla de límite de Cloudflare (sin JSON) pide esperar, no culpa a nuestro lado', () => {
+  for (const cuerpo of [null, undefined, 'Too Many Requests', {}, { raro: true }]) {
+    const r = interpretResponse(429, cuerpo);
+    assert.equal(r.fase, 'error');
+    assert.equal(r.mensaje, respuestas.demasiados_intentos);
+    assert.notEqual(r.mensaje, respuestas.error_interno);
+    assert.deepEqual(r.errores, []);
+  }
+  // un código que la API sí conoce sigue mandando sobre el estado
+  assert.equal(interpretResponse(429, { ok: false, error: 'no_disponible' }).mensaje, respuestas.no_disponible);
+});
+
+test('foco: un error sin campos (403, 413, 415, 429, 503, red, tiempo agotado) lleva el foco al resumen de errores', () => {
+  assert.equal(SUMMARY_FOCUS_ID, 'anotarme-resumen');
+  for (const estado of [
+    reduce({ fase: 'enviando', errores: [], mensaje: null }, { type: 'respuesta', status: 403, body: null }),
+    reduce({ fase: 'enviando', errores: [], mensaje: null }, { type: 'respuesta', status: 429, body: null }),
+    reduce({ fase: 'enviando', errores: [], mensaje: null }, { type: 'respuesta', status: 503, body: null }),
+    reduce({ fase: 'enviando', errores: [], mensaje: null }, { type: 'falloRed' }),
+  ]) {
+    assert.equal(estado.fase, 'error');
+    assert.equal(focusTarget(estado), SUMMARY_FOCUS_ID);
+  }
+});
+
+test('foco: con errores de campo va al primero; con éxito, al título; editando sin errores, a ninguna parte', () => {
+  const conCampos = reduce(initialState(), {
+    type: 'invalido',
+    errores: validateForm({ ...crudoValido(), email: 'x' }, { turnstileToken: 't' }).errores,
+  });
+  assert.equal(focusTarget(conCampos), 'campo-email');
+  assert.equal(focusTarget({ fase: 'exito', errores: [], mensaje: 'ok' }), SUCCESS_FOCUS_ID);
+  assert.equal(focusTarget(initialState()), null);
+  const apiConCampos = interpretResponse(400, { ok: false, error: 'campos_invalidos', campos: { country: 'opcion' } });
+  assert.equal(focusTarget(apiConCampos), 'campo-country');
 });

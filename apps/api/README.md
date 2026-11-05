@@ -4,7 +4,7 @@ Un solo Worker de Cloudflare que hace dos cosas: sirve la web estática (`apps/w
 
 ## Rutas
 
-Todas son `POST` con `Content-Type: application/json` (se admite `; charset=utf-8`). Cualquier otro método da `405` con `Allow: POST` y cuerpo vacío. Una ruta desconocida da `404`. Las rutas de `/v1` no tienen CORS: la web y la API comparten origen.
+Todas son `POST` con `Content-Type: application/json` (se admite `; charset=utf-8`). Cualquier otro método da `405` con `Allow: POST` y cuerpo vacío. Una ruta desconocida da `404`, salvo con la configuración inválida: en producción, con `SITE_URL` mal puesto, **todo** pedido a `/v1` (ruta desconocida o método equivocado incluidos) da `503` antes de mirar nada más. Las rutas de `/v1` no tienen CORS: la web y la API comparten origen.
 
 | Ruta                        | Cuerpo máximo | Éxito                    |
 | --------------------------- | ------------- | ------------------------ |
@@ -33,9 +33,11 @@ Los topes cuentan los bytes realmente leídos, no solo `Content-Length`.
 
 Los campos opcionales son `tiktok_user`, `followers_range` y `country`. Los valores permitidos, los límites y los mensajes salen de `@tienda/contracts` (un solo origen para la web, la API y la base). Una clave de más es un error.
 
-Orden de las comprobaciones: ruta, método, origen, tipo de contenido, tamaño, JSON, campos (todos los errores a la vez), Turnstile, disponibilidad del correo y, por último, la escritura. Una fila solo se escribe si pasó todo lo anterior.
+Orden de las comprobaciones: configuración (paso 0), ruta, método, origen, tipo de contenido, tamaño, JSON, campos (todos los errores a la vez), Turnstile, disponibilidad del correo y, por último, la escritura. Una fila solo se escribe si pasó todo lo anterior.
 
-La respuesta de éxito es **idéntica byte a byte** para un correo nuevo, uno pendiente, uno cuyo reenvío se frenó y uno ya confirmado. Así nadie puede averiguar quién está anotado. El correo sale después de responder (`ctx.waitUntil`), de modo que el tiempo de respuesta tampoco lo delata.
+La respuesta de éxito es **idéntica byte a byte** (estado, cabeceras y cuerpo) para un correo nuevo, uno pendiente, uno cuyo reenvío se frenó y uno ya confirmado, y el correo sale después de responder (`ctx.waitUntil`). Eso tapa la diferencia obvia, pero no la oculta del todo: cada camino hace una cantidad distinta de trabajo en D1 (una lectura y una escritura, solo la lectura, o un insert), así que una sonda estadística paciente podría distinguirlos midiendo tiempos. Cada sondeo necesita un token de Turnstile nuevo, lo que lo encarece; es un riesgo aceptado en el H1, no una garantía.
+
+Si la persona vuelve a anotarse mientras está pendiente y dentro de sus 7 días, **no se cambia nada de lo que guardamos** (perfil, consentimiento y `created_at` quedan como estaban). Solo, si el límite de reenvíos lo permite, se rota el token y se manda un enlace nuevo, que vence a las 48 horas o al cumplirse los 7 días desde el alta, lo que ocurra antes (el correo dice lo que le queda de verdad: "48 horas", "N horas", "1 hora" o "menos de una hora"). Si el límite lo frena, no se escribe nada. Un pendiente que ya pasó sus 7 días y que la purga todavía no borró se trata como un alta nueva. Dos pedidos simultáneos del mismo pendiente producen un solo correo (la escritura compara lo que leyó).
 
 ### `POST /v1/waitlist/confirm`
 
@@ -68,7 +70,7 @@ Cuerpo: `{ "ok": false, "error": "<código>", "campos": { ... }, "mensaje": "<te
 | 415    | `solicitud_invalida`   | El tipo de contenido no es `application/json`                                             |
 | 403    | `verificacion_fallida` | Falta el token de Turnstile, o Cloudflare lo rechazó                                      |
 | 403    | `origen_no_permitido`  | `Origin` ausente o fuera de la lista, o `Sec-Fetch-Site` distinto de `same-origin`        |
-| 503    | `no_disponible`        | Turnstile no responde, o no hay proveedor de correo fuera de desarrollo                   |
+| 503    | `no_disponible`        | Turnstile no responde o su secreto no sirve, no hay proveedor de correo, o `SITE_URL` mal |
 | 404    | `no_encontrado`        | Ruta desconocida                                                                          |
 | 500    | `error_interno`        | Cualquier fallo inesperado; el registro guarda solo la ruta y el nombre del error         |
 
@@ -76,7 +78,7 @@ Códigos por campo en `campos`: `requerido`, `formato`, `largo`, `opcion`, `cant
 
 ### Cabeceras de toda respuesta de `/v1`
 
-`Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'` y `Cross-Origin-Resource-Policy: same-origin`, más `Content-Type: application/json; charset=utf-8` cuando hay cuerpo. Nunca llevan cookies. Las cabeceras de las páginas estáticas (`_headers`) vienen de `@tienda/contracts`, no de este paquete.
+`Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `Cross-Origin-Resource-Policy: same-origin` y `Strict-Transport-Security: max-age=31536000` (el mismo valor que las páginas: `_headers` no se aplica a lo que genera el Worker), más `Content-Type: application/json; charset=utf-8` cuando hay cuerpo. Nunca llevan cookies. Las cabeceras de las páginas estáticas (`_headers`) vienen de `@tienda/contracts`, no de este paquete.
 
 ## Modelo de datos (D1)
 
@@ -90,23 +92,27 @@ No existen columnas de IP, agente de usuario ni huella. El token en claro solo e
 
 ### Retención
 
-- Pendientes sin confirmar: se borran a los 7 días (purga diaria). Volver a anotarse reinicia esa ventana.
+- Pendientes sin confirmar: se borran a los 7 días del alta (purga diaria). Volver a anotarse **no** reinicia esa ventana ni cambia lo guardado; un pendiente que ya la pasó y sigue ahí cuenta como alta nueva.
 - Confirmados: se quedan hasta que la persona pida su borrado (ver el runbook).
 - `funnel_daily`: no tiene datos personales y se conserva.
 
 ### Límite de reenvíos
 
-Para un correo pendiente, un token y un correo nuevos solo salen si el último envío fue hace 10 minutos o más y hubo menos de 5 envíos en las últimas 24 horas. En cualquier otro caso la respuesta es el mismo `202`, sin correo y sin token nuevo. Cada token nuevo invalida al anterior. El token vale 48 horas y sirve una sola vez.
+Para un correo pendiente, un token y un correo nuevos solo salen si el último envío fue hace 10 minutos o más y hubo menos de 5 envíos en las últimas 24 horas. En cualquier otro caso la respuesta es el mismo `202`, sin correo y sin token nuevo. Cada token nuevo invalida al anterior. El token vale 48 horas (nunca más allá de los 7 días del alta) y sirve una sola vez. El reenvío es un compare-and-swap sobre `recent_sends`: solo el pedido que cambia la fila manda el correo.
 
 ## Entorno
 
-| Variable               | Dónde                               | Para qué                                                                                                            |
-| ---------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `ENVIRONMENT`          | `vars` / `.dev.vars`                | Solo `development` activa el correo de consola y los orígenes locales. Cualquier otro valor es producción.          |
-| `SITE_URL`             | `vars` / `.dev.vars`                | Origen del sitio. Es el único origen permitido en producción y la base de los enlaces del correo.                   |
-| `TURNSTILE_SECRET_KEY` | `.dev.vars` / `wrangler secret put` | Secreto de Turnstile. Vacío: la inscripción responde 503. En local sirve la clave de prueba de `.dev.vars.example`. |
+| Variable               | Dónde                               | Para qué                                                                                                                                                                                      |
+| ---------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ENVIRONMENT`          | `vars` / `.dev.vars`                | Solo `development` activa el correo de consola y los orígenes locales. Cualquier otro valor es producción.                                                                                    |
+| `SITE_URL`             | `vars` / `.dev.vars`                | Origen del sitio. Es el único origen permitido en producción y la base de los enlaces del correo. En producción debe ser https y no local.                                                    |
+| `TURNSTILE_SECRET_KEY` | `.dev.vars` / `wrangler secret put` | Secreto de Turnstile. Vacío: la inscripción responde 503. En local sirve la clave de prueba de `.dev.vars.example`; en producción las tres claves de prueba de Cloudflare cuentan como vacío. |
 
 En local, `npm run dev` crea `apps/api/.dev.vars` desde `.dev.vars.example` si falta (está ignorado por git). El estado local de D1 vive en `apps/api/.wrangler/state`; para empezar de cero se borra esa carpeta y se corre `npm run db:migrate`.
+
+**En producción, un `SITE_URL` ausente, vacío, que no sea https o que apunte a localhost, 127.0.0.1 o [::1] detiene `/v1` a propósito:** todas las rutas responden `503 no_disponible` (el mismo cuerpo de siempre) y no se escribe ni se cuenta nada. Antes caía en `http://localhost:8790`, y eso apagaba la comprobación de hostname de Turnstile y ponía enlaces locales en los correos. Cómo darse cuenta (`node scripts/run.mjs wrangler tail`, o los registros de la plataforma si se activan): el Worker escribe una línea `{"nivel":"error","evento":"config.invalida","codigo":"site_url"}` por pedido (nunca el valor). La purga diaria **sigue corriendo**, porque no usa `SITE_URL`. En desarrollo no cambia nada: siguen los valores por defecto y los orígenes locales.
+
+Si Cloudflare responde `success:false` con `missing-input-secret`, `invalid-input-secret`, `bad-request` o `internal-error`, el problema es nuestro: la persona recibe `503 no_disponible` (no un 403) y se registra una línea `{"nivel":"error","evento":"turnstile.config","codigo":"<nombres de los códigos>"}`, sin token, IP ni correo. Los demás códigos (`missing-input-response`, `invalid-input-response`, `timeout-or-duplicate` y los desconocidos) siguen dando `403 verificacion_fallida`.
 
 Fuera de desarrollo todavía no hay proveedor de correo (queda fuera del H1): la inscripción responde `503 no_disponible` y no escribe nada. En desarrollo el enlace de confirmación se imprime en la consola de `wrangler dev`.
 
@@ -155,17 +161,19 @@ Con `--remote` en lugar de `--local` apunta a la base real (solo el dueño).
 
 ### Lista de despliegue (solo el dueño)
 
-El despliegue no está automatizado y ningún agente lo corre. Orden sugerido:
+El despliegue no está automatizado y ningún agente lo corre. Todos los comandos de Wrangler pasan por el lanzador (`node scripts/run.mjs wrangler ...`, desde la raíz del repositorio): así el estado y el inicio de sesión quedan en `.dev-state` (en D:, nunca en C:), y `npm run embudo -- --remote` y `npm run borrar -- ... --remote` encuentran la misma sesión con la que desplegaste. Orden sugerido:
 
-1. Crear la base: `wrangler d1 create tienda-live` y poner el `database_id` real en `wrangler.jsonc` (el que está es un marcador; el id real no debe versionarse).
-2. Aplicar las migraciones a la base real: `wrangler d1 migrations apply DB --remote`.
-3. Cargar el secreto: `wrangler secret put TURNSTILE_SECRET_KEY` con la clave **real** de Turnstile; y poner en el sitio (build de la web) la clave pública `PUBLIC_TURNSTILE_SITE_KEY`.
-4. Fijar `SITE_URL` al origen público (con `https`) y asociar el dominio al Worker.
-5. Construir la web y desplegar: `npm run build:web` y luego `wrangler deploy -c apps/api/wrangler.jsonc`.
-6. Regla de límite de velocidad por IP (WAF o rate limiting de Cloudflare) sobre `/v1/waitlist`: la API no ve ni guarda IPs, así que ese límite solo puede ponerse en Cloudflare, antes del Worker.
-7. Analítica opcional: si se usa el beacon de Cloudflare Web Analytics, definir `PUBLIC_CF_BEACON_TOKEN` al construir la web y **desactivar la inyección automática** del beacon en el panel (el sitio lo incluye por su cuenta, y nunca en `/confirmar`).
-8. Verificar las cabeceras con `curl -I https://<dominio>/` y `curl -I https://<dominio>/confirmar`: deben coincidir con `dist/_headers` (CSP, `Referrer-Policy: no-referrer` y `X-Robots-Tag: noindex` en `/confirmar`). Si `_headers` no se aplicara, el plan B del diseño es decorar las respuestas desde el Worker.
-9. Antes de abrir la lista: proveedor de correo real (ver `src/adapters/mailer.js`), textos legales finales y correo de contacto.
+1. Iniciar sesión: `node scripts/run.mjs wrangler login`.
+2. Crear la base: `node scripts/run.mjs wrangler d1 create tienda-live` y poner el `database_id` real en `wrangler.jsonc` (el que está es un marcador; el id real no debe versionarse).
+3. Aplicar las migraciones a la base real: `node scripts/run.mjs wrangler d1 migrations apply DB --remote`.
+4. Cargar el secreto: `node scripts/run.mjs wrangler secret put TURNSTILE_SECRET_KEY` con la clave **real** de Turnstile (las de prueba de Cloudflare se tratan como ausentes). La clave pública `PUBLIC_TURNSTILE_SITE_KEY` va al construir la web.
+5. Fijar `SITE_URL` al origen público con `https` (por ejemplo con `--var SITE_URL:https://<dominio>` en el despliegue) y asociar el dominio al Worker. **La web debe servirse solo en el origen exacto de `SITE_URL`:** `/v1` acepta únicamente ese `Origin`, así que quien se anote desde otro host (el `www` si `SITE_URL` es el apex, o al revés) recibe `403 origen_no_permitido` y "Recarga la página" no lo arregla. Redirige el otro host al origen de `SITE_URL`. El `SITE_URL` vacío de `wrangler.jsonc` es a propósito: mientras no se fije, `/v1` responde 503. Un valor puesto solo en el panel lo pisa el siguiente `deploy`.
+6. Construir la web y desplegar: `npm run build:web` y luego `node scripts/run.mjs wrangler deploy -c apps/api/wrangler.jsonc --var SITE_URL:https://<dominio>` (sin el `--var`, `SITE_URL` queda vacío y todo `/v1` responde `503`). La construcción de la web necesita `SITE_URL` y `PUBLIC_TURNSTILE_SITE_KEY` puestos de forma explícita; si falta alguno, se detiene.
+7. Regla de límite de velocidad por IP (WAF o rate limiting de Cloudflare) sobre **todo `/v1/*`**, no solo `/v1/waitlist`: `/v1/events` y `/v1/waitlist/confirm` también escriben en la base. La API no ve ni guarda IPs, así que ese límite solo puede ponerse en Cloudflare, antes del Worker. Los contadores del embudo son de mejor esfuerzo: quien abusa a propósito (por ejemplo, desde varias IPs) todavía puede sesgarlos.
+8. Analítica opcional: si se usa el beacon de Cloudflare Web Analytics, definir `PUBLIC_CF_BEACON_TOKEN` al construir la web y **desactivar la inyección automática** del beacon en el panel (el sitio lo incluye por su cuenta, y nunca en `/confirmar`).
+9. Verificar las cabeceras con `curl -I https://<dominio>/` y `curl -I https://<dominio>/confirmar`: deben coincidir con `dist/_headers` (CSP, `Referrer-Policy: no-referrer` y `X-Robots-Tag: noindex` en `/confirmar`). Si `_headers` no se aplicara, el plan B del diseño es decorar las respuestas desde el Worker.
+10. **Requisito antes de conectar un proveedor de correo real: un tope global de envíos por día** (una cuota diaria en el proveedor o en el Worker). **No está implementado en el H1.** El límite actual es por correo (10 minutos entre envíos y 5 en 24 horas), así que quien use muchas direcciones distintas podría agotar la cuota o la reputación del dominio de envío.
+11. Antes de abrir la lista: proveedor de correo real (ver `src/adapters/mailer.js`), textos legales finales y correo de contacto.
 
 ## Estructura
 

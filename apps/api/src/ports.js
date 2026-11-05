@@ -25,7 +25,9 @@
  */
 
 /**
- * @typedef {{ sendConfirmation(mensaje: { to: string, link: string }): Promise<void> }} Mailer
+ * El mensaje lleva `validezMs`: lo que le queda de verdad al enlace (puede ser menos de 48 h en un reenvío cerca de
+ * los 7 días del alta). El correo lo dice con `confirmationMessage(link, validezMs)`.
+ * @typedef {{ sendConfirmation(mensaje: { to: string, link: string, validezMs: number }): Promise<void> }} Mailer
  */
 
 /** @typedef {{ now(): number }} Clock Milisegundos desde la época. */
@@ -41,8 +43,10 @@
 /**
  * @typedef {object} AppConfig
  * @property {'development' | 'production'} environment
- * @property {string} siteUrl Origen del sitio, sin barra final.
+ * @property {string} siteUrl Origen del sitio, sin barra final. Vacío si en producción SITE_URL no es válido.
  * @property {readonly string[]} allowedOrigins Orígenes que pueden hacer POST a /v1.
+ * @property {readonly string[]} problems Códigos de lo que impide usar la configuración (hoy solo `site_url`, en
+ *   producción). Si no está vacía, todo /v1 responde 503 `no_disponible` y la purga diaria sigue corriendo.
  * @property {{ secret: string, expectedHostname: string | null, expectedAction: string }} turnstile
  */
 

@@ -118,6 +118,89 @@ test('waitlist/email: formatos inválidos dan "formato"', () => {
   assert.deepEqual(campos(con({ email: 42 })), { email: 'formato' });
 });
 
+test('waitlist/email: Unicode NFC antes de comprobar: las dos escrituras de "é" son la misma persona', () => {
+  const descompuesto = con({ email: 'josé@ejemplo.com' });
+  const compuesto = con({ email: 'josé@ejemplo.com' });
+  assert.equal(descompuesto.ok, true);
+  assert.equal(compuesto.ok, true);
+  assert.equal(descompuesto.value.email, 'josé@ejemplo.com');
+  assert.equal(descompuesto.value.email, compuesto.value.email);
+  // La mayúscula descompuesta también termina en la forma compuesta y en minúsculas.
+  assert.equal(con({ email: 'JOSÉ@Ejemplo.com' }).value.email, 'josé@ejemplo.com');
+  // El largo se mide ya normalizado: 254 caracteres compuestos pasan aunque escritos descompuestos midan más.
+  const local = 'é'.repeat(100) + 'a'.repeat(254 - '@e.com'.length - 100);
+  assert.equal(con({ email: `${local}@e.com` }).ok, true);
+});
+
+test('waitlist/email: los caracteres de formato invisibles (Cf) dan "formato", al medio, al borde o solos', () => {
+  const malos = [
+    'ana​@ejemplo.com', // espacio de ancho cero
+    'ana@ejem‍plo.com', // unión de ancho cero
+    '﻿ana@ejemplo.com', // marca de orden de bytes: String.trim() la quita, por eso se mira antes
+    'ana@ejemplo.com﻿',
+    'a­na@ejemplo.com', // guion blando
+    'ana‮@ejemplo.com', // inversión de dirección
+    '​',
+  ];
+  for (const email of malos) assert.deepEqual(campos(con({ email })), { email: 'formato' }, JSON.stringify(email));
+});
+
+test('waitlist/email: etiquetas del dominio vacías o que empiezan o terminan en guion dan "formato"', () => {
+  const malos = ['a@b..c', 'a@.b.c', 'a@b.c.', 'a@-b.c', 'a@b-.c', 'a@b.-c', 'a@b.c-', 'a@b.c..d', 'a@b.-.c'];
+  for (const email of malos) assert.deepEqual(campos(con({ email })), { email: 'formato' }, JSON.stringify(email));
+});
+
+test('waitlist/email (F4): la parte local rechaza , ; : < > ( ) [ ] " \\ (listas de direcciones, cabeceras y comillas)', () => {
+  for (const c of [',', ';', ':', '<', '>', '(', ')', '[', ']', '"', '\\']) {
+    const email = `a${c}b@d.com`;
+    assert.deepEqual(campos(con({ email })), { email: 'formato' }, JSON.stringify(email));
+  }
+  const malos = ['a,victim@gmail.com', 'x;y@d.com', 'a<b@d.com', '"a"@d.com', 'a@b,c.com', 'a@[1.2.3.4]'];
+  for (const email of malos) assert.deepEqual(campos(con({ email })), { email: 'formato' }, JSON.stringify(email));
+});
+
+test('waitlist/email (F4): cada etiqueta del dominio solo admite letras, marcas, dígitos y guion', () => {
+  const malos = ['a@b,c.com', 'a@b;c.com', 'a@b_c.com', 'a@b!c.com', 'a@b+c.com', 'a@b"c.com', 'a@b/c.com', 'a@b.c d'];
+  for (const email of malos) assert.deepEqual(campos(con({ email })), { email: 'formato' }, JSON.stringify(email));
+});
+
+test('waitlist/email (F4): una mitad suelta de par sustituto (surrogate) da "formato"; un emoji completo no lo es', () => {
+  for (const email of ['\ud800@x.com', 'a\udc00b@x.com', 'a@x\ud800.com', 'ana@\udbff.com']) {
+    assert.deepEqual(campos(con({ email })), { email: 'formato' }, JSON.stringify(email));
+  }
+  // Un par completo no es una mitad suelta: el validador no lo confunde (no lo rechaza esta regla).
+  assert.equal(con({ email: 'a😀b@ejemplo.com' }).ok, true);
+});
+
+test('waitlist/email (F4): lo que sigue aceptándose: +etiqueta, puntos, símbolos habituales, letras Unicode e IDN', () => {
+  for (const email of [
+    'nombre+tag@dominio.com',
+    'josé@dominio.com',
+    'a@münchen.de',
+    "o'brien@d.com",
+    '!#$%&*/=?^_`{|}~@d.com',
+    'a.b.c@d.com',
+  ]) {
+    assert.equal(con({ email }).ok, true, email);
+  }
+});
+
+test('waitlist/email: lo que NO se rechaza: +etiqueta, puntos en la parte local, guion interno y dominios IDN', () => {
+  const buenos = {
+    'ana+tienda@ejemplo.com': 'ana+tienda@ejemplo.com',
+    'ana.perez@ejemplo.com': 'ana.perez@ejemplo.com',
+    'a@b-c.d': 'a@b-c.d',
+    'a@sub.b-c.example': 'a@sub.b-c.example',
+    'ana@münchen.de': 'ana@münchen.de',
+    'ana@xn--mnchen-3ya.de': 'ana@xn--mnchen-3ya.de',
+  };
+  for (const [entrada, esperado] of Object.entries(buenos)) {
+    const r = con({ email: entrada });
+    assert.equal(r.ok, true, entrada);
+    assert.equal(r.value.email, esperado, 'la dirección con +etiqueta se guarda tal cual: no se colapsan alias');
+  }
+});
+
 // ---- tiktok_user ----
 
 test('waitlist/tiktok_user: se quita el @ inicial y la cadena vacía equivale a ausente', () => {

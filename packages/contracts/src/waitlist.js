@@ -56,27 +56,41 @@ export const WAITLIST_KEYS = Object.freeze([
  *   | { ok: false, error: 'campos_invalidos', campos: Record<string, FieldErrorCode> }} WaitlistResult
  */
 
-const CARACTER_PROHIBIDO_EMAIL = /[\s\p{Cc}]/u;
+// Espacios, controles y mitades sueltas de par sustituto (\p{Cs}; con la bandera u un par completo NO coincide). No se
+// usa String.isWellFormed porque este validador también corre en navegadores.
+const CARACTER_PROHIBIDO_EMAIL = /[\s\p{Cc}\p{Cs}]/u;
+// Parte local: separadores de listas de direcciones, de cabeceras y de comillas (, ; : < > ( ) [ ] " \).
+const CARACTER_PROHIBIDO_LOCAL = /[,;:<>()[\]"\\]/;
+// Cada etiqueta del dominio: letras, marcas, dígitos y guion (los dominios IDN siguen valiendo).
+const ETIQUETA_VALIDA = /^[\p{L}\p{M}\p{N}-]+$/u;
+// Caracteres de formato invisibles (espacio de ancho cero, unión, BOM, guion blando, inversión de dirección...).
+const CARACTER_INVISIBLE_EMAIL = /\p{Cf}/u;
 const TIKTOK_USER_VALIDO = /^[A-Za-z0-9._]+$/;
 
 /**
- * Normaliza un correo: recorta y pasa a minúsculas. La forma devuelta es la que se guarda y la que debe ser única.
+ * Normaliza un correo: Unicode NFC, recorta y pasa a minúsculas. La forma devuelta es la que se guarda y la que debe
+ * ser única. No colapsa alias (`+etiqueta`), no toca los puntos de la parte local y admite dominios IDN.
  * @param {unknown} crudo
  * @returns {{ ok: true, value: string } | { ok: false, code: FieldErrorCode }}
  */
 export function normalizeEmail(crudo) {
   if (crudo === undefined) return { ok: false, code: 'requerido' };
   if (typeof crudo !== 'string') return { ok: false, code: 'formato' };
-  const email = crudo.trim().toLowerCase();
+  const compuesto = crudo.normalize('NFC');
+  // Antes de recortar: String.trim() quita U+FEFF (es de formato), y un BOM al borde tiene que rechazarse igual.
+  if (CARACTER_INVISIBLE_EMAIL.test(compuesto)) return { ok: false, code: 'formato' };
+  const email = compuesto.trim().toLowerCase().normalize('NFC');
   if (email === '') return { ok: false, code: 'requerido' };
   if (email.length > LIMITS.email.max) return { ok: false, code: 'largo' };
   if (CARACTER_PROHIBIDO_EMAIL.test(email)) return { ok: false, code: 'formato' };
   const partes = email.split('@');
   if (partes.length !== 2) return { ok: false, code: 'formato' };
   const [local, dominio] = partes;
-  const punto = dominio.indexOf('.');
-  // El dominio necesita un punto que no sea el primero ni el último carácter.
-  if (local === '' || punto < 1 || dominio.endsWith('.')) return { ok: false, code: 'formato' };
+  const etiquetas = dominio.split('.');
+  // El dominio necesita al menos dos etiquetas, ninguna vacía y ninguna que empiece o termine en guion.
+  const etiquetaMala = etiquetas.some((e) => !ETIQUETA_VALIDA.test(e) || e.startsWith('-') || e.endsWith('-'));
+  if (local === '' || CARACTER_PROHIBIDO_LOCAL.test(local) || etiquetas.length < 2 || etiquetaMala)
+    return { ok: false, code: 'formato' };
   return { ok: true, value: email };
 }
 

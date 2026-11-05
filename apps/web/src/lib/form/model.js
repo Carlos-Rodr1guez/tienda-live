@@ -28,6 +28,12 @@ export const WAITLIST_URL = '/v1/waitlist';
 /** Id del título que recibe el foco cuando el envío sale bien. */
 export const SUCCESS_FOCUS_ID = 'anotarme-exito';
 
+/** Id del resumen de errores: recibe el foco cuando falla el envío sin un campo al que apuntar (servidor, red, tiempo). */
+export const SUMMARY_FOCUS_ID = 'anotarme-resumen';
+
+/** Tiempo máximo de un envío. Pasado, se aborta y sigue el camino de "sin conexión": el botón vuelve y se puede reintentar. */
+export const REQUEST_TIMEOUT_MS = 15_000;
+
 /**
  * El nombre legible de un campo, para el resumen de errores (junto al mensaje, así se sabe cuál es cuál).
  * @param {string} campo
@@ -114,7 +120,8 @@ export function validateForm(crudos, { turnstileToken }) {
       errores: ordenarErrores(resultado.error === 'campos_invalidos' ? Object.keys(resultado.campos) : []),
     };
   }
-  // El token de Turnstile no sale de acá: lo pone el controlador, que es quien lo recibe del widget.
+  // El `turnstile_token` del validador (null: no se le pasó ninguno) se descarta y al cuerpo se le suma el que entregó el
+  // widget (`turnstileToken`, lo recibe el controlador). Sí viaja en el cuerpo: la API lo exige.
   const body = Object.fromEntries(
     Object.entries(resultado.value).filter(([clave, v]) => v !== null && clave !== 'turnstile_token'),
   );
@@ -131,6 +138,8 @@ const MENSAJE_POR_ESTADO = {
   403: respuestas.verificacion_fallida,
   413: respuestas.demasiado_grande,
   415: respuestas.solicitud_invalida,
+  // La regla de límite de Cloudflare responde 429 con un cuerpo que no es JSON: no es un fallo de nuestro lado
+  429: respuestas.demasiados_intentos,
   503: respuestas.no_disponible,
 };
 
@@ -202,20 +211,24 @@ export function describedBy(estado, campo) {
 }
 
 /**
- * Hacia dónde va el foco tras pintar el estado: el primer campo con error, o el título de éxito.
+ * Hacia dónde va el foco tras pintar el estado: el primer campo con error, el título de éxito o, si el envío falló sin
+ * un campo al que apuntar, el resumen de errores (el botón estaba deshabilitado mientras enviaba y el foco se perdió).
  * @param {EstadoFormulario} estado
  * @returns {string | null}
  */
 export function focusTarget(estado) {
   if (estado.fase === 'exito') return SUCCESS_FOCUS_ID;
-  return estado.errores[0]?.idCampo ?? null;
+  if (estado.errores.length > 0) return estado.errores[0].idCampo;
+  return estado.fase === 'error' ? SUMMARY_FOCUS_ID : null;
 }
 
 /**
- * El pedido de fetch para enviar el formulario. Sin cookies: la API no las usa.
+ * El pedido de fetch para enviar el formulario. Sin cookies: la API no las usa. Con tiempo máximo: si la conexión se
+ * cuelga, el fetch se aborta y el controlador lo trata como "sin conexión".
  * @param {Record<string, unknown>} cuerpo
+ * @param {{ timeoutMs?: number }} [opciones]
  */
-export function buildRequest(cuerpo) {
+export function buildRequest(cuerpo, { timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   return {
     url: WAITLIST_URL,
     init: {
@@ -223,6 +236,7 @@ export function buildRequest(cuerpo) {
       credentials: /** @type {RequestCredentials} */ ('omit'),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cuerpo),
+      signal: AbortSignal.timeout(timeoutMs),
     },
   };
 }

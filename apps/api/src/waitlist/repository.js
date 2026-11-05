@@ -31,20 +31,27 @@ export const CONFIRM_SQL =
   'UPDATE waitlist SET confirmed_at=?2, updated_at=?2, token_hash=NULL, token_expires_at=NULL ' +
   'WHERE token_hash=?1 AND confirmed_at IS NULL AND token_expires_at > ?2';
 
-const BUSCAR = 'SELECT id, confirmed_at, recent_sends FROM waitlist WHERE email = ?1';
+const BUSCAR = 'SELECT id, confirmed_at, created_at, recent_sends FROM waitlist WHERE email = ?1';
 
 const INSERTAR =
   'INSERT INTO waitlist (email, live_frequency, stream_type, interests, tiktok_user, followers_range, country, ' +
   'consent_version, consent_at, created_at, updated_at, token_hash, token_expires_at, recent_sends) ' +
   'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?9, ?10, ?11, ?12)';
 
-// Una persona pendiente que vuelve a anotarse: se reemplaza el perfil y el consentimiento y se reinicia la ventana
-// de 7 días (created_at). Con `envio`, además, el token nuevo pisa al anterior (el enlace viejo deja de servir).
-const ACTUALIZAR_PERFIL =
+// Pendiente que vuelve a anotarse DENTRO de sus 7 días: no se toca el perfil, el consentimiento ni created_at. Solo se
+// rota el token y se anota el envío. Es un compare-and-swap sobre `recent_sends` (lo que se leyó): si dos pedidos leyeron
+// lo mismo, solo el primero cambia una fila y es el único que manda correo.
+const ROTAR_TOKEN =
+  'UPDATE waitlist SET token_hash=?3, token_expires_at=?4, recent_sends=?5, updated_at=?6 ' +
+  'WHERE id=?1 AND confirmed_at IS NULL AND recent_sends=?2';
+
+// Pendiente PASADO de sus 7 días que la purga diaria todavía no borró: vale como inscripción nueva, así que se
+// reemplazan perfil, consentimiento, created_at y token. Compare-and-swap sobre `created_at` (lo que se leyó).
+const REEMPLAZAR_VENCIDO =
   'UPDATE waitlist SET live_frequency=?2, stream_type=?3, interests=?4, tiktok_user=?5, followers_range=?6, ' +
-  'country=?7, consent_version=?8, consent_at=?9, created_at=?9, updated_at=?9';
-const ACTUALIZAR_ENVIO = ', token_hash=?10, token_expires_at=?11, recent_sends=?12';
-const SOLO_PENDIENTES = ' WHERE id=?1 AND confirmed_at IS NULL';
+  'country=?7, consent_version=?8, consent_at=?9, created_at=?9, updated_at=?9, ' +
+  'token_hash=?10, token_expires_at=?11, recent_sends=?12 ' +
+  'WHERE id=?1 AND confirmed_at IS NULL AND created_at=?13';
 
 const PURGAR = 'DELETE FROM waitlist WHERE confirmed_at IS NULL AND created_at < ?1';
 
@@ -68,12 +75,19 @@ function valoresDelPerfil(p, ahora) {
 /**
  * @param {import('../ports.js').Db} db
  * @param {string} email Ya normalizado.
- * @returns {Promise<{ id: number, confirmedAt: string | null, recentSends: string[] } | null>}
+ * @returns {Promise<{ id: number, confirmedAt: string | null, createdAt: string, recentSends: string[], recentSendsRaw: string } | null>}
+ *   `recentSendsRaw` es el texto tal cual está en la base: es lo que `rotatePending` compara para no pisar a otro pedido.
  */
 export async function findByEmail(db, email) {
   const fila = await db.prepare(BUSCAR).bind(email).first();
   if (!fila) return null;
-  return { id: Number(fila.id), confirmedAt: fila.confirmed_at, recentSends: JSON.parse(fila.recent_sends) };
+  return {
+    id: Number(fila.id),
+    confirmedAt: fila.confirmed_at,
+    createdAt: fila.created_at,
+    recentSends: JSON.parse(fila.recent_sends),
+    recentSendsRaw: fila.recent_sends,
+  };
 }
 
 /**
@@ -105,18 +119,39 @@ export async function insertPending(db, { perfil, ahora, tokenHash, tokenExpires
 }
 
 /**
- * Actualiza una fila pendiente. Devuelve cuántas filas cambió (0 si ya se había confirmado en el medio).
+ * Rota el token de un pendiente que sigue dentro de sus 7 días (el enlace anterior deja de servir) y anota el envío.
+ * Compare-and-swap: solo cambia la fila si `recent_sends` sigue siendo `recentSendsLeido`. Devuelve cuántas filas
+ * cambió: 1 si este pedido ganó (y por lo tanto manda el correo), 0 si otro envió antes o ya se confirmó.
  * @param {import('../ports.js').Db} db
  * @param {number} id
- * @param {{ perfil: Perfil, ahora: string, envio: Envio | null }} datos
+ * @param {{ ahora: string, envio: Envio, recentSendsLeido: string }} datos
  */
-export async function updatePending(db, id, { perfil, ahora, envio }) {
-  const valores = [id, ...valoresDelPerfil(perfil, ahora)];
-  const sql = envio ? ACTUALIZAR_PERFIL + ACTUALIZAR_ENVIO + SOLO_PENDIENTES : ACTUALIZAR_PERFIL + SOLO_PENDIENTES;
-  if (envio) valores.push(envio.tokenHash, envio.tokenExpiresAt, JSON.stringify(envio.recentSends));
+export async function rotatePending(db, id, { ahora, envio, recentSendsLeido }) {
   const { meta } = await db
-    .prepare(sql)
-    .bind(...valores)
+    .prepare(ROTAR_TOKEN)
+    .bind(id, recentSendsLeido, envio.tokenHash, envio.tokenExpiresAt, JSON.stringify(envio.recentSends), ahora)
+    .run();
+  return meta.changes;
+}
+
+/**
+ * Reemplaza un pendiente cuya ventana de 7 días ya pasó (y que la purga todavía no borró) como si fuera un alta nueva.
+ * Compare-and-swap sobre `created_at`. Devuelve cuántas filas cambió (0 si otro pedido lo reemplazó antes o se confirmó).
+ * @param {import('../ports.js').Db} db
+ * @param {number} id
+ * @param {{ perfil: Perfil, ahora: string, envio: Envio, createdAtLeido: string }} datos
+ */
+export async function replacePending(db, id, { perfil, ahora, envio, createdAtLeido }) {
+  const { meta } = await db
+    .prepare(REEMPLAZAR_VENCIDO)
+    .bind(
+      id,
+      ...valoresDelPerfil(perfil, ahora),
+      envio.tokenHash,
+      envio.tokenExpiresAt,
+      JSON.stringify(envio.recentSends),
+      createdAtLeido,
+    )
     .run();
   return meta.changes;
 }

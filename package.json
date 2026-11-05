@@ -15,7 +15,7 @@
     "dev:web": "npm run dev -w @tienda/web",
     "dev:api": "npm run dev -w @tienda/api",
     "build:web": "npm run build -w @tienda/web",
-    "preview": "npm run build:web && npm run preview -w @tienda/api",
+    "preview": "node scripts/preview.mjs",
     "db:migrate": "npm run db:migrate -w @tienda/api",
     "embudo": "npm run embudo -w @tienda/api --",
     "test": "npm test --workspaces --if-present && node --test \"scripts/*.test.mjs\"",

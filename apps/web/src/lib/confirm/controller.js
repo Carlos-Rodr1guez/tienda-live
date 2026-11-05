@@ -8,7 +8,7 @@ import { CLEAN_PATH, buildConfirmRequest, initialConfirmState, reduceConfirm, vi
  * Lo que el controlador necesita de la página. Los elementos reales del DOM cumplen esta forma.
  * @typedef {object} ElementosConfirmar
  * @property {{ textContent: string | null, dataset: Record<string, string | undefined>, focus: () => void }} mensaje  región de estado
- * @property {{ hidden: boolean | string, disabled: boolean, textContent: string | null, addEventListener: (tipo: 'click', f: () => unknown) => void }} boton
+ * @property {{ hidden: boolean | string, disabled: boolean, textContent: string | null, focus: () => void, addEventListener: (tipo: 'click', f: () => unknown) => void }} boton
  * @property {{ hidden: boolean | string }} volver  enlace de vuelta al inicio
  */
 
@@ -18,9 +18,10 @@ import { CLEAN_PATH, buildConfirmRequest, initialConfirmState, reduceConfirm, vi
  *   history: { replaceState: (estado: unknown, titulo: string, url: string) => void },
  *   elementos: ElementosConfirmar,
  *   fetchFn: (url: string, init: RequestInit) => Promise<{ status: number }>,
- * }} entrada
+ *   timeoutMs?: number,
+ * }} entrada  `timeoutMs`: tiempo máximo del pedido (por defecto 15 s); pasado, sigue el camino de "sin conexión"
  */
-export function mountConfirm({ hash, history, elementos, fetchFn }) {
+export function mountConfirm({ hash, history, elementos, fetchFn, timeoutMs }) {
   // Lo primero: el token sale de la barra y del historial, pase lo que pase después.
   history.replaceState(null, '', CLEAN_PATH);
 
@@ -44,7 +45,7 @@ export function mountConfirm({ hash, history, elementos, fetchFn }) {
     estado = enviando;
     dibujar();
 
-    const { url, init } = buildConfirmRequest(token);
+    const { url, init } = buildConfirmRequest(token, { timeoutMs });
     try {
       const respuesta = await fetchFn(url, init);
       estado = reduceConfirm(estado, { type: 'respuesta', status: respuesta.status });
@@ -52,8 +53,11 @@ export function mountConfirm({ hash, history, elementos, fetchFn }) {
       estado = reduceConfirm(estado, { type: 'falloRed' });
     }
     dibujar();
-    // El resultado definitivo se anuncia llevando el foco al mensaje; un error de red deja el foco en el botón.
-    if (estado.fase === 'confirmado' || estado.fase === 'invalido') elementos.mensaje.focus();
+    // Un resultado definitivo se anuncia llevando el foco al mensaje. Si queda un botón activo para reintentar (error
+    // de red, tiempo vencido, 429), el foco va al botón: al deshabilitarse mientras envía lo perdió y habría caído al body.
+    const vista = viewFor(estado);
+    if (vista.boton.visible && !vista.boton.deshabilitado) elementos.boton.focus();
+    else if (estado.fase === 'confirmado' || estado.fase === 'invalido') elementos.mensaje.focus();
   }
 
   elementos.boton.addEventListener('click', confirmar);

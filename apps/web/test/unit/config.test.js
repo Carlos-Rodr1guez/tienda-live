@@ -36,6 +36,7 @@ test('config de Astro: puerto 4400 estricto y proxy de /v1 hacia la API en 8790'
 test('config de Astro: el sitio sale de SITE_URL y, sin ella, es el origen local de la API', async () => {
   assert.equal((await cargarConfig('https://ejemplo.test')).site, 'https://ejemplo.test');
   assert.equal((await cargarConfig(undefined)).site, 'http://localhost:8790');
+  assert.equal((await cargarConfig('ejemplo.com')).site, 'http://localhost:8790', 'mal formado: no llega a Astro');
 });
 
 test('web: dependencias fijadas por el diseño (Astro 7.4.5 en dependencies, TypeScript 6 solo acá)', () => {
