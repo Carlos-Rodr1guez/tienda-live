@@ -1,0 +1,34 @@
+{
+  // Un solo Worker: sirve la web estática (apps/web/dist) y corre código únicamente para /v1/*.
+  "name": "tienda-live",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+
+  "assets": {
+    // Ruta relativa a este archivo. Si Wrangler no la resuelve así, el plan B es un wrangler.jsonc en la raíz (diseño, D§14).
+    "directory": "../web/dist",
+    "run_worker_first": ["/v1/*"],
+    "not_found_handling": "404-page"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tienda-live",
+      // Marcador: el id real lo pone quien despliega (ver el runbook). Nunca se versiona.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Purga diaria de anotados sin confirmar, a las 03:17 UTC.
+  "triggers": { "crons": ["17 3 * * *"] },
+
+  // Variables públicas. Los secretos (TURNSTILE_SECRET_KEY) van con `wrangler secret put`, no acá.
+  "vars": { "ENVIRONMENT": "production", "SITE_URL": "" },
+
+  // Apagada a propósito: en el H1 no se guardan metadatos de los pedidos. El dueño puede activarla tras la revisión legal.
+  "observability": { "enabled": false },
+
+  "dev": { "ip": "localhost", "port": 8790, "inspector_port": 9290 }
+}

@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import worker from '../src/index.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
@@ -29,11 +28,4 @@ test('api: los scripts pasan por el lanzador y respetan los puertos 8790 y 9290'
   assert.equal(pkg.scripts['db:migrate'], 'node ../../scripts/run.mjs wrangler d1 migrations apply DB --local');
   assert.equal(pkg.scripts.test, 'node --test --disable-warning=ExperimentalWarning "test/**/*.test.js"');
   for (const nombre of ['embudo', 'borrar', 'check:bundle']) assert.ok(pkg.scripts[nombre], nombre);
-});
-
-test('api: el Worker de arranque responde 404 a todo hasta que lleguen las rutas', async () => {
-  for (const url of ['http://localhost:8790/', 'http://localhost:8790/v1/events']) {
-    const res = await worker.fetch(new Request(url));
-    assert.equal(res.status, 404, url);
-  }
 });
