@@ -25,11 +25,15 @@ try {
   console.log(`  Abre en Chrome:  ${url}`);
   console.log(`  Demo sin TikTok: ${url}/?demo`);
   console.log('');
-  const stop = async () => { await app.close(); process.exit(0); };
+  const stop = async () => {
+    await app.close();
+    process.exit(0);
+  };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
 } catch (err) {
-  if (err.code === 'EADDRINUSE') console.error(`El puerto ${port} está ocupado. Cambia "port" en config.json o usa PORT=4000 npm start`);
+  if (err.code === 'EADDRINUSE')
+    console.error(`El puerto ${port} está ocupado. Cambia "port" en config.json o usa PORT=4000 npm start`);
   else console.error(err);
   process.exit(1);
 }

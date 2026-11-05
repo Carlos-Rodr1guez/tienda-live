@@ -86,9 +86,16 @@ export class GameRenderer {
 
     // anillo del comandante
     const ringGeo = new THREE.RingGeometry(1.1, 1.35, 40).rotateX(-Math.PI / 2);
-    this.cmdRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
-      color: hdr(GOLD, 3.5), transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
+    this.cmdRing = new THREE.Mesh(
+      ringGeo,
+      new THREE.MeshBasicMaterial({
+        color: hdr(GOLD, 3.5),
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
     this.cmdRing.visible = false;
     scene.add(this.cmdRing);
 
@@ -144,13 +151,25 @@ export class GameRenderer {
     base.add(shell);
     this.baseShell = shell;
 
-    this.coreMat = new THREE.MeshLambertMaterial({ color: 0x2c6f8f, emissive: 0x2bc8ff, emissiveIntensity: 1.7, flatShading: true });
+    this.coreMat = new THREE.MeshLambertMaterial({
+      color: 0x2c6f8f,
+      emissive: 0x2bc8ff,
+      emissiveIntensity: 1.7,
+      flatShading: true,
+    });
     this.core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.15, 0), this.coreMat);
     this.core.position.y = 5.8;
     base.add(this.core);
-    const ring = new THREE.Mesh(new THREE.RingGeometry(6.7, 7.1, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({
-      color: hdr(TEAM_COLORS[0], 3), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(6.7, 7.1, 64).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({
+        color: hdr(TEAM_COLORS[0], 3),
+        transparent: true,
+        opacity: 0.55,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
     ring.position.y = 0.05;
     base.add(ring);
     this.baseRing = ring;
@@ -176,9 +195,15 @@ export class GameRenderer {
     const portal = new THREE.Group();
     portal.position.set(0, 6.5, FIELD.zTop - 7);
     const red = TEAM_COLORS[1];
-    const torus = new THREE.Mesh(new THREE.TorusGeometry(7, 0.6, 10, 48), new THREE.MeshLambertMaterial({
-      color: 0x3a1418, emissive: red, emissiveIntensity: 3, flatShading: true,
-    }));
+    const torus = new THREE.Mesh(
+      new THREE.TorusGeometry(7, 0.6, 10, 48),
+      new THREE.MeshLambertMaterial({
+        color: 0x3a1418,
+        emissive: red,
+        emissiveIntensity: 3,
+        flatShading: true,
+      }),
+    );
     portal.add(torus);
     const c = document.createElement('canvas');
     c.width = c.height = 256;
@@ -199,12 +224,22 @@ export class GameRenderer {
     }
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    this.portalDisc = new THREE.Mesh(new THREE.CircleGeometry(6.6, 48), new THREE.MeshBasicMaterial({
-      map: tex, color: new THREE.Color(2.6, 2.6, 2.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
+    this.portalDisc = new THREE.Mesh(
+      new THREE.CircleGeometry(6.6, 48),
+      new THREE.MeshBasicMaterial({
+        map: tex,
+        color: new THREE.Color(2.6, 2.6, 2.6),
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
     portal.add(this.portalDisc);
     for (const s of [-1, 1]) {
-      const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.4, 9, 1.4), new THREE.MeshLambertMaterial({ color: 0x2b2230, flatShading: true }));
+      const pillar = new THREE.Mesh(
+        new THREE.BoxGeometry(1.4, 9, 1.4),
+        new THREE.MeshLambertMaterial({ color: 0x2b2230, flatShading: true }),
+      );
       pillar.position.set(s * 8.2, -2, 0);
       portal.add(pillar);
     }
@@ -233,9 +268,17 @@ export class GameRenderer {
 
     // aro del color del equipo bajo cada unidad: se lee de qué bando es incluso en un celular
     const ring = new THREE.RingGeometry(0.8, 1, 28).rotateX(-Math.PI / 2);
-    this.halos = new THREE.InstancedMesh(ring, new THREE.MeshBasicMaterial({
-      color: 0xffffff, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthWrite: false,
-    }), MAX_SHADOWS);
+    this.halos = new THREE.InstancedMesh(
+      ring,
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.42,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+      MAX_SHADOWS,
+    );
     this.halos.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.halos.setColorAt(0, new THREE.Color(1, 1, 1));
     this.halos.frustumCulled = false;
@@ -307,12 +350,25 @@ export class GameRenderer {
             // la nave grande revienta por partes y al final estalla entera
             fx.chain(e.x, e.y, e.z, 3.2, 7, 9, 0.16, 0xff9a40);
             fx.explode(e.x, e.y, e.z, 4, 0xffb060);
-            fx.later(1.05, () => { fx.explode(e.x, e.y, e.z, 7.5, 0xff8a30); this.shake(1.4); });
+            fx.later(1.05, () => {
+              fx.explode(e.x, e.y, e.z, 7.5, 0xff8a30);
+              this.shake(1.4);
+            });
             this.shake(0.6);
-          } else if (e.kind === 'coloso') { fx.explode(e.x, 3.2, e.z, 3.6, 0xffa040); fx.chain(e.x, 2.5, e.z, 2.2, 3, 2.5, 0.14, 0xff8a30); this.shake(0.7); }
-          else if (e.kind === 'bombardero') { fx.explode(e.x, e.y, e.z, 2.3, 0xffa040); this.shake(0.12); }
-          else if (e.kind === 'comandante') { fx.explode(e.x, e.y, e.z, 2.4, GOLD); this.shake(0.4); }
-          else { fx.explode(e.x, e.y, e.z, 1.0, 0xffa850); fx.sparks(e.x, e.y, e.z, 5, col, 4, 0.5); }
+          } else if (e.kind === 'coloso') {
+            fx.explode(e.x, 3.2, e.z, 3.6, 0xffa040);
+            fx.chain(e.x, 2.5, e.z, 2.2, 3, 2.5, 0.14, 0xff8a30);
+            this.shake(0.7);
+          } else if (e.kind === 'bombardero') {
+            fx.explode(e.x, e.y, e.z, 2.3, 0xffa040);
+            this.shake(0.12);
+          } else if (e.kind === 'comandante') {
+            fx.explode(e.x, e.y, e.z, 2.4, GOLD);
+            this.shake(0.4);
+          } else {
+            fx.explode(e.x, e.y, e.z, 1.0, 0xffa850);
+            fx.sparks(e.x, e.y, e.z, 5, col, 4, 0.5);
+          }
           break;
         }
         case 'spawn': {
@@ -400,7 +456,8 @@ export class GameRenderer {
       const v = this.views.get(c.id);
       if (u && u.alive && v) this.cineTarget.set(v.root.position.x, v.root.position.y, v.root.position.z);
       else if (c.t < c.dur - 0.9) c.t = c.dur - 0.9; // si muere, se vuelve antes
-      const fadeIn = 0.85, fadeOut = 0.9;
+      const fadeIn = 0.85,
+        fadeOut = 0.9;
       k = Math.min(1, c.t / fadeIn, (c.dur - c.t) / fadeOut);
       k = Math.max(0, k);
       k = k * k * (3 - 2 * k);
@@ -419,8 +476,11 @@ export class GameRenderer {
       const a = (c.t - c.dur / 2) * (big ? 0.16 : 0.22);
       const dist = big ? 27 : 17;
       const hgt = big ? 15 : 9.5;
-      const tx = this.cineTarget.x, ty = this.cineTarget.y, tz = this.cineTarget.z;
-      const cx = tx + Math.sin(a) * dist, cz = tz + Math.cos(a) * dist;
+      const tx = this.cineTarget.x,
+        ty = this.cineTarget.y,
+        tz = this.cineTarget.z;
+      const cx = tx + Math.sin(a) * dist,
+        cz = tz + Math.cos(a) * dist;
       this.viewPos.lerp(this.tmpV.set(cx, ty + hgt, cz), k);
       this.viewLook.lerp(this.tmpV.set(tx, ty + (big ? 0.5 : 2.4), tz), k);
     }
@@ -467,7 +527,10 @@ export class GameRenderer {
 
     for (const u of w.units) {
       let v = this.views.get(u.id);
-      if (!v) { v = this.createView(u); this.views.set(u.id, v); }
+      if (!v) {
+        v = this.createView(u);
+        this.views.set(u.id, v);
+      }
       v.seen = this.frame;
       const age = t - v.born;
       let y = u.y;
@@ -476,7 +539,7 @@ export class GameRenderer {
         if (u.kind === 'acorazado' && age < 1.4) y += (1 - age / 1.4) ** 2 * 26; // desciende desde el cielo
         // alabeo al girar
         let dh = u.heading - v.prevHeading;
-        dh = ((dh + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+        dh = ((((dh + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) - Math.PI;
         const turn = dt > 0 ? dh / dt : 0;
         const targetRoll = Math.max(-0.6, Math.min(0.6, -turn * 0.18));
         v.roll += (targetRoll - v.roll) * Math.min(1, dt * 6);
@@ -495,7 +558,8 @@ export class GameRenderer {
         const f = heavy ? 2.6 : 4;
         const amp = heavy ? 0.32 : 0.45;
         const sw = u.moving ? Math.sin(t * f + u.id) * amp : 0;
-        const r0 = v.legRest ? v.legRest[0] : 0, r1 = v.legRest ? v.legRest[1] : 0;
+        const r0 = v.legRest ? v.legRest[0] : 0,
+          r1 = v.legRest ? v.legRest[1] : 0;
         v.legs[0].rotation.x = r0 + sw;
         v.legs[1].rotation.x = r1 - sw;
         if (u.moving) v.root.position.y += Math.abs(Math.cos(t * f + u.id)) * (heavy ? 0.35 : 0.18);
@@ -538,7 +602,10 @@ export class GameRenderer {
     if (this.halos.instanceColor) this.halos.instanceColor.needsUpdate = true;
 
     for (const [id, v] of this.views) {
-      if (v.seen !== this.frame) { this.removeView(v); this.views.delete(id); }
+      if (v.seen !== this.frame) {
+        this.removeView(v);
+        this.views.delete(id);
+      }
     }
 
     // comandante

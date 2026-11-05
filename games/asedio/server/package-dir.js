@@ -7,7 +7,7 @@ import path from 'node:path';
 
 export function packageDir(name, from) {
   const start = path.resolve(from);
-  for (let dir = start; ; ) {
+  for (let dir = start; ;) {
     const candidate = path.join(dir, 'node_modules', name);
     if (existsSync(path.join(candidate, 'package.json'))) return candidate;
     const parent = path.dirname(dir);

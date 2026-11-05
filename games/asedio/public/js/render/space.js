@@ -144,12 +144,18 @@ function atmosphereMaterial(sunDir) {
 
 function ringTexture() {
   const c = document.createElement('canvas');
-  c.width = 512; c.height = 8;
+  c.width = 512;
+  c.height = 8;
   const g = c.getContext('2d');
   for (let x = 0; x < 512; x++) {
     const t = x / 511;
-    const a = (0.25 + 0.55 * Math.abs(Math.sin(t * 38) * Math.sin(t * 11 + 1))) * Math.sin(t * Math.PI) ** 0.6 * (t > 0.62 && t < 0.66 ? 0.15 : 1);
-    const r = 220 - t * 50, gg = 190 - t * 60, b = 160 - t * 50;
+    const a =
+      (0.25 + 0.55 * Math.abs(Math.sin(t * 38) * Math.sin(t * 11 + 1))) *
+      Math.sin(t * Math.PI) ** 0.6 *
+      (t > 0.62 && t < 0.66 ? 0.15 : 1);
+    const r = 220 - t * 50,
+      gg = 190 - t * 60,
+      b = 160 - t * 50;
     g.fillStyle = `rgba(${r | 0},${gg | 0},${b | 0},${a.toFixed(3)})`;
     g.fillRect(x, 0, 1, 8);
   }
@@ -166,7 +172,11 @@ export class SpaceBackdrop {
 
     // 1) nebulosa pintada una sola vez en un cubemap (barato de dibujar cada cuadro)
     // 8 bits en sRGB: buena precisión en los tonos oscuros con poca memoria de video (~24 MB)
-    const rt = new THREE.WebGLCubeRenderTarget(1024, { colorSpace: THREE.SRGBColorSpace, generateMipmaps: false, minFilter: THREE.LinearFilter });
+    const rt = new THREE.WebGLCubeRenderTarget(1024, {
+      colorSpace: THREE.SRGBColorSpace,
+      generateMipmaps: false,
+      minFilter: THREE.LinearFilter,
+    });
     const cubeCam = new THREE.CubeCamera(1, 100, rt);
     const tmp = new THREE.Scene();
     const sky = new THREE.Mesh(new THREE.SphereGeometry(50, 64, 32), nebulaMaterial());
@@ -185,13 +195,19 @@ export class SpaceBackdrop {
     const pos = new Float32Array(N * 3);
     const seed = new Float32Array(N);
     let s = 1234567;
-    const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
     for (let i = 0; i < N; i++) {
       // casi todas por debajo del horizonte, que es lo que ve esta cámara
       let x, y, z;
-      do { x = rnd() * 2 - 1; y = rnd() * 2 - 1; z = rnd() * 2 - 1; } while (x * x + y * y + z * z > 1 || y > 0.15);
+      do {
+        x = rnd() * 2 - 1;
+        y = rnd() * 2 - 1;
+        z = rnd() * 2 - 1;
+      } while (x * x + y * y + z * z > 1 || y > 0.15);
       const l = Math.hypot(x, y, z) || 1;
-      pos[i * 3] = (x / l) * 900; pos[i * 3 + 1] = (y / l) * 900; pos[i * 3 + 2] = (z / l) * 900;
+      pos[i * 3] = (x / l) * 900;
+      pos[i * 3 + 1] = (y / l) * 900;
+      pos[i * 3 + 2] = (z / l) * 900;
       seed[i] = rnd();
     }
     const sg = new THREE.BufferGeometry();
@@ -248,10 +264,17 @@ export class SpaceBackdrop {
       const r = Math.hypot(rp.getX(i), rp.getY(i));
       ruv.setXY(i, (r - R * 1.35) / (R * 0.8), 0.5);
     }
-    const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
-      map: ringTexture(), transparent: true, side: THREE.DoubleSide, depthWrite: false,
-      color: new THREE.Color(0.85, 0.78, 0.72), fog: false,
-    }));
+    const ring = new THREE.Mesh(
+      ringGeo,
+      new THREE.MeshBasicMaterial({
+        map: ringTexture(),
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        color: new THREE.Color(0.85, 0.78, 0.72),
+        fog: false,
+      }),
+    );
     ring.rotation.x = -Math.PI / 2 + 0.38;
     ring.rotation.y = 0.22;
     planet.add(ring);

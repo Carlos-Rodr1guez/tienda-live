@@ -44,13 +44,20 @@ async function boot() {
 
   const world = new World(cfg);
   const glCanvas = $('gl');
-  const renderer = new GameRenderer(glCanvas, world, cfg, { bloom: params.get('bloom') !== '0', cinematics: params.get('cine') !== '0', pixelRatio: params.get('pr') });
+  const renderer = new GameRenderer(glCanvas, world, cfg, {
+    bloom: params.get('bloom') !== '0',
+    cinematics: params.get('cine') !== '0',
+    pixelRatio: params.get('pr'),
+  });
   if (params.get('cam')) {
     // ajuste fino de cámara para pruebas: ?cam=x,y,z,lookX,lookY,lookZ,fov
     const [x, y, z, lx, ly, lz, fov] = params.get('cam').split(',').map(Number);
     renderer.camPos.set(x, y, z);
     renderer.camLook.set(lx, ly, lz);
-    if (fov) { renderer.camera.fov = fov; renderer.camera.updateProjectionMatrix(); }
+    if (fov) {
+      renderer.camera.fov = fov;
+      renderer.camera.updateProjectionMatrix();
+    }
   }
   const overlay = new Overlay($('ov'), renderer, world);
   let hud;
@@ -61,7 +68,10 @@ async function boot() {
   hud = new Hud(cfg, world, router);
   renderer.onCine = (state, c) => hud.cine(state, c);
   $('hud').classList.add('hidden'); // se muestra al pulsar JUGAR
-  const sfx = new Sfx(cfg.audio?.volume ?? 0.5, { music: cfg.audio?.music !== false && params.get('music') !== '0', musicVolume: cfg.audio?.musicVolume ?? 0.35 });
+  const sfx = new Sfx(cfg.audio?.volume ?? 0.5, {
+    music: cfg.audio?.music !== false && params.get('music') !== '0',
+    musicVolume: cfg.audio?.musicVolume ?? 0.35,
+  });
   const sim = new SimulatorPanel($('sim'), (evt) => router.handle(evt));
 
   let running = false;
@@ -76,11 +86,16 @@ async function boot() {
   $('startBtn').addEventListener('click', start);
 
   const input = new Input($('game'), renderer, {
-    toggleSim: () => { sim.toggle(); layout(); },
+    toggleSim: () => {
+      sim.toggle();
+      layout();
+    },
     toggleSafe: () => hud.toggleSafe(),
     toggleMute: () => sfx.toggleMute(),
     toggleHud: () => hud.toggleHud(),
-    toggleNames: () => { overlay.showNames = !overlay.showNames; },
+    toggleNames: () => {
+      overlay.showNames = !overlay.showNames;
+    },
     toggleCam: () => hud.toggleCam(),
     start,
   });
@@ -93,14 +108,17 @@ async function boot() {
     const W = app.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     const H = app.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
     const wantsPanel = sim.el.classList.contains('on');
-    const docked = wantsPanel && W - Math.round(H * 9 / 16) >= 330;
+    const docked = wantsPanel && W - Math.round((H * 9) / 16) >= 330;
     sim.floating = wantsPanel && !docked;
     sim.el.classList.toggle('floating', sim.floating);
-    sim.fab.classList.toggle('on', demo && !wantsPanel && W < Math.round(H * 9 / 16) + 330);
+    sim.fab.classList.toggle('on', demo && !wantsPanel && W < Math.round((H * 9) / 16) + 330);
     const availW = docked ? W - 316 : W;
     let h = H;
-    let w = Math.round(h * 9 / 16);
-    if (w > availW) { w = availW; h = Math.round(w * 16 / 9); }
+    let w = Math.round((h * 9) / 16);
+    if (w > availW) {
+      w = availW;
+      h = Math.round((w * 16) / 9);
+    }
     game.style.width = `${w}px`;
     game.style.height = `${h}px`;
     game.style.fontSize = `${(h / 960) * 16}px`;
@@ -112,7 +130,7 @@ async function boot() {
   window.addEventListener('resize', layout);
 
   // con espacio de sobra y en modo demo, el simulador se muestra al lado
-  if (demo && app.clientWidth - Math.round(app.clientHeight * 9 / 16) >= 360) sim.show(true);
+  if (demo && app.clientWidth - Math.round((app.clientHeight * 9) / 16) >= 360) sim.show(true);
   layout();
 
   // ---------------------------------------------------------------- modelos y miniaturas
@@ -136,13 +154,19 @@ async function boot() {
   } catch (err) {
     console.warn('[modelos] se usan los modelos por código:', err);
   }
-  try { hud.setThumbs(renderer.thumbnails()); } catch (err) { console.warn('miniaturas', err); }
+  try {
+    hud.setThumbs(renderer.thumbnails());
+  } catch (err) {
+    console.warn('miniaturas', err);
+  }
 
   // ---------------------------------------------------------------- conexión con TikTok
   if (server) {
     const user = server.tiktokUsername ? `@${server.tiktokUsername}` : '';
     hud.setConn('warn', 'CONECTANDO…');
-    $('startInfo').textContent = user ? `Conectando con el LIVE de ${user}…` : 'Sin usuario de TikTok en config.json: solo simulador (F1).';
+    $('startInfo').textContent = user
+      ? `Conectando con el LIVE de ${user}…`
+      : 'Sin usuario de TikTok en config.json: solo simulador (F1).';
     const wsUrl = params.get('ws') || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
     connectBridge(wsUrl, {
       onEvent: (evt) => router.handle(evt),

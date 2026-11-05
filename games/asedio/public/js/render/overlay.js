@@ -16,7 +16,8 @@ export function donorLabelUnits(units) {
   for (const u of units) {
     if (!u.alive || !u.gift || !u.owner || u.controlled) continue;
     const cur = best.get(u.owner.id);
-    const r = RANK[u.kind] ?? 0, rc = cur ? RANK[cur.kind] ?? 0 : -1;
+    const r = RANK[u.kind] ?? 0,
+      rc = cur ? (RANK[cur.kind] ?? 0) : -1;
     if (r > rc || (r === rc && u.born < cur.born)) best.set(u.owner.id, u);
   }
   return new Set(best.values());
@@ -32,8 +33,9 @@ export function nameCandidates(units, t) {
     if (!u.gift && t - u.born > (LABEL_TIME[u.kind] ?? Infinity)) continue;
     owned.push(u);
   }
-  owned.sort((a, b) => (isBig(b.kind) - isBig(a.kind)) || (main.has(b) - main.has(a))
-    || (b.gift - a.gift) || (b.born - a.born));
+  owned.sort(
+    (a, b) => isBig(b.kind) - isBig(a.kind) || main.has(b) - main.has(a) || b.gift - a.gift || b.born - a.born,
+  );
   return { owned, main };
 }
 
@@ -68,7 +70,9 @@ export class Overlay {
       const img = new Image();
       img.referrerPolicy = 'no-referrer';
       a = { img, ok: false };
-      img.onload = () => { a.ok = true; };
+      img.onload = () => {
+        a.ok = true;
+      };
       img.src = url;
       this.avatars.set(url, a);
       if (this.avatars.size > 400) this.avatars.delete(this.avatars.keys().next().value);
@@ -153,7 +157,8 @@ export class Overlay {
         const name = u.owner.nickname.length > 14 ? `${u.owner.nickname.slice(0, 13)}…` : u.owner.nickname;
         const cx = p.x * w;
         let cy = p.y * h - 10 * k;
-        const hw = (name.length * 0.62 + 1) * size / 2, hh = size * 0.75;
+        const hw = ((name.length * 0.62 + 1) * size) / 2,
+          hh = size * 0.75;
         const hit = (y) => placed.some((r) => Math.abs(r.x - cx) < r.hw + hw && Math.abs(r.y - y) < r.hh + hh);
         if (!big && hit(cy)) {
           // si se encima con otro nombre se saltea en ese momento (vuelve cuando la nave se separa),
@@ -183,7 +188,8 @@ export class Overlay {
       this.r.project(this.aim.x, 0, this.aim.z, p);
       if (p.visible) {
         const ready = world.strikeCooldown() <= 0;
-        const x = p.x * w, y = p.y * h;
+        const x = p.x * w,
+          y = p.y * h;
         const r = 16 * k;
         ctx.strokeStyle = ready ? 'rgba(255,210,80,0.95)' : 'rgba(255,255,255,0.35)';
         ctx.lineWidth = 2 * k;
@@ -191,8 +197,10 @@ export class Overlay {
         ctx.ellipse(x, y, r * 1.4, r * 0.7, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.beginPath();
-        ctx.moveTo(x - r * 2, y); ctx.lineTo(x - r * 0.8, y);
-        ctx.moveTo(x + r * 0.8, y); ctx.lineTo(x + r * 2, y);
+        ctx.moveTo(x - r * 2, y);
+        ctx.lineTo(x - r * 0.8, y);
+        ctx.moveTo(x + r * 0.8, y);
+        ctx.lineTo(x + r * 2, y);
         ctx.stroke();
       }
     }

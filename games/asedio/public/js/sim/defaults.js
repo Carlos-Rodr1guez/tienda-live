@@ -5,10 +5,10 @@ export const DEFAULT_CONFIG = {
   title: 'ASEDIO',
 
   round: {
-    seconds: 240,       // duración de cada ronda
-    introSeconds: 4,    // cuenta regresiva antes de empezar
-    intermission: 12,   // pantalla de resultados entre rondas
-    baseHp: 30000,      // vida de la base del streamer
+    seconds: 240, // duración de cada ronda
+    introSeconds: 4, // cuenta regresiva antes de empezar
+    intermission: 12, // pantalla de resultados entre rondas
+    baseHp: 30000, // vida de la base del streamer
   },
 
   teams: {

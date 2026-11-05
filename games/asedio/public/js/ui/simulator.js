@@ -12,9 +12,26 @@ const GIFTS = [
 ];
 
 const NAMES = [
-  'ana_23', 'lucho.pe', 'mari_q', 'elpepe', 'sofi.x', 'kevin_007', 'gato.loco', 'rocio.lp',
-  'jhon.ar', 'vale.cusco', 'tito99', 'meli.pz', 'dany_god', 'pao.tq', 'brayan.x', 'nico.aqp',
-  'flor_17', 'gamer.puno', 'cami.v', 'diego.rx',
+  'ana_23',
+  'lucho.pe',
+  'mari_q',
+  'elpepe',
+  'sofi.x',
+  'kevin_007',
+  'gato.loco',
+  'rocio.lp',
+  'jhon.ar',
+  'vale.cusco',
+  'tito99',
+  'meli.pz',
+  'dany_god',
+  'pao.tq',
+  'brayan.x',
+  'nico.aqp',
+  'flor_17',
+  'gamer.puno',
+  'cami.v',
+  'diego.rx',
 ];
 
 function button(label, sub, onClick) {
@@ -56,15 +73,23 @@ export class SimulatorPanel {
     h.textContent = 'Simulador de público';
     const hint = document.createElement('p');
     hint.className = 'hint';
-    hint.textContent = 'Prueba el juego sin TikTok. Cada botón envía el mismo evento que llegaría del directo. Se abre y cierra con F1.';
+    hint.textContent =
+      'Prueba el juego sin TikTok. Cada botón envía el mismo evento que llegaría del directo. Se abre y cierra con F1.';
     el.append(close, h, hint);
 
     el.append(this.title('EQUIPO DE QUIEN ENVÍA'));
     const seg = document.createElement('div');
     seg.className = 'seg';
-    const opts = [['auto', 'Auto'], ['1', 'Defensa'], ['2', 'Invasión']];
+    const opts = [
+      ['auto', 'Auto'],
+      ['1', 'Defensa'],
+      ['2', 'Invasión'],
+    ];
     const btns = opts.map(([v, label]) => {
-      const b = button(label, '', () => { this.team = v; btns.forEach((x) => x.classList.toggle('on', x === b)); });
+      const b = button(label, '', () => {
+        this.team = v;
+        btns.forEach((x) => x.classList.toggle('on', x === b));
+      });
       if (v === this.team) b.classList.add('on');
       return b;
     });
@@ -82,13 +107,18 @@ export class SimulatorPanel {
     el.append(this.title('REGALOS'));
     const grid = document.createElement('div');
     grid.className = 'grid';
-    for (const g of GIFTS) grid.append(button(g.name, `${g.coins} ${g.coins === 1 ? 'moneda' : 'monedas'}`, () => this.gift(g, this.streak)));
+    for (const g of GIFTS)
+      grid.append(
+        button(g.name, `${g.coins} ${g.coins === 1 ? 'moneda' : 'monedas'}`, () => this.gift(g, this.streak)),
+      );
     el.append(grid);
     const streak = document.createElement('label');
     streak.className = 'chk';
     const cb = document.createElement('input');
     cb.type = 'checkbox';
-    cb.addEventListener('change', () => { this.streak = cb.checked ? 5 : 1; });
+    cb.addEventListener('change', () => {
+      this.streak = cb.checked ? 5 : 1;
+    });
     streak.append(cb, document.createTextNode('Enviar en racha ×5'));
     el.append(streak);
 
@@ -101,7 +131,9 @@ export class SimulatorPanel {
       button('+100 likes', '', () => this.like(100)),
       button('Seguir', '', () => this.social('follow')),
       button('Compartir', '', () => this.social('share')),
-      button('10 personas se unen', '', () => { for (let i = 0; i < 10; i++) this.chat(Math.random() < 0.5 ? '1' : '2', true); }),
+      button('10 personas se unen', '', () => {
+        for (let i = 0; i < 10; i++) this.chat(Math.random() < 0.5 ? '1' : '2', true);
+      }),
       button('Comentan 5', 'energía', () => {
         // cada uno se une a su bando (según "Equipo de quien envía") y comenta
         for (let i = 0; i < 5; i++) {
@@ -116,7 +148,12 @@ export class SimulatorPanel {
     el.append(this.title('TRÁFICO AUTOMÁTICO'));
     const seg2 = document.createElement('div');
     seg2.className = 'seg';
-    const levels = [['off', 'Apagado'], ['low', 'Bajo'], ['mid', 'Medio'], ['high', 'Alto']];
+    const levels = [
+      ['off', 'Apagado'],
+      ['low', 'Bajo'],
+      ['mid', 'Medio'],
+      ['high', 'Alto'],
+    ];
     this.levelBtns = levels.map(([v, label]) => button(label, '', () => this.setAuto(v)));
     seg2.append(...this.levelBtns);
     el.append(seg2);

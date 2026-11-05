@@ -8,13 +8,13 @@ Borrador del 4 de noviembre de 2026. Los precios y las reglas de terceros salen 
 
 El orden detallado, con los hitos H0 a H6, las tareas técnicas, la arquitectura y las categorías del catálogo, está en el [roadmap técnico](https://claude.ai/artifact/JAe31yRkPVuViziz6Ybku6). Este documento queda como el análisis de fondo. Así se corresponden:
 
-| Este plan | Roadmap |
-|---|---|
-| Fase 0: validar | H0 y H1; los streamers de prueba pasan a la beta de H3 |
-| Fase 1: cimientos | H2 núcleo sin AGPL |
-| Fase 2: producto | H3 beta cerrada y H4 lanzamiento comercial |
-| Fase 3: catálogo | H5 catálogo |
-| Fase 4: tienda | Repartida: la vidriera en H1, el cobro en H4 y el catálogo en H5 |
+| Este plan         | Roadmap                                                          |
+| ----------------- | ---------------------------------------------------------------- |
+| Fase 0: validar   | H0 y H1; los streamers de prueba pasan a la beta de H3           |
+| Fase 1: cimientos | H2 núcleo sin AGPL                                               |
+| Fase 2: producto  | H3 beta cerrada y H4 lanzamiento comercial                       |
+| Fase 3: catálogo  | H5 catálogo                                                      |
+| Fase 4: tienda    | Repartida: la vidriera en H1, el cobro en H4 y el catálogo en H5 |
 
 ## Punto de partida
 
@@ -35,17 +35,18 @@ Verificado en `node_modules/tiktok-live-connector/package.json` (`"license": "AG
 
 **Salidas:**
 
-| Opción | Cómo | A favor | En contra |
-|---|---|---|---|
-| **A. Cambiar de cliente (recomendada)** | `@eulerstream/euler-websocket-sdk` (MIT) contra la WebSocket administrada de Euler, o `tiktok-live-api` de tik.tools (MIT) | Producto cerrado posible; el proveedor mantiene la conexión cuando TikTok cambia algo | Servicio pago; dependés del proveedor |
-| B. Publicar el juego como AGPL | Código abierto; vendés hosting, soporte o recursos | Sin costo de licencia | Cualquiera puede copiarlo y revenderlo |
-| C. Licencia comercial | Preguntarles a los autores (isaackogan y Euler Stream) si la ofrecen | Mantenés el código actual | No sé si existe esa opción |
+| Opción                                  | Cómo                                                                                                                       | A favor                                                                               | En contra                              |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------- |
+| **A. Cambiar de cliente (recomendada)** | `@eulerstream/euler-websocket-sdk` (MIT) contra la WebSocket administrada de Euler, o `tiktok-live-api` de tik.tools (MIT) | Producto cerrado posible; el proveedor mantiene la conexión cuando TikTok cambia algo | Servicio pago; dependés del proveedor  |
+| B. Publicar el juego como AGPL          | Código abierto; vendés hosting, soporte o recursos                                                                         | Sin costo de licencia                                                                 | Cualquiera puede copiarlo y revenderlo |
+| C. Licencia comercial                   | Preguntarles a los autores (isaackogan y Euler Stream) si la ofrecen                                                       | Mantenés el código actual                                                             | No sé si existe esa opción             |
 
 No soy abogado: confirmá la decisión final con uno.
 
 ### 2. Términos de TikTok
 
 No pude confirmar el texto actual sobre ingeniería inversa: TOS Tracker marca esa sección como eliminada el 31/01/2026 y no muestra con qué la reemplazaron. Antes de vender:
+
 - consultá con un abogado;
 - agregá en la tienda y en el juego un aviso de "No afiliado a TikTok ni a ByteDance";
 - no uses el logo de TikTok ni la palabra "TikTok" en el nombre de tu marca. Decí "para TikTok LIVE" como descripción y revisá las pautas de marca de TikTok.
@@ -60,6 +61,7 @@ No pude confirmar el texto actual sobre ingeniería inversa: TOS Tracker marca e
 4. Grabá clips de los mejores momentos (acorazados, bombardeos, remontadas): son tu marketing de la fase 4.
 
 **Puerta para avanzar:**
+
 - tus directos con juego rinden más que sin juego;
 - al menos 3 streamers de prueba lo siguen usando después de 2 semanas sin que se lo pidas;
 - al menos 1 pregunta cuánto cuesta.
@@ -94,13 +96,13 @@ launcher/      ventana, configuración y actualizaciones
 1. **Configuración en pantalla:** usuario de TikTok, clave de licencia, calidad gráfica y marco de cámara, sin tocar `config.json`. El servidor guarda los cambios y se reconecta sin reiniciar.
 2. **Empaquetado:**
 
-| | Electron (recomendado) | Ejecutable único de Node (SEA) + navegador |
-|---|---|---|
-| Ventana | Propia: LIVE Studio captura esa ventana y no hace falta Chrome | Sigue dependiendo de Chrome |
-| Actualizaciones | Automáticas (`electron-updater`) | Manuales |
-| Peso | Unos 100 a 150 MB | Liviano |
+|                 | Electron (recomendado)                                         | Ejecutable único de Node (SEA) + navegador |
+| --------------- | -------------------------------------------------------------- | ------------------------------------------ |
+| Ventana         | Propia: LIVE Studio captura esa ventana y no hace falta Chrome | Sigue dependiendo de Chrome                |
+| Actualizaciones | Automáticas (`electron-updater`)                               | Manuales                                   |
+| Peso            | Unos 100 a 150 MB                                              | Liviano                                    |
 
-3. **Licencias y cobro:** Lemon Squeezy u otra tienda que actúe como *merchant of record* (cobra y paga los impuestos por vos) y genere claves con una API de activación. El juego valida la clave al iniciar y da unos días de margen sin internet. Verificá que la tienda pague a tu país.
+3. **Licencias y cobro:** Lemon Squeezy u otra tienda que actúe como _merchant of record_ (cobra y paga los impuestos por vos) y genere claves con una API de activación. El juego valida la clave al iniciar y da unos días de margen sin internet. Verificá que la tienda pague a tu país.
 4. **Conexión segura:** la WebSocket de Euler admite autenticación con JWT. Tu servidor (puede ser una función serverless) entrega un token a cada cliente con licencia válida, y así tu clave de Euler nunca sale de tu servidor. De paso es tu control contra la piratería: sin licencia, no hay conexión.
 5. **Instalación en 15 minutos:** guía con video, escena lista para LIVE Studio y el marco de cámara que ya existe.
 6. **Papeles:** términos de uso, política de privacidad (tratás nombres y avatares de espectadores) y el aviso de "no afiliado".
@@ -113,12 +115,12 @@ launcher/      ventana, configuración y actualizaciones
 - Cada juego nuevo usa el kit, así que tendría que llevar mucho menos trabajo que ASEDIO.
 - No todo tiene que ser un juego donde juega el streamer. El catálogo se ordena en cuatro categorías según quién mueve la acción:
 
-| Categoría | Quién juega | Rol del streamer | Ejemplos |
-|---|---|---|---|
-| Acción | El streamer, con ayuda o estorbo del público | Juega | ASEDIO LIVE, jefe final |
-| Público | El chat: en equipos, por país o respondiendo | Conduce | Carrera por equipos, batalla de países, trivia |
-| Relax | Nadie gana: la escena cambia y crece con los regalos | Acompaña en cámara (charla, música, estudio) | Acuario, jardín, cielo de linternas |
-| Metas | Todo el chat junto, hacia una meta con gran final | Conduce | Cohete del directo, torre del chat |
+| Categoría | Quién juega                                          | Rol del streamer                             | Ejemplos                                       |
+| --------- | ---------------------------------------------------- | -------------------------------------------- | ---------------------------------------------- |
+| Acción    | El streamer, con ayuda o estorbo del público         | Juega                                        | ASEDIO LIVE, jefe final                        |
+| Público   | El chat: en equipos, por país o respondiendo         | Conduce                                      | Carrera por equipos, batalla de países, trivia |
+| Relax     | Nadie gana: la escena cambia y crece con los regalos | Acompaña en cámara (charla, música, estudio) | Acuario, jardín, cielo de linternas            |
+| Metas     | Todo el chat junto, hacia una meta con gran final    | Conduce                                      | Cohete del directo, torre del chat             |
 
 - **En todas, el streamer está en el directo.** Puede no jugar, pero no se va: TikTok deja sin monetización el contenido de baja calidad, y las guías para streamers ponen como ejemplos una pantalla estática o una sala vacía. Las escenas relajantes son las más expuestas.
 - **Nada de azar a cambio de regalos:** ni ruletas, ni sorteos, ni premios. TikTok trata como apuesta dar algo de valor por la chance de ganar un premio.
@@ -134,7 +136,7 @@ launcher/      ventana, configuración y actualizaciones
   - suscripción mensual al catálogo, que da ingreso recurrente;
   - pago único por juego, más fácil de vender en Latinoamérica;
   - las dos.
-  Considerá precios regionales.
+    Considerá precios regionales.
 - **Prueba gratis:** el demo con marca de agua, o unos días completos.
 - **Canales de venta:**
   - tus propios directos (el juego se vende solo cuando la gente lo ve);
@@ -145,25 +147,25 @@ launcher/      ventana, configuración y actualizaciones
 
 ## Costos a confirmar
 
-| Concepto | Referencia |
-|---|---|
-| WebSocket de Euler | Servicio pago; revisá su página de precios. Su SDK en GitHub lista el plan Business a $50/mes |
-| Tienda (Lemon Squeezy u otra) | Comisión por venta; revisá su página |
-| Dominio | Unos pocos dólares al año |
-| Página de la tienda | Gratis en Cloudflare Pages, Netlify o Vercel |
-| Firma de código para Windows | Opcional; evita la alerta de SmartScreen pero cuesta cientos de dólares al año |
+| Concepto                      | Referencia                                                                                    |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| WebSocket de Euler            | Servicio pago; revisá su página de precios. Su SDK en GitHub lista el plan Business a $50/mes |
+| Tienda (Lemon Squeezy u otra) | Comisión por venta; revisá su página                                                          |
+| Dominio                       | Unos pocos dólares al año                                                                     |
+| Página de la tienda           | Gratis en Cloudflare Pages, Netlify o Vercel                                                  |
+| Firma de código para Windows  | Opcional; evita la alerta de SmartScreen pero cuesta cientos de dólares al año                |
 
 ## Riesgos y defensa
 
-| Riesgo | Defensa |
-|---|---|
-| TikTok cambia algo y se corta la conexión | Proveedor administrado que mantiene la conexión, un segundo proveedor de respaldo y otras plataformas |
-| TikTok restringe los LIVE desatendidos (AFK) o con pedidos de regalos | Cada categoría define el rol del streamer (juega, conduce o acompaña) y nada se vende para dejarlo corriendo solo. Guía de buenas prácticas para clientes. Las escenas relajantes son las más expuestas |
-| Una mecánica se interpreta como apuesta | Sin ruletas, sorteos ni premios: el efecto de un regalo depende de su valor |
-| Competencia gratis en escenas relajantes (Fishbowl de Meld Studio, Coin Jar de BetterTok) | Calidad 3D, escenas que persisten entre directos y nombres de donantes; venderlas en pack o en la suscripción |
-| Piratería | La conexión solo funciona con licencia válida (token desde tu servidor) |
-| Competencia con catálogos grandes | Nicho hispanohablante, calidad 3D y soporte en español |
-| Dependencia de Euler | Adaptador de tik.tools listo como respaldo |
+| Riesgo                                                                                    | Defensa                                                                                                                                                                                                 |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TikTok cambia algo y se corta la conexión                                                 | Proveedor administrado que mantiene la conexión, un segundo proveedor de respaldo y otras plataformas                                                                                                   |
+| TikTok restringe los LIVE desatendidos (AFK) o con pedidos de regalos                     | Cada categoría define el rol del streamer (juega, conduce o acompaña) y nada se vende para dejarlo corriendo solo. Guía de buenas prácticas para clientes. Las escenas relajantes son las más expuestas |
+| Una mecánica se interpreta como apuesta                                                   | Sin ruletas, sorteos ni premios: el efecto de un regalo depende de su valor                                                                                                                             |
+| Competencia gratis en escenas relajantes (Fishbowl de Meld Studio, Coin Jar de BetterTok) | Calidad 3D, escenas que persisten entre directos y nombres de donantes; venderlas en pack o en la suscripción                                                                                           |
+| Piratería                                                                                 | La conexión solo funciona con licencia válida (token desde tu servidor)                                                                                                                                 |
+| Competencia con catálogos grandes                                                         | Nicho hispanohablante, calidad 3D y soporte en español                                                                                                                                                  |
+| Dependencia de Euler                                                                      | Adaptador de tik.tools listo como respaldo                                                                                                                                                              |
 
 ## Decisiones que tenés que tomar
 

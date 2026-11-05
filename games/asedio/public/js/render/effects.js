@@ -16,7 +16,13 @@ const TRACER_COLORS = {
   cmd: [new THREE.Color(0xffd36b), new THREE.Color(0xffd36b)],
 };
 
-function radialTexture(stops = [[0, 1], [0.35, 0.55], [1, 0]]) {
+function radialTexture(
+  stops = [
+    [0, 1],
+    [0.35, 0.55],
+    [1, 0],
+  ],
+) {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
   const g = c.getContext('2d');
@@ -39,9 +45,16 @@ export class Effects {
     // trazadoras (cajas delgadas estiradas entre dos puntos)
     const tg = new THREE.BoxGeometry(1, 1, 1);
     tg.translate(0, 0, 0.5);
-    this.tracerMesh = new THREE.InstancedMesh(tg, new THREE.MeshBasicMaterial({
-      color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
-    }), MAX_TRACERS);
+    this.tracerMesh = new THREE.InstancedMesh(
+      tg,
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+      MAX_TRACERS,
+    );
     this.tracerMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.tracerMesh.setColorAt(0, new THREE.Color(1, 1, 1));
     this.tracerMesh.frustumCulled = false;
@@ -50,9 +63,16 @@ export class Effects {
     this.tracers = [];
 
     // proyectiles (obuses y cohetes)
-    this.projMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({
-      color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
-    }), MAX_PROJ);
+    this.projMesh = new THREE.InstancedMesh(
+      new THREE.IcosahedronGeometry(1, 0),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+      MAX_PROJ,
+    );
     this.projMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.projMesh.setColorAt(0, new THREE.Color(1, 1, 1));
     this.projMesh.frustumCulled = false;
@@ -72,10 +92,18 @@ export class Effects {
     const pg = new THREE.BufferGeometry();
     pg.setAttribute('position', new THREE.BufferAttribute(this.pPos, 3).setUsage(THREE.DynamicDrawUsage));
     pg.setAttribute('color', new THREE.BufferAttribute(this.pCol, 3).setUsage(THREE.DynamicDrawUsage));
-    this.points = new THREE.Points(pg, new THREE.PointsMaterial({
-      size: 0.55, map: this.soft, vertexColors: true, transparent: true,
-      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
-    }));
+    this.points = new THREE.Points(
+      pg,
+      new THREE.PointsMaterial({
+        size: 0.55,
+        map: this.soft,
+        vertexColors: true,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        sizeAttenuation: true,
+      }),
+    );
     this.points.frustumCulled = false;
     scene.add(this.points);
 
@@ -87,9 +115,16 @@ export class Effects {
     const ring = new THREE.RingGeometry(0.75, 1, 40);
     ring.rotateX(-Math.PI / 2);
     for (let i = 0; i < 40; i++) {
-      const r = new THREE.Mesh(ring, new THREE.MeshBasicMaterial({
-        color: 0xffc070, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
-      }));
+      const r = new THREE.Mesh(
+        ring,
+        new THREE.MeshBasicMaterial({
+          color: 0xffc070,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        }),
+      );
       r.visible = false;
       scene.add(r);
       this.blasts.push({ r, life: 0, max: 1, size: 1, active: false });
@@ -100,9 +135,16 @@ export class Effects {
     const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 24, 1, true);
     beamGeo.translate(0, 0.5, 0);
     for (let i = 0; i < 10; i++) {
-      const m = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({
-        color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
-      }));
+      const m = new THREE.Mesh(
+        beamGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        }),
+      );
       m.visible = false;
       scene.add(m);
       this.beams.push({ m, life: 0, max: 1, r: 1, active: false });
@@ -113,9 +155,16 @@ export class Effects {
     const markGeo = new THREE.RingGeometry(0.86, 1, 48);
     markGeo.rotateX(-Math.PI / 2);
     for (let i = 0; i < 4; i++) {
-      const m = new THREE.Mesh(markGeo, new THREE.MeshBasicMaterial({
-        color: new THREE.Color(0xffd040).multiplyScalar(4), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
-      }));
+      const m = new THREE.Mesh(
+        markGeo,
+        new THREE.MeshBasicMaterial({
+          color: new THREE.Color(0xffd040).multiplyScalar(4),
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        }),
+      );
       m.visible = false;
       scene.add(m);
       this.markers.push({ m, life: 0, max: 1, r: 1, active: false });
@@ -126,12 +175,13 @@ export class Effects {
 
   tracer(e) {
     if (this.tracers.length >= MAX_TRACERS) this.tracers.shift();
-    const set = e.cmd ? TRACER_COLORS.cmd : (TRACER_COLORS[e.w] || TRACER_COLORS.rifle);
+    const set = e.cmd ? TRACER_COLORS.cmd : TRACER_COLORS[e.w] || TRACER_COLORS.rifle;
     const color = set[e.team] || set[0];
     const width = e.w === 'laser' ? 0.22 : e.w === 'turret' ? 0.12 : e.cmd ? 0.1 : 0.06;
     const life = e.w === 'laser' ? 0.16 : 0.07;
     this.tracers.push({ x1: e.x1, y1: e.y1, z1: e.z1, x2: e.x2, y2: e.y2, z2: e.z2, color, width, life, max: life });
-    if (e.w === 'laser' || e.w === 'turret' || e.cmd) this.sparks(e.x2, e.y2, e.z2, e.w === 'laser' ? 5 : 2, color, 4, 0.25);
+    if (e.w === 'laser' || e.w === 'turret' || e.cmd)
+      this.sparks(e.x2, e.y2, e.z2, e.w === 'laser' ? 5 : 2, color, 4, 0.25);
   }
 
   sparks(x, y, z, n, color, speed = 6, life = 0.5, gravity = 9) {
@@ -142,21 +192,36 @@ export class Effects {
       const a = Math.random() * Math.PI * 2;
       const up = Math.random() * 0.9 + 0.2;
       const sp = speed * (0.4 + Math.random() * 0.8);
-      this.pPos[i * 3] = x; this.pPos[i * 3 + 1] = y; this.pPos[i * 3 + 2] = z;
-      this.pVel[i * 3] = Math.cos(a) * sp; this.pVel[i * 3 + 1] = up * sp; this.pVel[i * 3 + 2] = Math.sin(a) * sp;
-      this.pBase[i * 3] = c.r * 2.2; this.pBase[i * 3 + 1] = c.g * 2.2; this.pBase[i * 3 + 2] = c.b * 2.2;
+      this.pPos[i * 3] = x;
+      this.pPos[i * 3 + 1] = y;
+      this.pPos[i * 3 + 2] = z;
+      this.pVel[i * 3] = Math.cos(a) * sp;
+      this.pVel[i * 3 + 1] = up * sp;
+      this.pVel[i * 3 + 2] = Math.sin(a) * sp;
+      this.pBase[i * 3] = c.r * 2.2;
+      this.pBase[i * 3 + 1] = c.g * 2.2;
+      this.pBase[i * 3 + 2] = c.b * 2.2;
       const l = life * (0.6 + Math.random() * 0.8);
-      this.pLife[i] = l; this.pMax[i] = l; this.pGrav[i] = gravity;
+      this.pLife[i] = l;
+      this.pMax[i] = l;
+      this.pGrav[i] = gravity;
     }
   }
 
   smoke(x, y, z) {
     const i = this.pNext;
     this.pNext = (this.pNext + 1) % MAX_PARTICLES;
-    this.pPos[i * 3] = x; this.pPos[i * 3 + 1] = y; this.pPos[i * 3 + 2] = z;
-    this.pVel[i * 3] = (Math.random() - 0.5) * 0.6; this.pVel[i * 3 + 1] = 0.8; this.pVel[i * 3 + 2] = (Math.random() - 0.5) * 0.6;
-    this.pBase[i * 3] = 0.35; this.pBase[i * 3 + 1] = 0.33; this.pBase[i * 3 + 2] = 0.3;
-    this.pLife[i] = this.pMax[i] = 0.5; this.pGrav[i] = 0;
+    this.pPos[i * 3] = x;
+    this.pPos[i * 3 + 1] = y;
+    this.pPos[i * 3 + 2] = z;
+    this.pVel[i * 3] = (Math.random() - 0.5) * 0.6;
+    this.pVel[i * 3 + 1] = 0.8;
+    this.pVel[i * 3 + 2] = (Math.random() - 0.5) * 0.6;
+    this.pBase[i * 3] = 0.35;
+    this.pBase[i * 3 + 1] = 0.33;
+    this.pBase[i * 3 + 2] = 0.3;
+    this.pLife[i] = this.pMax[i] = 0.5;
+    this.pGrav[i] = 0;
   }
 
   explode(x, y, z, size, color = 0xffa040) {
@@ -270,7 +335,12 @@ export class Effects {
       this.pPos[i3] += this.pVel[i3] * dt;
       this.pPos[i3 + 1] += this.pVel[i3 + 1] * dt;
       this.pPos[i3 + 2] += this.pVel[i3 + 2] * dt;
-      if (this.pPos[i3 + 1] < 0.05) { this.pPos[i3 + 1] = 0.05; this.pVel[i3 + 1] *= -0.3; this.pVel[i3] *= 0.7; this.pVel[i3 + 2] *= 0.7; }
+      if (this.pPos[i3 + 1] < 0.05) {
+        this.pPos[i3 + 1] = 0.05;
+        this.pVel[i3 + 1] *= -0.3;
+        this.pVel[i3] *= 0.7;
+        this.pVel[i3 + 2] *= 0.7;
+      }
       const k = this.pLife[i] / this.pMax[i];
       this.pCol[i3] = this.pBase[i3] * k;
       this.pCol[i3 + 1] = this.pBase[i3 + 1] * k;
@@ -289,7 +359,11 @@ export class Effects {
     for (const b of this.blasts) {
       if (!b.active) continue;
       b.life -= dt;
-      if (b.life <= 0) { b.active = false; b.r.visible = false; continue; }
+      if (b.life <= 0) {
+        b.active = false;
+        b.r.visible = false;
+        continue;
+      }
       const k = 1 - b.life / b.max;
       const ease = 1 - (1 - k) * (1 - k);
       b.r.scale.setScalar(b.size * (0.4 + 1.5 * ease));
@@ -299,7 +373,11 @@ export class Effects {
     for (const b of this.beams) {
       if (!b.active) continue;
       b.life -= dt;
-      if (b.life <= 0) { b.active = false; b.m.visible = false; continue; }
+      if (b.life <= 0) {
+        b.active = false;
+        b.m.visible = false;
+        continue;
+      }
       const k = b.life / b.max;
       b.m.material.opacity = k * 0.4;
       const r = b.r * (0.4 + 0.6 * k);
@@ -309,7 +387,11 @@ export class Effects {
     for (const m of this.markers) {
       if (!m.active) continue;
       m.life -= dt;
-      if (m.life <= 0) { m.active = false; m.m.visible = false; continue; }
+      if (m.life <= 0) {
+        m.active = false;
+        m.m.visible = false;
+        continue;
+      }
       const pulse = 0.5 + 0.5 * Math.sin(time * 30);
       m.m.scale.setScalar(m.r * (0.55 + 0.45 * (m.life / m.max)));
       m.m.material.opacity = 0.45 + 0.5 * pulse;
@@ -318,12 +400,24 @@ export class Effects {
 
   clear() {
     this.tracers.length = 0;
-    for (let i = 0; i < MAX_PARTICLES; i++) { this.pLife[i] = 0; this.pPos[i * 3 + 1] = -999; }
+    for (let i = 0; i < MAX_PARTICLES; i++) {
+      this.pLife[i] = 0;
+      this.pPos[i * 3 + 1] = -999;
+    }
     this.blastFx.clear();
     this.timers.length = 0;
-    for (const b of this.blasts) { b.active = false; b.r.visible = false; }
-    for (const b of this.beams) { b.active = false; b.m.visible = false; }
-    for (const m of this.markers) { m.active = false; m.m.visible = false; }
+    for (const b of this.blasts) {
+      b.active = false;
+      b.r.visible = false;
+    }
+    for (const b of this.beams) {
+      b.active = false;
+      b.m.visible = false;
+    }
+    for (const m of this.markers) {
+      m.active = false;
+      m.m.visible = false;
+    }
   }
 }
 

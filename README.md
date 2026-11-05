@@ -4,13 +4,13 @@ Monorepo de los juegos interactivos para TikTok LIVE y de la página que los ven
 
 ## Qué hay adentro
 
-| Carpeta | Qué guarda | Llega en |
-|---|---|---|
-| `games/asedio` | ASEDIO LIVE, el primer juego (categoría Acción) | Ya está |
-| `games/*` | Los próximos juegos, por ejemplo Acuario (Relax) y Carrera (Público) | H5 |
-| `apps/*` | La página de la tienda y la app de escritorio | H1 y H2 |
-| `packages/*` | Código compartido: conexión con TikTok, kit de juego y licencias | H2 |
-| `docs/` | Plan de producto y decisiones de arquitectura | Ya está |
+| Carpeta        | Qué guarda                                                           | Llega en |
+| -------------- | -------------------------------------------------------------------- | -------- |
+| `games/asedio` | ASEDIO LIVE, el primer juego (categoría Acción)                      | Ya está  |
+| `games/*`      | Los próximos juegos, por ejemplo Acuario (Relax) y Carrera (Público) | H5       |
+| `apps/*`       | La página de la tienda y la app de escritorio                        | H1 y H2  |
+| `packages/*`   | Código compartido: conexión con TikTok, kit de juego y licencias     | H2       |
+| `docs/`        | Plan de producto y decisiones de arquitectura                        | Ya está  |
 
 ## Requisitos
 

@@ -7,16 +7,37 @@ export function connectBridge(url, { onEvent, onStatus }) {
 
   const open = () => {
     if (closed) return;
-    try { ws = new WebSocket(url); } catch { schedule(); return; }
-    ws.onopen = () => { retry = 1000; onStatus?.({ state: 'bridge' }); };
+    try {
+      ws = new WebSocket(url);
+    } catch {
+      schedule();
+      return;
+    }
+    ws.onopen = () => {
+      retry = 1000;
+      onStatus?.({ state: 'bridge' });
+    };
     ws.onmessage = (m) => {
       let evt;
-      try { evt = JSON.parse(m.data); } catch { return; }
+      try {
+        evt = JSON.parse(m.data);
+      } catch {
+        return;
+      }
       if (evt.type === 'status') onStatus?.(evt);
       else onEvent?.(evt);
     };
-    ws.onclose = () => { onStatus?.({ state: 'bridge-lost' }); schedule(); };
-    ws.onerror = () => { try { ws.close(); } catch { /* ignore */ } };
+    ws.onclose = () => {
+      onStatus?.({ state: 'bridge-lost' });
+      schedule();
+    };
+    ws.onerror = () => {
+      try {
+        ws.close();
+      } catch {
+        /* ignore */
+      }
+    };
   };
 
   const schedule = () => {
@@ -26,5 +47,14 @@ export function connectBridge(url, { onEvent, onStatus }) {
   };
 
   open();
-  return { close() { closed = true; try { ws?.close(); } catch { /* ignore */ } } };
+  return {
+    close() {
+      closed = true;
+      try {
+        ws?.close();
+      } catch {
+        /* ignore */
+      }
+    },
+  };
 }

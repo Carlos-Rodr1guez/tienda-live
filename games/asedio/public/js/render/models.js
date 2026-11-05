@@ -49,7 +49,11 @@ function P(geo, color, o = {}) {
   const c = color instanceof THREE.Color ? color : new THREE.Color(color);
   const n = g.attributes.position.count;
   const arr = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
+  for (let i = 0; i < n; i++) {
+    arr[i * 3] = c.r;
+    arr[i * 3 + 1] = c.g;
+    arr[i * 3 + 2] = c.b;
+  }
   g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
   if (g.attributes.uv) g.deleteAttribute('uv');
   if (g.attributes.uv1) g.deleteAttribute('uv1');
@@ -69,7 +73,11 @@ const cone = (r, h, s = 6) => new THREE.ConeGeometry(r, h, s);
 // ---------------------------------------------------------------- respaldos por código
 
 function buildShip(T, scale) {
-  const engines = [[-1.05, 0, 1], [1.05, 0, 1], [0, 0.32, 1.15]];
+  const engines = [
+    [-1.05, 0, 1],
+    [1.05, 0, 1],
+    [0, 0.32, 1.15],
+  ];
   const parts = [
     P(box(2.8, 1.25, 7.0), T, { z: 0.4 }),
     P(cone(1.55, 3.4, 4), shade(T, 0.85), { z: -4.6, rx: -Math.PI / 2, ry: Math.PI / 4 }),
@@ -81,7 +89,9 @@ function buildShip(T, scale) {
   ];
   const body = M(parts);
   body.scale(scale, scale, scale);
-  const glow = M(engines.map(([x, y, s]) => P(cyl(0.5 * s, 0.5 * s, 0.12, 12), 0xffffff, { x, y, z: 5.05, rx: Math.PI / 2 })));
+  const glow = M(
+    engines.map(([x, y, s]) => P(cyl(0.5 * s, 0.5 * s, 0.12, 12), 0xffffff, { x, y, z: 5.05, rx: Math.PI / 2 })),
+  );
   glow.scale(scale, scale, scale);
   return { body, glow };
 }
@@ -89,7 +99,12 @@ function buildShip(T, scale) {
 function buildColossus(T) {
   const tubes = [];
   for (const sx of [-1, 1]) {
-    for (const [dx, dy] of [[-0.2, 0.18], [0.2, 0.18], [-0.2, -0.18], [0.2, -0.18]]) {
+    for (const [dx, dy] of [
+      [-0.2, 0.18],
+      [0.2, 0.18],
+      [-0.2, -0.18],
+      [0.2, -0.18],
+    ]) {
       tubes.push(P(cyl(0.13, 0.13, 0.22, 8), DARK, { x: sx * 1.65 + dx, y: 3.92 + dy, z: -0.74, rx: Math.PI / 2 }));
     }
   }
@@ -121,10 +136,16 @@ export class ModelLibrary {
   constructor(cfg) {
     this.cfg = cfg;
     this.mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-    this.exhaustMats = [0, 1, 2].map((i) => new THREE.MeshBasicMaterial({
-      color: i === 2 ? EXHAUST_GOLD : EXHAUST_COLORS[i],
-      transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
+    this.exhaustMats = [0, 1, 2].map(
+      (i) =>
+        new THREE.MeshBasicMaterial({
+          color: i === 2 ? EXHAUST_GOLD : EXHAUST_COLORS[i],
+          transparent: true,
+          opacity: 0.7,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        }),
+    );
     this.proc = {};
     for (let team = 0; team < 2; team++) {
       const T = TEAM_COLORS[team];
@@ -135,8 +156,8 @@ export class ModelLibrary {
       this.proc[`acorazado:${team}`] = buildShip(T, 1.2);
     }
     this.proc['comandante:0'] = buildShip(GOLD, 0.34);
-    this.glb = {};     // kind -> { variants: [obj, obj], animations }
-    this.scenes = {};  // base / escenario -> Object3D
+    this.glb = {}; // kind -> { variants: [obj, obj], animations }
+    this.scenes = {}; // base / escenario -> Object3D
   }
 
   // Carga los .glb disponibles. `available` es la lista que da el servidor,
@@ -156,21 +177,23 @@ export class ModelLibrary {
     const names = [...KINDS.flatMap((k) => [k, `${k}_inv`]), ...SCENE_MODELS];
     const want = names.filter((n) => (embedded ? n in embedded : !available || available.includes(n)));
     const gltfs = {};
-    await Promise.all(want.map(async (name) => {
-      try {
-        if (embedded) {
-          gltfs[name] = await loader.parseAsync(embedded[name], baseUrl);
-        } else {
-          if (!available) {
-            const head = await fetch(`${baseUrl}${name}.glb`, { method: 'HEAD' });
-            if (!head.ok) return;
+    await Promise.all(
+      want.map(async (name) => {
+        try {
+          if (embedded) {
+            gltfs[name] = await loader.parseAsync(embedded[name], baseUrl);
+          } else {
+            if (!available) {
+              const head = await fetch(`${baseUrl}${name}.glb`, { method: 'HEAD' });
+              if (!head.ok) return;
+            }
+            gltfs[name] = await loader.loadAsync(`${baseUrl}${name}.glb`);
           }
-          gltfs[name] = await loader.loadAsync(`${baseUrl}${name}.glb`);
+        } catch (err) {
+          console.warn(`[modelos] no se pudo cargar ${name}.glb:`, err?.message || err);
         }
-      } catch (err) {
-        console.warn(`[modelos] no se pudo cargar ${name}.glb:`, err?.message || err);
-      }
-    }));
+      }),
+    );
     for (const kind of KINDS) {
       if (!gltfs[kind] && !gltfs[`${kind}_inv`]) continue;
       const def = gltfs[kind] || gltfs[`${kind}_inv`];
@@ -222,8 +245,9 @@ export class ModelLibrary {
         if (cache.has(m)) return cache.get(m);
         const c = m.clone();
         if (c.color && (tintIt || only)) {
-          if (only) { if (m.name === only) c.color.lerp(teamColor, opts.tint ?? 1); }
-          else if (tint > 0) c.color.lerp(teamColor, tint);
+          if (only) {
+            if (m.name === only) c.color.lerp(teamColor, opts.tint ?? 1);
+          } else if (tint > 0) c.color.lerp(teamColor, tint);
         } else if (c.color && kind !== 'comandante') {
           // un toque del color del equipo también en modelos que ya traen su versión
           c.color.lerp(teamColor, opts.teamTint ?? 0.18);
@@ -261,9 +285,12 @@ export class ModelLibrary {
       const inner = SkeletonUtils.clone(glb.variants[team] || glb.variants[0]);
       root.add(inner);
       const view = { root, glb: true, exhausts: [] };
-      inner.traverse((o) => { if (o.userData.exhaust) view.exhausts.push(o); });
+      inner.traverse((o) => {
+        if (o.userData.exhaust) view.exhausts.push(o);
+      });
       // modelos sin animación pero con piernas separadas (nodos LegL / LegR con pivote en la cadera)
-      const legL = inner.getObjectByName('LegL'), legR = inner.getObjectByName('LegR');
+      const legL = inner.getObjectByName('LegL'),
+        legR = inner.getObjectByName('LegR');
       if (legL && legR && !glb.animations.length) {
         view.legs = [legL, legR];
         view.legRest = [legL.rotation.x, legR.rotation.x];

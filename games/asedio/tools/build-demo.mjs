@@ -78,4 +78,6 @@ ${app}
 await mkdir(path.join(ROOT, 'dist'), { recursive: true });
 const out = path.join(ROOT, 'dist', local ? 'asedio-demo-local.html' : 'asedio-demo.html');
 await writeFile(out, page);
-console.log(`Demo generada: ${path.relative(ROOT, out)} (${(page.length / 1024).toFixed(0)} KB, de ellos ${modelsKB.toFixed(0)} KB de modelos (${Object.keys(models).join(', ')}) y ${soundsKB.toFixed(0)} KB de sonido (${Object.keys(sounds).length} archivos); three ${threeVersion})`);
+console.log(
+  `Demo generada: ${path.relative(ROOT, out)} (${(page.length / 1024).toFixed(0)} KB, de ellos ${modelsKB.toFixed(0)} KB de modelos (${Object.keys(models).join(', ')}) y ${soundsKB.toFixed(0)} KB de sonido (${Object.keys(sounds).length} archivos); three ${threeVersion})`,
+);

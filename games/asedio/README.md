@@ -7,12 +7,12 @@ Juego interactivo para TikTok LIVE. El público elige bando y con sus regalos in
 - **Comentar `1`** te une a los **Defensores** y **comentar `2`** a los **Invasores**. También sirven palabras como `defender`, `defensores`, `azul`, `atacar`, `invasores` o `rojo`, aunque estén en medio de una frase ("quiero defender"). Unirse es gratis y trae un Dron.
 - **Regalos** (por valor en monedas):
 
-  | Monedas del regalo | Unidad | Ejemplo |
-  |---|---|---|
-  | 1 a 9 | Caza, una nave ligera (1 por moneda) | Rosa |
-  | 10 a 99 | Bombardero (1 cada 10 monedas) | Rosquilla |
-  | 100 a 999 | Coloso, un robot gigante | Corazón con las manos |
-  | 1000 o más | Acorazado, una nave capital que baja del cielo | Galaxia |
+  | Monedas del regalo | Unidad                                         | Ejemplo               |
+  | ------------------ | ---------------------------------------------- | --------------------- |
+  | 1 a 9              | Caza, una nave ligera (1 por moneda)           | Rosa                  |
+  | 10 a 99            | Bombardero (1 cada 10 monedas)                 | Rosquilla             |
+  | 100 a 999          | Coloso, un robot gigante                       | Corazón con las manos |
+  | 1000 o más         | Acorazado, una nave capital que baja del cielo | Galaxia               |
 
 - **Regalos grandes:** cuando alguien invoca un Coloso o un Acorazado, la cámara se acerca a la unidad y aparece su nombre en grande. Con el Acorazado la toma es más larga, con franjas de cine.
 - **Tu nombre en tus naves:** todas las naves que llegan por un regalo llevan el nombre de quien lo mandó, todo el tiempo. Si dos nombres se enciman, uno se oculta hasta que las naves se separan, salvo el de la nave más fuerte de cada donante, que sube para no taparse. Las naves gratis (unirse, likes, seguir o compartir) muestran el nombre solo unos segundos. `N` oculta todos los nombres.
@@ -63,7 +63,7 @@ El juego ya trae modelos 3D gratuitos con licencia CC0 (naves de Quaternius, rob
 
 Para cambiar uno por otro modelo (por ejemplo, uno que consigas con Blender MCP, Hugging Face o Sketchfab):
 
-1. Exporta el modelo como **.glb** (en Blender: *Archivo → Exportar → glTF 2.0*, formato binario).
+1. Exporta el modelo como **.glb** (en Blender: _Archivo → Exportar → glTF 2.0_, formato binario).
 2. Ponlo en `models/` con el nombre de la unidad: `dron`, `caza`, `bombardero`, `coloso`, `acorazado` o `comandante`. La base y el decorado son `base.glb` y `escenario.glb`.
 3. Para que cada bando tenga su versión, nombra la roja con `_inv` (por ejemplo `caza_inv.glb`). Sin ella, el juego tiñe el modelo con el color del equipo.
 4. Recarga la página.

@@ -140,7 +140,9 @@ class BillboardPool {
   update(dt) {
     let n = 0;
     let w = 0;
-    const P = this.aPos.array, D = this.aData.array, T = this.aTint.array;
+    const P = this.aPos.array,
+      D = this.aData.array,
+      T = this.aTint.array;
     for (let i = 0; i < this.items.length; i++) {
       const it = this.items[i];
       it.age += dt;
@@ -148,17 +150,25 @@ class BillboardPool {
       this.items[w++] = it;
       const k = it.age / it.life;
       if (it.age > 0) {
-        it.x += it.vx * dt; it.y += it.vy * dt; it.z += it.vz * dt;
+        it.x += it.vx * dt;
+        it.y += it.vy * dt;
+        it.z += it.vz * dt;
         const drag = Math.exp(-(it.drag ?? 2) * dt);
-        it.vx *= drag; it.vz *= drag; it.vy = it.vy * drag + (it.lift ?? 0) * dt;
+        it.vx *= drag;
+        it.vz *= drag;
+        it.vy = it.vy * drag + (it.lift ?? 0) * dt;
       }
       const ease = 1 - (1 - Math.max(0, k)) ** 2;
-      P[n * 3] = it.x; P[n * 3 + 1] = it.y; P[n * 3 + 2] = it.z;
+      P[n * 3] = it.x;
+      P[n * 3 + 1] = it.y;
+      P[n * 3 + 2] = it.z;
       D[n * 4] = it.age < 0 ? -1 : k;
       D[n * 4 + 1] = it.seed;
       D[n * 4 + 2] = it.s0 + (it.s1 - it.s0) * ease;
       D[n * 4 + 3] = it.rot + (it.spin || 0) * Math.max(0, it.age);
-      T[n * 3] = it.r; T[n * 3 + 1] = it.g; T[n * 3 + 2] = it.b;
+      T[n * 3] = it.r;
+      T[n * 3 + 1] = it.g;
+      T[n * 3 + 2] = it.b;
       n++;
     }
     this.items.length = w;
@@ -191,9 +201,16 @@ export class Blasts {
     // escombros
     this.MAXD = 260;
     this.debris = [];
-    this.debrisMesh = new THREE.InstancedMesh(chunkGeometry(), new THREE.MeshStandardMaterial({
-      color: 0x34323a, roughness: 0.8, metalness: 0.3, flatShading: true,
-    }), this.MAXD);
+    this.debrisMesh = new THREE.InstancedMesh(
+      chunkGeometry(),
+      new THREE.MeshStandardMaterial({
+        color: 0x34323a,
+        roughness: 0.8,
+        metalness: 0.3,
+        flatShading: true,
+      }),
+      this.MAXD,
+    );
     this.debrisMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.debrisMesh.count = 0;
     this.debrisMesh.frustumCulled = false;
@@ -207,44 +224,116 @@ export class Blasts {
     const R = Math.random;
     y = Math.max(y, size * 0.35);
     // destello
-    this.fire.add({ x, y, z, vx: 0, vy: 0, vz: 0, age: 0, life: 0.11, s0: size * 1.3, s1: size * 1.7, seed: R(), rot: R() * 6, r: 1, g: 0.8, b: 0.55 });
+    this.fire.add({
+      x,
+      y,
+      z,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      age: 0,
+      life: 0.11,
+      s0: size * 1.3,
+      s1: size * 1.7,
+      seed: R(),
+      rot: R() * 6,
+      r: 1,
+      g: 0.8,
+      b: 0.55,
+    });
     // bolas de fuego
     const nf = Math.min(6, 1 + Math.round(size * 0.7));
     for (let i = 0; i < nf; i++) {
-      const a = R() * Math.PI * 2, d = i === 0 ? 0 : size * (0.25 + R() * 0.45);
+      const a = R() * Math.PI * 2,
+        d = i === 0 ? 0 : size * (0.25 + R() * 0.45);
       const life = (0.42 + size * 0.07) * (0.8 + R() * 0.45);
       this.fire.add({
-        x: x + Math.cos(a) * d, y: y + (R() - 0.3) * size * 0.4, z: z + Math.sin(a) * d,
-        vx: Math.cos(a) * size * 0.6, vy: size * 0.35, vz: Math.sin(a) * size * 0.6, drag: 3,
-        age: -i * 0.04, life, s0: size * (0.9 + R() * 0.3), s1: size * (1.9 + R() * 0.5),
-        seed: R(), rot: R() * 6, spin: (R() - 0.5) * 1.5, r: c.r, g: c.g, b: c.b,
+        x: x + Math.cos(a) * d,
+        y: y + (R() - 0.3) * size * 0.4,
+        z: z + Math.sin(a) * d,
+        vx: Math.cos(a) * size * 0.6,
+        vy: size * 0.35,
+        vz: Math.sin(a) * size * 0.6,
+        drag: 3,
+        age: -i * 0.04,
+        life,
+        s0: size * (0.9 + R() * 0.3),
+        s1: size * (1.9 + R() * 0.5),
+        seed: R(),
+        rot: R() * 6,
+        spin: (R() - 0.5) * 1.5,
+        r: c.r,
+        g: c.g,
+        b: c.b,
       });
     }
     // humo
     const ns = Math.min(6, 1 + Math.round(size * 0.8));
     for (let i = 0; i < ns; i++) {
-      const a = R() * Math.PI * 2, d = size * R() * 0.5;
+      const a = R() * Math.PI * 2,
+        d = size * R() * 0.5;
       this.smoke.add({
-        x: x + Math.cos(a) * d, y: y + size * 0.2, z: z + Math.sin(a) * d,
-        vx: Math.cos(a) * size * 0.25, vy: 0.6 + size * 0.25, vz: Math.sin(a) * size * 0.25, drag: 1.2, lift: 0.4,
-        age: -0.08 - i * 0.05, life: 1.1 + size * 0.22 + R() * 0.4, s0: size * 1.1, s1: size * (2.6 + R() * 0.8),
-        seed: R(), rot: R() * 6, spin: (R() - 0.5) * 0.6, r: c.r, g: c.g * 0.6, b: c.b * 0.3,
+        x: x + Math.cos(a) * d,
+        y: y + size * 0.2,
+        z: z + Math.sin(a) * d,
+        vx: Math.cos(a) * size * 0.25,
+        vy: 0.6 + size * 0.25,
+        vz: Math.sin(a) * size * 0.25,
+        drag: 1.2,
+        lift: 0.4,
+        age: -0.08 - i * 0.05,
+        life: 1.1 + size * 0.22 + R() * 0.4,
+        s0: size * 1.1,
+        s1: size * (2.6 + R() * 0.8),
+        seed: R(),
+        rot: R() * 6,
+        spin: (R() - 0.5) * 0.6,
+        r: c.r,
+        g: c.g * 0.6,
+        b: c.b * 0.3,
       });
     }
     // onda expansiva
     if (size >= 3) {
-      this.waves.add({ x, y, z, vx: 0, vy: 0, vz: 0, age: 0, life: 0.3 + size * 0.03, s0: size * 1.2, s1: size * 3.2, seed: 0, rot: 0, r: c.r * 0.6, g: c.g * 0.5, b: c.b * 0.4 });
+      this.waves.add({
+        x,
+        y,
+        z,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+        age: 0,
+        life: 0.3 + size * 0.03,
+        s0: size * 1.2,
+        s1: size * 3.2,
+        seed: 0,
+        rot: 0,
+        r: c.r * 0.6,
+        g: c.g * 0.5,
+        b: c.b * 0.4,
+      });
     }
     // escombros
     if (size >= 1.8) {
       const nd = Math.min(18, Math.round(size * 3));
       for (let i = 0; i < nd; i++) {
         if (this.debris.length >= this.MAXD) this.debris.shift();
-        const a = R() * Math.PI * 2, sp = size * (1.5 + R() * 2.5);
+        const a = R() * Math.PI * 2,
+          sp = size * (1.5 + R() * 2.5);
         this.debris.push({
-          x, y, z, vx: Math.cos(a) * sp, vy: size * (1.2 + R() * 2.2), vz: Math.sin(a) * sp,
-          rx: R() * 6, ry: R() * 6, sx: (R() - 0.5) * 12, sy: (R() - 0.5) * 12,
-          s: (0.12 + R() * 0.22) * Math.min(3, size * 0.6), age: 0, life: 1.1 + R() * 0.9,
+          x,
+          y,
+          z,
+          vx: Math.cos(a) * sp,
+          vy: size * (1.2 + R() * 2.2),
+          vz: Math.sin(a) * sp,
+          rx: R() * 6,
+          ry: R() * 6,
+          sx: (R() - 0.5) * 12,
+          sy: (R() - 0.5) * 12,
+          s: (0.12 + R() * 0.22) * Math.min(3, size * 0.6),
+          age: 0,
+          life: 1.1 + R() * 0.9,
         });
       }
     }
@@ -255,8 +344,11 @@ export class Blasts {
     for (let i = 0; i < count; i++) {
       this.pending.push({
         at: i * interval * (0.7 + Math.random() * 0.6),
-        x: x + (Math.random() - 0.5) * spread, y: y + (Math.random() - 0.5) * size * 0.5, z: z + (Math.random() - 0.5) * spread * 1.4,
-        size: size * (0.6 + Math.random() * 0.5), color,
+        x: x + (Math.random() - 0.5) * spread,
+        y: y + (Math.random() - 0.5) * size * 0.5,
+        z: z + (Math.random() - 0.5) * spread * 1.4,
+        size: size * (0.6 + Math.random() * 0.5),
+        color,
       });
     }
   }
@@ -276,15 +368,26 @@ export class Blasts {
     this.waves.update(dt);
 
     const d = this.d;
-    let n = 0, w = 0;
+    let n = 0,
+      w = 0;
     for (const b of this.debris) {
       b.age += dt;
       if (b.age >= b.life) continue;
       this.debris[w++] = b;
       b.vy -= 22 * dt;
-      b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
-      if (b.y < 0.1) { b.y = 0.1; b.vy *= -0.3; b.vx *= 0.6; b.vz *= 0.6; b.sx *= 0.6; b.sy *= 0.6; }
-      b.rx += b.sx * dt; b.ry += b.sy * dt;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      b.z += b.vz * dt;
+      if (b.y < 0.1) {
+        b.y = 0.1;
+        b.vy *= -0.3;
+        b.vx *= 0.6;
+        b.vz *= 0.6;
+        b.sx *= 0.6;
+        b.sy *= 0.6;
+      }
+      b.rx += b.sx * dt;
+      b.ry += b.sy * dt;
       const k = b.age / b.life;
       d.position.set(b.x, b.y, b.z);
       d.rotation.set(b.rx, b.ry, 0);

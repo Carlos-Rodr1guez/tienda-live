@@ -15,8 +15,19 @@ export function deckOutline() {
   const { half: h, z0, z1 } = DECK;
   const p = PAD;
   return [
-    [-h + 2, z0], [h - 2, z0], [h, z0 + 2], [h, z1 - 2], [h - 2, z1], [-h + 2, z1], [-h, z1 - 2],
-    [-h, p.z1], [p.x0 + 2, p.z1], [p.x0, p.z1 - 2], [p.x0, p.z0 + 2], [p.x0 + 2, p.z0], [-h, p.z0],
+    [-h + 2, z0],
+    [h - 2, z0],
+    [h, z0 + 2],
+    [h, z1 - 2],
+    [h - 2, z1],
+    [-h + 2, z1],
+    [-h, z1 - 2],
+    [-h, p.z1],
+    [p.x0 + 2, p.z1],
+    [p.x0, p.z1 - 2],
+    [p.x0, p.z0 + 2],
+    [p.x0 + 2, p.z0],
+    [-h, p.z0],
     [-h, z0 + 2],
   ];
 }
@@ -37,15 +48,27 @@ function makeNoise(seed) {
   const N = 256;
   const perm = new Uint8Array(N * 2);
   const vals = new Float32Array(N);
-  for (let i = 0; i < N; i++) { perm[i] = i; vals[i] = rnd(); }
-  for (let i = N - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+  for (let i = 0; i < N; i++) {
+    perm[i] = i;
+    vals[i] = rnd();
+  }
+  for (let i = N - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [perm[i], perm[j]] = [perm[j], perm[i]];
+  }
   for (let i = 0; i < N; i++) perm[i + N] = perm[i];
   const h = (x, y) => vals[perm[(perm[x & 255] + y) & 511]];
   return (x, y) => {
-    const xi = Math.floor(x), yi = Math.floor(y);
-    const xf = x - xi, yf = y - yi;
-    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-    const a = h(xi, yi), b = h(xi + 1, yi), c = h(xi, yi + 1), d = h(xi + 1, yi + 1);
+    const xi = Math.floor(x),
+      yi = Math.floor(y);
+    const xf = x - xi,
+      yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf),
+      v = yf * yf * (3 - 2 * yf);
+    const a = h(xi, yi),
+      b = h(xi + 1, yi),
+      c = h(xi, yi + 1),
+      d = h(xi + 1, yi + 1);
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
   };
 }
@@ -59,16 +82,19 @@ function paintDeck() {
   const P = TEX.ppu;
   const toPx = (x, z) => [(x - TEX.x0) * P, (z - TEX.z0) * P];
   const c = document.createElement('canvas');
-  c.width = W; c.height = H;
+  c.width = W;
+  c.height = H;
   const g = c.getContext('2d');
   const e = document.createElement('canvas');
-  e.width = W; e.height = H;
+  e.width = W;
+  e.height = H;
   const ge = e.getContext('2d');
   ge.fillStyle = '#000';
   ge.fillRect(0, 0, W, H);
 
   // base metálica con variación suave
-  const n1 = makeNoise(5), n2 = makeNoise(17);
+  const n1 = makeNoise(5),
+    n2 = makeNoise(17);
   const img = g.createImageData(W, H);
   const data = img.data;
   for (let py = 0; py < H; py++) {
@@ -98,10 +124,13 @@ function paintDeck() {
       g.lineWidth = 2;
       g.strokeRect(x + 1, y + 1, plate - 2, plate - 2);
       g.strokeStyle = 'rgba(170,200,255,0.08)';
-      g.beginPath(); g.moveTo(x + 3, y + 3); g.lineTo(x + plate - 3, y + 3); g.stroke();
+      g.beginPath();
+      g.moveTo(x + 3, y + 3);
+      g.lineTo(x + plate - 3, y + 3);
+      g.stroke();
       if (rnd() < 0.16) {
         g.fillStyle = 'rgba(0,0,0,0.28)';
-        for (let b = 0; b < 4; b++) g.fillRect(x + 6 + b * (plate - 16) / 3, y + plate / 2 - 2, 4, 4);
+        for (let b = 0; b < 4; b++) g.fillRect(x + 6 + (b * (plate - 16)) / 3, y + plate / 2 - 2, 4, 4);
       }
       if (rnd() < 0.05) {
         // rejilla de ventilación
@@ -118,7 +147,9 @@ function paintDeck() {
     grd.addColorStop(0, 'rgba(5,4,8,0.35)');
     grd.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = grd;
-    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    g.beginPath();
+    g.arc(cx, cy, r, 0, Math.PI * 2);
+    g.fill();
   }
 
   // franjas de peligro a lo largo de los bordes de la pista
@@ -131,12 +162,18 @@ function paintDeck() {
     g.fillStyle = '#17171c';
     g.fillRect(xs, ly0, band, ly1 - ly0);
     g.save();
-    g.beginPath(); g.rect(xs, ly0, band, ly1 - ly0); g.clip();
+    g.beginPath();
+    g.rect(xs, ly0, band, ly1 - ly0);
+    g.clip();
     g.fillStyle = 'rgba(240,180,40,0.6)';
     for (let y = ly0 - band; y < ly1; y += band * 2) {
       g.beginPath();
-      g.moveTo(xs, y); g.lineTo(xs + band, y + band); g.lineTo(xs + band, y + band * 2); g.lineTo(xs, y + band);
-      g.closePath(); g.fill();
+      g.moveTo(xs, y);
+      g.lineTo(xs + band, y + band);
+      g.lineTo(xs + band, y + band * 2);
+      g.lineTo(xs, y + band);
+      g.closePath();
+      g.fill();
     }
     g.restore();
   }
@@ -146,9 +183,13 @@ function paintDeck() {
       if (side < 0 && z > PAD.z0 && z < PAD.z1) continue;
       const [px, py] = toPx(side * (DECK.half - 1.75), z);
       ge.fillStyle = '#9fe4ff';
-      ge.beginPath(); ge.arc(px, py, 0.15 * P, 0, Math.PI * 2); ge.fill();
+      ge.beginPath();
+      ge.arc(px, py, 0.15 * P, 0, Math.PI * 2);
+      ge.fill();
       g.fillStyle = '#d4f3ff';
-      g.beginPath(); g.arc(px, py, 0.15 * P, 0, Math.PI * 2); g.fill();
+      g.beginPath();
+      g.arc(px, py, 0.15 * P, 0, Math.PI * 2);
+      g.fill();
     }
   }
   // flechas de avance tenues en el centro
@@ -157,7 +198,11 @@ function paintDeck() {
   for (let z = FIELD.zTop + 4; z < FIELD.baseZ - 10; z += 9) {
     const [cx, cy] = toPx(0, z);
     const s = 1.2 * P;
-    g.beginPath(); g.moveTo(cx - s, cy - s * 0.6); g.lineTo(cx, cy + s * 0.2); g.lineTo(cx + s, cy - s * 0.6); g.stroke();
+    g.beginPath();
+    g.moveTo(cx - s, cy - s * 0.6);
+    g.lineTo(cx, cy + s * 0.2);
+    g.lineTo(cx + s, cy - s * 0.6);
+    g.stroke();
   }
   // zona del portal en rojo
   const [, pz0] = toPx(0, DECK.z0);
@@ -171,15 +216,23 @@ function paintDeck() {
   // plataforma circular de la base
   const [bx, by] = toPx(0, FIELD.baseZ);
   g.fillStyle = 'rgba(24,46,72,0.9)';
-  g.beginPath(); g.arc(bx, by, 8.8 * P, 0, Math.PI * 2); g.fill();
+  g.beginPath();
+  g.arc(bx, by, 8.8 * P, 0, Math.PI * 2);
+  g.fill();
   g.strokeStyle = 'rgba(120,200,255,0.28)';
   g.lineWidth = 3;
-  for (const rr of [8.8, 7.6]) { g.beginPath(); g.arc(bx, by, rr * P, 0, Math.PI * 2); g.stroke(); }
+  for (const rr of [8.8, 7.6]) {
+    g.beginPath();
+    g.arc(bx, by, rr * P, 0, Math.PI * 2);
+    g.stroke();
+  }
   for (let i = 0; i < 24; i++) {
     const a = (i / 24) * Math.PI * 2;
     const [lx, ly] = [bx + Math.cos(a) * 8.2 * P, by + Math.sin(a) * 8.2 * P];
     ge.fillStyle = '#5fd0ff';
-    ge.beginPath(); ge.arc(lx, ly, 0.12 * P, 0, Math.PI * 2); ge.fill();
+    ge.beginPath();
+    ge.arc(lx, ly, 0.12 * P, 0, Math.PI * 2);
+    ge.fill();
   }
 
   // plataforma lateral (colonia): planchas más oscuras y círculo de aterrizaje
@@ -225,7 +278,10 @@ export class Platform {
 
     // cubierta con algo de espesor (los costados se ven al acercar la cámara)
     const shape = new THREE.Shape();
-    deckOutline().forEach(([x, z], i) => { if (i) shape.lineTo(x, -z); else shape.moveTo(x, -z); });
+    deckOutline().forEach(([x, z], i) => {
+      if (i) shape.lineTo(x, -z);
+      else shape.moveTo(x, -z);
+    });
     const geo = new THREE.ExtrudeGeometry(shape, { depth: 1.6, bevelEnabled: false, curveSegments: 1 });
     geo.rotateX(-Math.PI / 2);
     geo.translate(0, -1.6, 0);
@@ -236,7 +292,12 @@ export class Platform {
     }
     const { map, emissiveMap } = paintDeck();
     const top = new THREE.MeshStandardMaterial({
-      map, emissiveMap, emissive: 0xffffff, emissiveIntensity: 2.4, roughness: 0.78, metalness: 0.25,
+      map,
+      emissiveMap,
+      emissive: 0xffffff,
+      emissiveIntensity: 2.4,
+      roughness: 0.78,
+      metalness: 0.25,
     });
     const side = new THREE.MeshStandardMaterial({ color: 0x1b1d26, roughness: 0.7, metalness: 0.4 });
     const deck = new THREE.Mesh(geo, [top, side]);
@@ -254,7 +315,8 @@ export class Platform {
       const len = Math.hypot(bx - ax, bz - az);
       if (len < 0.1) continue;
       const ang = Math.atan2(bx - ax, bz - az);
-      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      const mx = (ax + bx) / 2,
+        mz = (az + bz) / 2;
       const curb = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.4, len + 0.4), curbMat);
       curb.position.set(mx, 0.2, mz);
       curb.rotation.y = ang;
@@ -285,7 +347,9 @@ export class Platform {
         strut.rotation.z = s * 0.5;
         group.add(strut);
         const red = z < (FIELD.zTop + FIELD.baseZ) / 2 - 6;
-        const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(red ? 0xff3344 : 0x44bbff).multiplyScalar(4) });
+        const mat = new THREE.MeshBasicMaterial({
+          color: new THREE.Color(red ? 0xff3344 : 0x44bbff).multiplyScalar(4),
+        });
         const tip = new THREE.Mesh(tipGeo, mat);
         tip.position.set(s * (DECK.half + L), -0.5, z);
         group.add(tip);
@@ -304,8 +368,15 @@ export class Platform {
       const y = -14 - rnd() * 80;
       if (Math.abs(x) < 34 && z > DECK.z0 - 12 && z < DECK.z1 + 12) continue;
       this.debris.push({
-        x, y, z, s: 0.8 + rnd() ** 2 * 6,
-        rx: rnd() * 6, ry: rnd() * 6, vx: (rnd() - 0.5) * 0.25, vy: (rnd() - 0.5) * 0.25, bob: rnd() * 6,
+        x,
+        y,
+        z,
+        s: 0.8 + rnd() ** 2 * 6,
+        rx: rnd() * 6,
+        ry: rnd() * 6,
+        vx: (rnd() - 0.5) * 0.25,
+        vy: (rnd() - 0.5) * 0.25,
+        bob: rnd() * 6,
       });
     }
     this.debrisMesh = debrisMesh;

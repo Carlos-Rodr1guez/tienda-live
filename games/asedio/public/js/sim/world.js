@@ -4,11 +4,11 @@
 import { UNITS, TURRET, TEAM, isBig, resolveKind } from './units.js';
 
 export const FIELD = {
-  halfW: 12,      // ancho jugable: x ∈ [-12, 12]
-  zTop: -34,      // borde superior, donde entran los invasores
-  baseZ: 22,      // centro de la base defensora
-  baseR: 4.5,     // radio de la base
-  guardZ: 8,      // línea donde esperan los defensores
+  halfW: 12, // ancho jugable: x ∈ [-12, 12]
+  zTop: -34, // borde superior, donde entran los invasores
+  baseZ: 22, // centro de la base defensora
+  baseR: 4.5, // radio de la base
+  guardZ: 8, // línea donde esperan los defensores
 };
 
 const CELL = 4;
@@ -54,7 +54,13 @@ export class World {
     const hp = this.cfg.round.baseHp;
     this.base = { x: 0, z: FIELD.baseZ, hp, maxHp: hp, lastHit: -99 };
     this.turrets = [-3.3, 3.3].map((x) => ({
-      x, z: FIELD.baseZ - 1.4, cd: 0, retarget: 0, target: null, aimX: 0, aimZ: -1,
+      x,
+      z: FIELD.baseZ - 1.4,
+      cd: 0,
+      retarget: 0,
+      target: null,
+      aimX: 0,
+      aimZ: -1,
     }));
     this.nextWave = this.cfg.cpu.firstWaveAt;
     this.stats = { spawned: [0, 0], kills: [0, 0] };
@@ -128,11 +134,14 @@ export class World {
       kind: req.kind,
       team,
       def,
-      x, z,
+      x,
+      z,
       y: def.flying ? def.altitude : 0,
-      vx: 0, vz: 0,
+      vx: 0,
+      vz: 0,
       heading: team === TEAM.DEF ? 0 : Math.PI,
-      hp: def.hp, maxHp: def.hp,
+      hp: def.hp,
+      maxHp: def.hp,
       alive: true,
       cd: r() * def.rate,
       retarget: r() * 0.3,
@@ -144,7 +153,8 @@ export class World {
       lastHit: -99,
       guardX: clamp(x + (r() - 0.5) * 4, -FIELD.halfW + 1, FIELD.halfW - 1),
       guardZ: FIELD.guardZ - r() * 6 - (def.flying ? 6 : 0),
-      aimX: 0, aimZ: team === TEAM.DEF ? -1 : 1,
+      aimX: 0,
+      aimZ: team === TEAM.DEF ? -1 : 1,
       moving: false,
       controlled: false,
     };
@@ -153,8 +163,16 @@ export class World {
     this.aliveCount[team]++;
     this.stats.spawned[team]++;
     this.fx.push({
-      t: 'spawn', id: u.id, kind: u.kind, team, x, y: u.y, z,
-      big: isBig(u.kind), owner: u.owner, cpu: u.cpu,
+      t: 'spawn',
+      id: u.id,
+      kind: u.kind,
+      team,
+      x,
+      y: u.y,
+      z,
+      big: isBig(u.kind),
+      owner: u.owner,
+      cpu: u.cpu,
     });
     return u;
   }
@@ -228,8 +246,10 @@ export class World {
   }
 
   forNear(x, z, r, fn) {
-    const x0 = Math.floor((x - r + OFF) / CELL), x1 = Math.floor((x + r + OFF) / CELL);
-    const z0 = Math.floor((z - r + OFF) / CELL), z1 = Math.floor((z + r + OFF) / CELL);
+    const x0 = Math.floor((x - r + OFF) / CELL),
+      x1 = Math.floor((x + r + OFF) / CELL);
+    const z0 = Math.floor((z - r + OFF) / CELL),
+      z1 = Math.floor((z + r + OFF) / CELL);
     for (let cx = x0; cx <= x1; cx++) {
       for (let cz = z0; cz <= z1; cz++) {
         const arr = this.grid.get(cx * 1024 + cz);
@@ -245,9 +265,13 @@ export class World {
     this.forNear(x, z, radius, (e) => {
       if (e.team === team || !e.alive) return;
       if (e.def.flying && !hitsAir) return;
-      const dx = e.x - x, dz = e.z - z;
+      const dx = e.x - x,
+        dz = e.z - z;
       const d = dx * dx + dz * dz;
-      if (d < bestD) { bestD = d; best = e; }
+      if (d < bestD) {
+        bestD = d;
+        best = e;
+      }
     });
     return best;
   }
@@ -267,7 +291,8 @@ export class World {
     let tx, tz, stop;
     let goingForBase = false;
     if (u.target) {
-      tx = u.target.x; tz = u.target.z;
+      tx = u.target.x;
+      tz = u.target.z;
       stop = d.range * 0.85 + u.target.def.radius * 0.5;
     } else if (u.team === TEAM.INV) {
       tx = this.base.x + clamp(u.x, -4, 4) * 0.5;
@@ -275,28 +300,39 @@ export class World {
       stop = FIELD.baseR + d.range * 0.8;
       goingForBase = true;
     } else {
-      tx = u.guardX; tz = u.guardZ; stop = 0.6;
+      tx = u.guardX;
+      tz = u.guardZ;
+      stop = 0.6;
     }
 
-    const dx = tx - u.x, dz = tz - u.z;
+    const dx = tx - u.x,
+      dz = tz - u.z;
     const dist = Math.hypot(dx, dz) || 1e-6;
-    let mx = 0, mz = 0;
-    if (dist > stop) { mx = dx / dist; mz = dz / dist; }
+    let mx = 0,
+      mz = 0;
+    if (dist > stop) {
+      mx = dx / dist;
+      mz = dz / dist;
+    }
 
     // separación para que no se amontonen
-    let sx = 0, sz = 0;
+    let sx = 0,
+      sz = 0;
     this.forNear(u.x, u.z, d.radius + 2, (o) => {
       if (o === u || !o.alive || !!o.def.flying !== !!d.flying) return;
-      const ox = u.x - o.x, oz = u.z - o.z;
+      const ox = u.x - o.x,
+        oz = u.z - o.z;
       const dd = ox * ox + oz * oz;
       const min = d.radius + o.def.radius;
       if (dd < min * min && dd > 1e-6) {
         const l = Math.sqrt(dd);
         const k = (min - l) / min;
-        sx += (ox / l) * k; sz += (oz / l) * k;
+        sx += (ox / l) * k;
+        sz += (oz / l) * k;
       }
     });
-    mx += sx * 1.5; mz += sz * 1.5;
+    mx += sx * 1.5;
+    mz += sz * 1.5;
 
     const ml = Math.hypot(mx, mz);
     if (ml > 0.05) {
@@ -313,11 +349,20 @@ export class World {
     this.confine(u);
 
     // orientación: mira al objetivo si está peleando, si no hacia donde camina
-    let fx = u.vx, fz = u.vz;
-    if (u.target || (goingForBase && dist <= stop + 0.5)) { fx = tx - u.x; fz = tz - u.z; }
+    let fx = u.vx,
+      fz = u.vz;
+    if (u.target || (goingForBase && dist <= stop + 0.5)) {
+      fx = tx - u.x;
+      fz = tz - u.z;
+    }
     if (fx * fx + fz * fz > 1e-4) u.heading = lerpAngle(u.heading, Math.atan2(-fx, -fz), Math.min(1, dt * 7));
-    if (u.target) { u.aimX = u.target.x - u.x; u.aimZ = u.target.z - u.z; }
-    else if (goingForBase) { u.aimX = tx - u.x; u.aimZ = tz - u.z; }
+    if (u.target) {
+      u.aimX = u.target.x - u.x;
+      u.aimZ = u.target.z - u.z;
+    } else if (goingForBase) {
+      u.aimX = tx - u.x;
+      u.aimZ = tz - u.z;
+    }
 
     u.cd -= dt;
     if (u.cd > 0) return;
@@ -338,10 +383,14 @@ export class World {
     u.x = clamp(u.x, -FIELD.halfW, FIELD.halfW);
     u.z = clamp(u.z, FIELD.zTop - 8, FIELD.baseZ + 4);
     if (d.flying) return;
-    const bx = u.x - this.base.x, bz = u.z - this.base.z;
+    const bx = u.x - this.base.x,
+      bz = u.z - this.base.z;
     const bd = Math.hypot(bx, bz) || 1e-6;
     const min = FIELD.baseR + d.radius;
-    if (bd < min) { u.x = this.base.x + (bx / bd) * min; u.z = this.base.z + (bz / bd) * min; }
+    if (bd < min) {
+      u.x = this.base.x + (bx / bd) * min;
+      u.z = this.base.z + (bz / bd) * min;
+    }
   }
 
   muzzleY(u) {
@@ -374,8 +423,17 @@ export class World {
 
   shotFx(u, x2, y2, z2) {
     this.fx.push({
-      t: 'shot', w: u.def.weapon, team: u.team, kind: u.kind, cmd: u.controlled,
-      x1: u.x, y1: this.muzzleY(u), z1: u.z, x2, y2, z2,
+      t: 'shot',
+      w: u.def.weapon,
+      team: u.team,
+      kind: u.kind,
+      cmd: u.controlled,
+      x1: u.x,
+      y1: this.muzzleY(u),
+      z1: u.z,
+      x2,
+      y2,
+      z2,
     });
   }
 
@@ -396,16 +454,29 @@ export class World {
 
   launch(u, tx, ty, tz, air, atBase = false) {
     const d = u.def;
-    const sx = u.x, sy = this.muzzleY(u), sz = u.z;
+    const sx = u.x,
+      sy = this.muzzleY(u),
+      sz = u.z;
     const spread = d.weapon === 'rockets' ? 0.9 : 0.35;
     tx += (this.rng() - 0.5) * spread;
     tz += (this.rng() - 0.5) * spread;
     const dist = Math.hypot(tx - sx, ty - sy, tz - sz);
     this.projectiles.push({
-      id: this.nextId++, team: u.team, w: d.weapon,
-      sx, sy, sz, tx, ty, tz,
-      t: 0, flight: Math.max(0.08, dist / d.projSpeed),
-      dmg: d.dmg, splash: d.splash, air, atBase,
+      id: this.nextId++,
+      team: u.team,
+      w: d.weapon,
+      sx,
+      sy,
+      sz,
+      tx,
+      ty,
+      tz,
+      t: 0,
+      flight: Math.max(0.08, dist / d.projSpeed),
+      dmg: d.dmg,
+      splash: d.splash,
+      air,
+      atBase,
       arc: d.weapon === 'rockets' ? 2.2 : 0.5,
       owner: u,
     });
@@ -450,7 +521,13 @@ export class World {
     this.stats.kills[1 - e.team]++;
     if (attacker && attacker.controlled) this.cmd.kills++;
     this.fx.push({
-      t: 'death', id: e.id, kind: e.kind, team: e.team, x: e.x, y: e.y, z: e.z,
+      t: 'death',
+      id: e.id,
+      kind: e.kind,
+      team: e.team,
+      x: e.x,
+      y: e.y,
+      z: e.z,
       big: isBig(e.kind) || e.controlled,
     });
     if (e.controlled) {
@@ -488,8 +565,16 @@ export class World {
       const t = tr.target;
       this.damage(t, TURRET.dmg, null);
       this.fx.push({
-        t: 'shot', w: 'turret', team: TEAM.DEF, kind: 'torreta',
-        x1: tr.x, y1: 2.9, z1: tr.z, x2: t.x, y2: t.y + t.def.height * 0.5, z2: t.z,
+        t: 'shot',
+        w: 'turret',
+        team: TEAM.DEF,
+        kind: 'torreta',
+        x1: tr.x,
+        y1: 2.9,
+        z1: tr.z,
+        x2: t.x,
+        y2: t.y + t.def.height * 0.5,
+        z2: t.z,
       });
     }
   }
@@ -509,14 +594,22 @@ export class World {
     }
     const d = c.def;
 
-    let mx = inp.moveX || 0, mz = inp.moveZ || 0;
+    let mx = inp.moveX || 0,
+      mz = inp.moveZ || 0;
     if (!mx && !mz && inp.moveTo) {
-      const dx = inp.moveTo.x - c.x, dz = inp.moveTo.z - c.z;
+      const dx = inp.moveTo.x - c.x,
+        dz = inp.moveTo.z - c.z;
       const dl = Math.hypot(dx, dz);
-      if (dl > 0.6) { mx = dx / dl; mz = dz / dl; }
+      if (dl > 0.6) {
+        mx = dx / dl;
+        mz = dz / dl;
+      }
     }
     const ml = Math.hypot(mx, mz);
-    if (ml > 1) { mx /= ml; mz /= ml; }
+    if (ml > 1) {
+      mx /= ml;
+      mz /= ml;
+    }
 
     if (inp.dash && this.time >= this.cmd.dashReady && ml > 0.1) {
       this.cmd.dashTime = 0.22;
@@ -524,7 +617,10 @@ export class World {
       this.fx.push({ t: 'dash', x: c.x, z: c.z });
     }
     let speed = d.speed;
-    if (this.cmd.dashTime > 0) { this.cmd.dashTime -= dt; speed *= 3.2; }
+    if (this.cmd.dashTime > 0) {
+      this.cmd.dashTime -= dt;
+      speed *= 3.2;
+    }
     c.vx = mx * speed;
     c.vz = mz * speed;
     c.x += c.vx * dt;
@@ -539,14 +635,23 @@ export class World {
       c.retarget = 0.15;
       c.target = this.nearestEnemyAt(c.x, c.z, c.team, d.range + 2, true);
     }
-    let fx = c.vx, fz = c.vz;
-    if (c.target) { c.aimX = c.target.x - c.x; c.aimZ = c.target.z - c.z; fx = c.aimX; fz = c.aimZ; }
+    let fx = c.vx,
+      fz = c.vz;
+    if (c.target) {
+      c.aimX = c.target.x - c.x;
+      c.aimZ = c.target.z - c.z;
+      fx = c.aimX;
+      fz = c.aimZ;
+    }
     if (fx * fx + fz * fz > 1e-4) c.heading = lerpAngle(c.heading, Math.atan2(-fx, -fz), Math.min(1, dt * 12));
 
     c.cd -= dt;
     if (c.cd <= 0 && c.target) {
       const td = Math.hypot(c.target.x - c.x, c.target.z - c.z);
-      if (td <= d.range + c.target.def.radius) { this.fire(c, c.target); c.cd = d.rate; }
+      if (td <= d.range + c.target.def.radius) {
+        this.fire(c, c.target);
+        c.cd = d.rate;
+      }
     }
 
     if (inp.strike && this.time >= this.cmd.strikeReady) {
@@ -569,7 +674,9 @@ export class World {
     for (let i = 0, n = Math.min(enemies.length, 24); i < n; i++) {
       const u = enemies[Math.floor(this.rng() * enemies.length)];
       let near = 0;
-      this.forNear(u.x, u.z, radius, (e) => { if (e.alive && e.team !== team) near++; });
+      this.forNear(u.x, u.z, radius, (e) => {
+        if (e.alive && e.team !== team) near++;
+      });
       cand.push({ x: u.x, z: u.z, near });
     }
     cand.sort((a, b) => b.near - a.near);
@@ -579,7 +686,9 @@ export class World {
       if (targets.every((t) => Math.hypot(t.x - c.x, t.z - c.z) > radius * 1.2)) targets.push(c);
     }
     if (!targets.length) {
-      targets.push(team === TEAM.INV ? { x: this.base.x, z: this.base.z - 3 } : { x: 0, z: (FIELD.zTop + FIELD.baseZ) / 2 });
+      targets.push(
+        team === TEAM.INV ? { x: this.base.x, z: this.base.z - 3 } : { x: 0, z: (FIELD.zTop + FIELD.baseZ) / 2 },
+      );
     }
     // Con pocos grupos enemigos igual caen todos los impactos: los que sobran rodean a los objetivos.
     // Esos extra no dañan la base, así el daño a la base sigue siendo baseDmg por objetivo real.
@@ -603,7 +712,10 @@ export class World {
     let w = 0;
     for (const s of this.strikes) {
       s.t -= dt;
-      if (s.t > 0) { this.strikes[w++] = s; continue; }
+      if (s.t > 0) {
+        this.strikes[w++] = s;
+        continue;
+      }
       // sin team es el bombardeo del comandante
       const team = s.team ?? TEAM.DEF;
       const attacker = s.team === undefined ? this.commander : null;

@@ -11,7 +11,9 @@ import { packageDir } from '../server/package-dir.js';
 const quiet = { info() {}, warn() {}, error() {} };
 
 test('usuario: formato nuevo (proto v3) y antiguo', () => {
-  const v3 = userOf({ user: { id: '77', displayId: 'ana_23', nickname: 'Ana', avatarThumb: { urlList: ['https://x/a.jpg'] } } });
+  const v3 = userOf({
+    user: { id: '77', displayId: 'ana_23', nickname: 'Ana', avatarThumb: { urlList: ['https://x/a.jpg'] } },
+  });
   assert.deepEqual(v3, { userId: '77', uniqueId: 'ana_23', nickname: 'Ana', avatar: 'https://x/a.jpg' });
   const legacy = userOf({ uniqueId: 'beto', nickname: 'Beto', userId: 9, profilePictureUrl: 'p.jpg' });
   assert.equal(legacy.userId, '9');
@@ -20,7 +22,11 @@ test('usuario: formato nuevo (proto v3) y antiguo', () => {
 
 test('racha de rosas: cada actualización suma solo lo nuevo', () => {
   const n = createNormalizer();
-  const base = { user: { id: '1', displayId: 'a', nickname: 'A' }, giftId: '5655', gift: { name: 'Rose', diamondCount: 1, type: 1 } };
+  const base = {
+    user: { id: '1', displayId: 'a', nickname: 'A' },
+    giftId: '5655',
+    gift: { name: 'Rose', diamondCount: 1, type: 1 },
+  };
   const counts = [
     n.gift({ ...base, repeatCount: 1, repeatEnd: 0 }),
     n.gift({ ...base, repeatCount: 2, repeatEnd: 0 }),
@@ -34,7 +40,13 @@ test('racha de rosas: cada actualización suma solo lo nuevo', () => {
 
 test('regalo sin racha y datos del regalo', () => {
   const n = createNormalizer();
-  const [e] = n.gift({ user: { id: '2', nickname: 'B' }, giftId: '5827', gift: { name: 'Galaxy', diamondCount: 1000, type: 2 }, repeatCount: 1, repeatEnd: 1 });
+  const [e] = n.gift({
+    user: { id: '2', nickname: 'B' },
+    giftId: '5827',
+    gift: { name: 'Galaxy', diamondCount: 1000, type: 2 },
+    repeatCount: 1,
+    repeatEnd: 1,
+  });
   assert.equal(e.type, 'gift');
   assert.equal(e.giftName, 'Galaxy');
   assert.equal(e.coins, 1000);
@@ -77,9 +89,15 @@ test('servidor: sirve el juego, la config y reenvía eventos por WebSocket', asy
     assert.notEqual((await fetch(`${base}/..%2fconfig.json`)).status, 200);
 
     const ws = new WebSocket(`ws://127.0.0.1:${app.port}/ws`);
-    await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
+    await new Promise((r, j) => {
+      ws.once('open', r);
+      ws.once('error', j);
+    });
     const got = new Promise((r) => ws.once('message', (m) => r(JSON.parse(String(m)))));
-    const res = await fetch(`${base}/api/simulate`, { method: 'POST', body: JSON.stringify({ type: 'gift', nickname: 'Ana', coins: 1, count: 3 }) });
+    const res = await fetch(`${base}/api/simulate`, {
+      method: 'POST',
+      body: JSON.stringify({ type: 'gift', nickname: 'Ana', coins: 1, count: 3 }),
+    });
     assert.equal(res.status, 204);
     const evt = await got;
     assert.equal(evt.type, 'gift');

@@ -8,7 +8,7 @@ import { donorLabelUnits, nameCandidates } from '../public/js/render/overlay.js'
 
 function seeded(seed = 7) {
   let s = seed >>> 0;
-  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
 }
 
 function setup(over = {}) {
@@ -58,7 +58,7 @@ test('los niveles de regalo eligen la unidad correcta', () => {
 });
 
 test('override por nombre de regalo', () => {
-  const { router } = setup({ giftOverrides: { 'Rose': { unit: 'bombardero', count: 1 } } });
+  const { router } = setup({ giftOverrides: { Rose: { unit: 'bombardero', count: 1 } } });
   assert.deepEqual(router.unitsForGift('rose', 1), { unit: 'bombardero', perGift: 1 });
 });
 
@@ -171,7 +171,10 @@ test('todas las naves de regalo siguen con nombre; las demás lo apagan', () => 
 });
 
 test('likes acumulan refuerzos', () => {
-  const { world, router, feed } = setup({ cpu: { enabled: false }, likes: { perReinforcement: 100, unit: 'caza', count: 3 } });
+  const { world, router, feed } = setup({
+    cpu: { enabled: false },
+    likes: { perReinforcement: 100, unit: 'caza', count: 3 },
+  });
   router.handle({ type: 'like', userId: 'l', count: 250 });
   run(world, 0.5);
   assert.equal(count(world, TEAM.DEF, 'caza'), 6);
@@ -180,7 +183,9 @@ test('likes acumulan refuerzos', () => {
 
 test('sin defensa los invasores destruyen la base', () => {
   const { world } = setup({ cpu: { enabled: false }, round: { baseHp: 3000, seconds: 200 } });
-  world.commander.hp = 0; world.commander.alive = false; world.commanderRespawnAt = 1e9;
+  world.commander.hp = 0;
+  world.commander.alive = false;
+  world.commanderRespawnAt = 1e9;
   world.turrets.length = 0;
   world.queueSpawn({ kind: 'bombardero', team: TEAM.INV }, 6);
   run(world, 90, {}, (w) => w.state === 'end');
@@ -217,7 +222,10 @@ test('el bombardeo del comandante elimina enemigos', () => {
 });
 
 test('el límite por equipo encola sin perder unidades', () => {
-  const { world } = setup({ cpu: { enabled: false }, limits: { maxUnitsPerTeam: 10, spawnsPerSecond: 100, maxQueue: 100 } });
+  const { world } = setup({
+    cpu: { enabled: false },
+    limits: { maxUnitsPerTeam: 10, spawnsPerSecond: 100, maxQueue: 100 },
+  });
   world.queueSpawn({ kind: 'caza', team: TEAM.INV }, 25);
   run(world, 0.5);
   assert.equal(world.aliveCount[TEAM.INV], 10);
@@ -226,7 +234,8 @@ test('el límite por equipo encola sin perder unidades', () => {
 
 test('las unidades nunca salen del campo', () => {
   const { world, router } = setup({ round: { introSeconds: 0.2 } });
-  for (let i = 0; i < 40; i++) router.handle({ type: 'gift', userId: 'u' + i, giftName: 'Doughnut', coins: 30, count: 1 });
+  for (let i = 0; i < 40; i++)
+    router.handle({ type: 'gift', userId: 'u' + i, giftName: 'Doughnut', coins: 30, count: 1 });
   run(world, 30, { moveX: 1 });
   for (const u of world.units) {
     assert.ok(Math.abs(u.x) <= FIELD.halfW + 1e-6, `x fuera: ${u.x}`);
@@ -235,7 +244,10 @@ test('las unidades nunca salen del campo', () => {
 });
 
 test('los nombres antiguos (soldado, tanque, recluta) siguen funcionando', () => {
-  const { world, router } = setup({ cpu: { enabled: false }, tiers: [{ minCoins: 1, unit: 'soldado', coinsPerUnit: 1, maxPerGift: 10 }] });
+  const { world, router } = setup({
+    cpu: { enabled: false },
+    tiers: [{ minCoins: 1, unit: 'soldado', coinsPerUnit: 1, maxPerGift: 10 }],
+  });
   assert.deepEqual(router.unitsForGift('Rose', 1), { unit: 'caza', perGift: 1 });
   world.queueSpawn({ kind: 'tanque', team: TEAM.DEF }, 1);
   world.queueSpawn({ kind: 'recluta', team: TEAM.DEF }, 1);

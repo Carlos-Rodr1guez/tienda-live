@@ -1,10 +1,14 @@
 // Controles del streamer: teclado + mouse en PC, tocar/arrastrar en celular.
 
 const MOVE_KEYS = {
-  KeyW: [0, -1], ArrowUp: [0, -1],
-  KeyS: [0, 1], ArrowDown: [0, 1],
-  KeyA: [-1, 0], ArrowLeft: [-1, 0],
-  KeyD: [1, 0], ArrowRight: [1, 0],
+  KeyW: [0, -1],
+  ArrowUp: [0, -1],
+  KeyS: [0, 1],
+  ArrowDown: [0, 1],
+  KeyA: [-1, 0],
+  ArrowLeft: [-1, 0],
+  KeyD: [1, 0],
+  ArrowRight: [1, 0],
 };
 
 export class Input {
@@ -26,8 +30,13 @@ export class Input {
     surface.addEventListener('pointermove', (e) => this.onMove(e));
     surface.addEventListener('pointerdown', (e) => this.onDown(e));
     surface.addEventListener('pointerup', (e) => this.onUp(e));
-    surface.addEventListener('pointercancel', () => { this.pointer = null; this.moveTo = null; });
-    surface.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') this.aim = null; });
+    surface.addEventListener('pointercancel', () => {
+      this.pointer = null;
+      this.moveTo = null;
+    });
+    surface.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'mouse') this.aim = null;
+    });
     surface.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
@@ -35,16 +44,23 @@ export class Input {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     const code = e.code;
     if (MOVE_KEYS[code]) {
-      if (down) this.keys.add(code); else this.keys.delete(code);
+      if (down) this.keys.add(code);
+      else this.keys.delete(code);
       e.preventDefault();
       return;
     }
     if (!down) return;
-    if (code === 'Space') { this.strike = true; e.preventDefault(); }
-    else if (code === 'ShiftLeft' || code === 'ShiftRight') this.dash = true;
-    else if (code === 'F1') { e.preventDefault(); this.hooks.toggleSim?.(); }
-    else if (code === 'F3') { e.preventDefault(); this.hooks.toggleSafe?.(); }
-    else if (code === 'KeyM') this.hooks.toggleMute?.();
+    if (code === 'Space') {
+      this.strike = true;
+      e.preventDefault();
+    } else if (code === 'ShiftLeft' || code === 'ShiftRight') this.dash = true;
+    else if (code === 'F1') {
+      e.preventDefault();
+      this.hooks.toggleSim?.();
+    } else if (code === 'F3') {
+      e.preventDefault();
+      this.hooks.toggleSafe?.();
+    } else if (code === 'KeyM') this.hooks.toggleMute?.();
     else if (code === 'KeyH') this.hooks.toggleHud?.();
     else if (code === 'KeyN') this.hooks.toggleNames?.();
     else if (code === 'KeyC') this.hooks.toggleCam?.();
@@ -77,7 +93,11 @@ export class Input {
       return;
     }
     this.pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() };
-    try { this.surface.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    try {
+      this.surface.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
   }
 
   onUp(e) {
@@ -96,11 +116,19 @@ export class Input {
 
   // Estado para el mundo; los disparadores de un solo uso se limpian al leerlos.
   read() {
-    let mx = 0, mz = 0;
-    for (const k of this.keys) { mx += MOVE_KEYS[k][0]; mz += MOVE_KEYS[k][1]; }
+    let mx = 0,
+      mz = 0;
+    for (const k of this.keys) {
+      mx += MOVE_KEYS[k][0];
+      mz += MOVE_KEYS[k][1];
+    }
     const out = {
-      moveX: Math.sign(mx), moveZ: Math.sign(mz),
-      aim: this.aim, strike: this.strike, dash: this.dash, moveTo: this.moveTo,
+      moveX: Math.sign(mx),
+      moveZ: Math.sign(mz),
+      aim: this.aim,
+      strike: this.strike,
+      dash: this.dash,
+      moveTo: this.moveTo,
     };
     this.strike = false;
     this.dash = false;

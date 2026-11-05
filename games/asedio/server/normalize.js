@@ -51,9 +51,14 @@ export function userOf(d = {}) {
   const uniqueId = u.uniqueId || u.displayId || d.uniqueId || '';
   const nickname = u.nickname || d.nickname || uniqueId || 'anónimo';
   const userId = String(u.userId || u.id || d.userId || uniqueId || nickname);
-  const avatar = u.profilePictureUrl
-    || firstUrl(u.avatarThumb) || firstUrl(u.avatarMedium) || firstUrl(u.avatarLarge)
-    || firstUrl(u.profilePicture) || d.profilePictureUrl || '';
+  const avatar =
+    u.profilePictureUrl ||
+    firstUrl(u.avatarThumb) ||
+    firstUrl(u.avatarMedium) ||
+    firstUrl(u.avatarLarge) ||
+    firstUrl(u.profilePicture) ||
+    d.profilePictureUrl ||
+    '';
   return { userId, uniqueId, nickname, avatar };
 }
 
@@ -92,7 +97,9 @@ export function createNormalizer({ now = Date.now } = {}) {
       const user = userOf(d);
       const giftId = String(d.giftId ?? gift.id ?? ext.id ?? '');
       const giftName = gift.name || det.giftName || ext.name || d.giftName || 'Regalo';
-      const coins = Number(gift.diamondCount ?? det.diamondCount ?? ext.diamond_count ?? ext.diamondCount ?? d.diamondCount ?? 1) || 1;
+      const coins =
+        Number(gift.diamondCount ?? det.diamondCount ?? ext.diamond_count ?? ext.diamondCount ?? d.diamondCount ?? 1) ||
+        1;
       const giftType = Number(gift.type ?? det.giftType ?? ext.type ?? d.giftType ?? 0);
       const repeatCount = Math.max(1, Number(d.repeatCount ?? d.comboCount ?? 1) || 1);
       const repeatEnd = d.repeatEnd === true || Number(d.repeatEnd) === 1;

@@ -40,12 +40,18 @@ export class ViewerRouter {
     if (!evt || !evt.type) return;
     this.syncRound();
     switch (evt.type) {
-      case 'chat': return this.onChat(evt);
-      case 'gift': return this.onGift(evt);
-      case 'like': return this.onLike(evt);
-      case 'follow': return this.onSocial(evt, 'follow');
-      case 'share': return this.onSocial(evt, 'share');
-      default: return undefined;
+      case 'chat':
+        return this.onChat(evt);
+      case 'gift':
+        return this.onGift(evt);
+      case 'like':
+        return this.onLike(evt);
+      case 'follow':
+        return this.onSocial(evt, 'follow');
+      case 'share':
+        return this.onSocial(evt, 'share');
+      default:
+        return undefined;
     }
   }
 
@@ -66,8 +72,15 @@ export class ViewerRouter {
     let u = this.users.get(key);
     if (!u) {
       u = {
-        key, nickname: 'anónimo', avatar: '', team: null,
-        coins: 0, roundCoins: 0, joinedRound: 0, lastSwitch: -999, lastEnergy: -999,
+        key,
+        nickname: 'anónimo',
+        avatar: '',
+        team: null,
+        coins: 0,
+        roundCoins: 0,
+        joinedRound: 0,
+        lastSwitch: -999,
+        lastEnergy: -999,
       };
       this.users.set(key, u);
     }
@@ -106,7 +119,11 @@ export class ViewerRouter {
   // cualquiera de la lista; en el resto solo cuentan las palabras, no los números,
   // así "quiero defender" funciona pero "tengo 2 gatos" no cambia de bando.
   teamFromText(text) {
-    const words = String(text || '').trim().split(/\s+/).map(normWord).filter(Boolean);
+    const words = String(text || '')
+      .trim()
+      .split(/\s+/)
+      .map(normWord)
+      .filter(Boolean);
     if (!words.length) return undefined;
     if (this.words.has(words[0])) return this.words.get(words[0]);
     for (const w of words.slice(1)) {
@@ -181,7 +198,16 @@ export class ViewerRouter {
     const { unit, perGift } = this.unitsForGift(evt.giftName, each);
     const total = Math.min(perGift * count, 400);
     this.world.queueSpawn({ kind: unit, team, owner: this.owner(u), gift: true }, total);
-    this.ui.feed?.({ kind: 'gift', team, nickname: u.nickname, giftName: evt.giftName || 'Regalo', count, unit, total, coins });
+    this.ui.feed?.({
+      kind: 'gift',
+      team,
+      nickname: u.nickname,
+      giftName: evt.giftName || 'Regalo',
+      count,
+      unit,
+      total,
+      coins,
+    });
     if (isBig(unit)) this.ui.banner?.({ team, unit, nickname: u.nickname, avatar: u.avatar, total });
   }
 

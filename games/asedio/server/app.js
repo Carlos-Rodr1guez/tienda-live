@@ -49,7 +49,14 @@ function safeJoin(dir, rel) {
   return full;
 }
 
-export async function startServer({ config = {}, port = 3000, host = '127.0.0.1', root = ROOT, tiktok = true, log = console } = {}) {
+export async function startServer({
+  config = {},
+  port = 3000,
+  host = '127.0.0.1',
+  root = ROOT,
+  tiktok = true,
+  log = console,
+} = {}) {
   const mounts = [
     { prefix: '/vendor/three/', dir: packageDir('three', root) },
     { prefix: '/models/', dir: path.join(root, 'models') },
@@ -67,9 +74,17 @@ export async function startServer({ config = {}, port = 3000, host = '127.0.0.1'
     for (const m of mounts) {
       if (!pathname.startsWith(m.prefix)) continue;
       let rel = pathname.slice(m.prefix.length);
-      try { rel = decodeURIComponent(rel); } catch { res.writeHead(400).end(); return true; }
+      try {
+        rel = decodeURIComponent(rel);
+      } catch {
+        res.writeHead(400).end();
+        return true;
+      }
       let file = safeJoin(m.dir, rel || 'index.html');
-      if (!file) { res.writeHead(403).end(); return true; }
+      if (!file) {
+        res.writeHead(403).end();
+        return true;
+      }
       try {
         let st = await stat(file);
         if (st.isDirectory()) {
@@ -81,7 +96,10 @@ export async function startServer({ config = {}, port = 3000, host = '127.0.0.1'
         if (req.method === 'HEAD') res.end();
         else createReadStream(file).pipe(res);
       } catch {
-        if (m.prefix !== '/') { res.writeHead(404).end(); return true; }
+        if (m.prefix !== '/') {
+          res.writeHead(404).end();
+          return true;
+        }
         continue;
       }
       return true;
@@ -99,14 +117,18 @@ export async function startServer({ config = {}, port = 3000, host = '127.0.0.1'
           models = (await readdir(path.join(root, 'models')))
             .filter((f) => f.toLowerCase().endsWith('.glb'))
             .map((f) => f.slice(0, -4).toLowerCase());
-        } catch { /* sin carpeta models */ }
+        } catch {
+          /* sin carpeta models */
+        }
         res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' });
-        res.end(JSON.stringify({
-          serverMode: true,
-          tiktokUsername: bridge?.status?.username || '',
-          game: config.game || {},
-          models,
-        }));
+        res.end(
+          JSON.stringify({
+            serverMode: true,
+            tiktokUsername: bridge?.status?.username || '',
+            game: config.game || {},
+            models,
+          }),
+        );
         return;
       }
       if (p === '/api/status') {
@@ -116,14 +138,23 @@ export async function startServer({ config = {}, port = 3000, host = '127.0.0.1'
       }
       if (p === '/api/simulate' && req.method === 'POST') {
         let body = '';
-        for await (const chunk of req) { body += chunk; if (body.length > 1e5) break; }
+        for await (const chunk of req) {
+          body += chunk;
+          if (body.length > 1e5) break;
+        }
         const evt = JSON.parse(body || '{}');
-        if (!evt || typeof evt.type !== 'string') { res.writeHead(400).end(); return; }
+        if (!evt || typeof evt.type !== 'string') {
+          res.writeHead(400).end();
+          return;
+        }
         broadcast(evt);
         res.writeHead(204).end();
         return;
       }
-      if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return; }
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.writeHead(405).end();
+        return;
+      }
       if (await serveStatic(req, res, p)) return;
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('No encontrado');
     } catch (err) {
@@ -142,10 +173,13 @@ export async function startServer({ config = {}, port = 3000, host = '127.0.0.1'
 
   const bridge = tiktok
     ? createTikTokBridge(config, {
-      onEvent: broadcast,
-      onStatus: (s) => { lastStatus = { type: 'status', ...s }; broadcast(lastStatus); },
-      log,
-    })
+        onEvent: broadcast,
+        onStatus: (s) => {
+          lastStatus = { type: 'status', ...s };
+          broadcast(lastStatus);
+        },
+        log,
+      })
     : null;
 
   await new Promise((resolve, reject) => {

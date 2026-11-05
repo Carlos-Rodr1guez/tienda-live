@@ -131,13 +131,25 @@ export class Hud {
     const units = (k, n) => el('span', 'u', `${n} ${unitLabel(k, n)}`);
     switch (m.kind) {
       case 'gift':
-        line.append(name(m.nickname), document.createTextNode(` ${m.giftName}${m.count > 1 ? ` ×${m.count}` : ''} → `), units(m.unit, m.total));
+        line.append(
+          name(m.nickname),
+          document.createTextNode(` ${m.giftName}${m.count > 1 ? ` ×${m.count}` : ''} → `),
+          units(m.unit, m.total),
+        );
         break;
       case 'join':
-        line.append(name(m.nickname), document.createTextNode(m.auto ? ' va con los ' : ' se unió a los '), el('b', '', TEAM_LABEL[m.team].toUpperCase()));
+        line.append(
+          name(m.nickname),
+          document.createTextNode(m.auto ? ' va con los ' : ' se unió a los '),
+          el('b', '', TEAM_LABEL[m.team].toUpperCase()),
+        );
         break;
       case 'likes':
-        line.append(document.createTextNode('❤ Likes → '), units(m.unit, m.total), document.createTextNode(` para ${TEAM_LABEL[m.team]}`));
+        line.append(
+          document.createTextNode('❤ Likes → '),
+          units(m.unit, m.total),
+          document.createTextNode(` para ${TEAM_LABEL[m.team]}`),
+        );
         break;
       case 'follow':
         line.append(name(m.nickname), document.createTextNode(' siguió → '), units(m.unit, m.total));
@@ -146,7 +158,12 @@ export class Hud {
         line.append(name(m.nickname), document.createTextNode(' compartió → '), units(m.unit, m.total));
         break;
       case 'energy':
-        line.append(document.createTextNode('⚡ '), name(m.nickname), document.createTextNode(' completó la energía → '), el('span', 'u', '¡bombardeo!'));
+        line.append(
+          document.createTextNode('⚡ '),
+          name(m.nickname),
+          document.createTextNode(' completó la energía → '),
+          el('span', 'u', '¡bombardeo!'),
+        );
         break;
       default:
         return;
@@ -168,7 +185,10 @@ export class Hud {
 
   nextBanner() {
     const info = this.bannerQueue.shift();
-    if (!info) { this.bannerBusy = false; return; }
+    if (!info) {
+      this.bannerBusy = false;
+      return;
+    }
     this.bannerBusy = true;
     const b = el('div', `b t${info.team}`);
     if (info.avatar) {
@@ -190,7 +210,13 @@ export class Hud {
       const side = info.team === TEAM.DEF ? 'ALIADO' : 'ENEMIGO';
       txt.append(
         el('small', '', `¡LLEGA UN ${UNITS[info.unit].name.toUpperCase()} ${side}!`),
-        el('strong', '', info.total > 1 ? `${UNITS[info.unit].plural.toUpperCase()} ×${info.total}` : UNITS[info.unit].name.toUpperCase()),
+        el(
+          'strong',
+          '',
+          info.total > 1
+            ? `${UNITS[info.unit].plural.toUpperCase()} ×${info.total}`
+            : UNITS[info.unit].name.toUpperCase(),
+        ),
         el('span', '', `de ${info.nickname}`),
       );
     }
@@ -198,7 +224,10 @@ export class Hud {
     this.e.banner.textContent = '';
     this.e.banner.append(b);
     setTimeout(() => b.classList.add('out'), 2600);
-    setTimeout(() => { b.remove(); this.nextBanner(); }, 2950);
+    setTimeout(() => {
+      b.remove();
+      this.nextBanner();
+    }, 2950);
   }
 
   // ---------------------------------------------------------------- toma cinematográfica
@@ -262,12 +291,18 @@ export class Hud {
       if (e.t === 'round') {
         if (e.state === 'intro') {
           this.setCenter('intro', (m) => {
-            m.append(el('div', 'kicker', `RONDA ${e.round}`), el('div', 'big', '¡DEFIENDE LA BASE!'),
-              el('div', 'sub', 'Comenta 1 o 2 y envía regalos'), el('div', 'count', ''));
+            m.append(
+              el('div', 'kicker', `RONDA ${e.round}`),
+              el('div', 'big', '¡DEFIENDE LA BASE!'),
+              el('div', 'sub', 'Comenta 1 o 2 y envía regalos'),
+              el('div', 'count', ''),
+            );
           });
         } else if (e.state === 'battle') {
           this.setCenter('go', (m) => m.append(el('div', 'big', '¡A LA BATALLA!')));
-          setTimeout(() => { if (this.centerMode === 'go') this.setCenter('', null); }, 1300);
+          setTimeout(() => {
+            if (this.centerMode === 'go') this.setCenter('', null);
+          }, 1300);
         } else if (e.state === 'end') {
           this.showEnd(e.winner);
         }
@@ -294,7 +329,11 @@ export class Hud {
         const top = this.router.topDonors(team, 1)[0];
         if (!top) continue;
         const chip = el('div', `mvp t${team}`);
-        chip.append(document.createTextNode('MVP '), el('b', '', top.nickname), document.createTextNode(` · ${fmtCoins(top.roundCoins)} monedas`));
+        chip.append(
+          document.createTextNode('MVP '),
+          el('b', '', top.nickname),
+          document.createTextNode(` · ${fmtCoins(top.roundCoins)} monedas`),
+        );
         mvps.append(chip);
       }
       card.append(mvps, el('div', 'sub next', ''));
@@ -352,7 +391,8 @@ export class Hud {
       e.cmdDown.textContent = left > 0 ? `Comandante caído · vuelve en ${Math.ceil(left)}` : '';
     }
     e.cmdKills.textContent = `${w.cmd.kills} bajas`;
-    const sCd = w.strikeCooldown(), dCd = w.dashCooldown();
+    const sCd = w.strikeCooldown(),
+      dCd = w.dashCooldown();
     e.skStrike.classList.toggle('ready', sCd <= 0);
     e.skDash.classList.toggle('ready', dCd <= 0);
     e.skStrike.querySelector('i').style.transform = `scaleX(${sCd / w.cfg.commander.strikeCooldown})`;
