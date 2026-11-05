@@ -49,6 +49,18 @@ test('web: dependencias fijadas por el diseño (Astro 7.4.5 en dependencies, Typ
   assert.equal(pkg.devDependencies.parse5, '^8.1.0');
 });
 
+test('tsconfig de la web: deja que los tipos JSDoc de @tienda/contracts lleguen a astro check (sin ts7016)', () => {
+  const { compilerOptions } = JSON.parse(
+    readFileSync(new URL('../../tsconfig.json', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, ''),
+  );
+  assert.equal(compilerOptions.allowJs, true);
+  assert.equal(compilerOptions.checkJs, false);
+  assert.deepEqual(compilerOptions.paths, {
+    '@tienda/contracts/i18n': ['../../packages/contracts/src/i18n/index.js'],
+    '@tienda/contracts/*': ['../../packages/contracts/src/*.js'],
+  });
+});
+
 test('web: los scripts pasan por el lanzador; el desarrollo usa el puerto 4400', () => {
   assert.equal(pkg.scripts.dev, 'node ../../scripts/run.mjs --port 4400 astro dev');
   assert.equal(pkg.scripts.build, 'node ../../scripts/run.mjs astro build');
