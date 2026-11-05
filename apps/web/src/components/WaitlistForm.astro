@@ -1,0 +1,511 @@
+---
+// Formulario de la lista de espera: un <details id="anotarme"> en la página (no un modal). Abrirlo cuenta "form_open" y
+// carga Turnstile; la lógica está en lib/form/controller.js. Todo texto sale del diccionario y las opciones, de contracts.
+//
+// - Sin JavaScript el botón de enviar queda deshabilitado (JS lo habilita) y un <noscript> explica por qué. El formulario
+//   usa method="post" action="/v1/waitlist", así que ni siquiera un envío sin JS puede poner datos en la URL.
+// - novalidate: valida el mismo validador que la API, y los errores van junto a cada campo.
+// - El consentimiento nace sin marcar, con la declaración de 18 años y el enlace a la política de privacidad.
+import { BRAND } from '@tienda/contracts/brand';
+import { consentimiento, fmt, formulario, opciones } from '@tienda/contracts/i18n';
+import { CATEGORIES, COUNTRIES, FOLLOWER_RANGES, LIVE_FREQUENCY, STREAM_TYPES } from '@tienda/contracts/enums';
+import CategoryArt from './CategoryArt.astro';
+import Icon from './Icon.astro';
+
+const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+const etiquetas = (tabla: Record<string, string>, valores: readonly string[]) =>
+  valores.map((valor) => ({ valor, texto: tabla[valor] }));
+
+const frecuencias = etiquetas(opciones.frecuencia, LIVE_FREQUENCY);
+const tipos = etiquetas(opciones.tiposDeLive, STREAM_TYPES);
+const seguidores = etiquetas(opciones.seguidores, FOLLOWER_RANGES);
+const paises = etiquetas(opciones.paises, COUNTRIES);
+const categorias = CATEGORIES.map((slug) => ({
+  slug,
+  nombre: (opciones.categorias as Record<string, { nombre: string }>)[slug].nombre,
+}));
+const consentimientoV1 = consentimiento.v1;
+---
+
+<section class="band" aria-labelledby="titulo-formulario">
+  <div class="container formulario">
+    <div class="formulario__texto">
+      <h2 id="titulo-formulario">{formulario.titulo}</h2>
+      <p>{formulario.bajada}</p>
+    </div>
+
+    <details id="anotarme" class="anotarme">
+      <summary class="btn anotarme__abrir">
+        <span>{formulario.abrir}</span>
+        <Icon nombre="chevron" size={22} class="anotarme__icono" />
+      </summary>
+
+      <noscript>
+        <p class="anotarme__aviso">{formulario.noscript}</p>
+      </noscript>
+
+      <form
+        id="anotarme-form"
+        class="anotarme__form"
+        method="post"
+        action="/v1/waitlist"
+        novalidate
+        data-sitekey={siteKey}
+      >
+        <div id="anotarme-resumen" class="resumen" role="alert" hidden>
+          <Icon nombre="alert" size={22} class="resumen__icono" />
+          <div>
+            <p id="anotarme-resumen-texto" class="resumen__texto"></p>
+            <ul id="anotarme-lista-errores" class="resumen__lista" aria-label={formulario.resumenErrores}></ul>
+          </div>
+        </div>
+
+        <fieldset class="grupo">
+          <legend>{formulario.grupos.tu}</legend>
+
+          <div class="campo">
+            <label for="campo-email">{formulario.campos.email.etiqueta}</label>
+            <input
+              id="campo-email"
+              name="email"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              autocapitalize="none"
+              spellcheck="false"
+              maxlength="254"
+              placeholder={formulario.campos.email.ejemplo}
+              aria-required="true"
+            />
+            <p id="error-email" class="error" hidden></p>
+          </div>
+
+          <div class="campo">
+            <label for="campo-tiktok-user">
+              {formulario.campos.tiktok_user.etiqueta} <span class="opcional">{formulario.opcional}</span>
+            </label>
+            <input
+              id="campo-tiktok-user"
+              name="tiktok_user"
+              type="text"
+              autocomplete="off"
+              autocapitalize="none"
+              spellcheck="false"
+              maxlength="25"
+              placeholder={formulario.campos.tiktok_user.ejemplo}
+            />
+            <p id="error-tiktok-user" class="error" hidden></p>
+          </div>
+        </fieldset>
+
+        <fieldset class="grupo">
+          <legend>{formulario.grupos.live}</legend>
+
+          <fieldset id="campo-live-frequency" class="opciones" aria-describedby="error-live-frequency">
+            <legend>{formulario.campos.live_frequency.etiqueta}</legend>
+            {frecuencias.map((f) => (
+              <label class="opcion">
+                <input type="radio" name="live_frequency" value={f.valor} />
+                <span>{f.texto}</span>
+              </label>
+            ))}
+            <p id="error-live-frequency" class="error" hidden></p>
+          </fieldset>
+
+          <fieldset id="campo-stream-type" class="opciones" aria-describedby="error-stream-type">
+            <legend>{formulario.campos.stream_type.etiqueta}</legend>
+            {tipos.map((t) => (
+              <label class="opcion">
+                <input type="radio" name="stream_type" value={t.valor} />
+                <span>{t.texto}</span>
+              </label>
+            ))}
+            <p id="error-stream-type" class="error" hidden></p>
+          </fieldset>
+
+          <div class="campo">
+            <label for="campo-followers-range">
+              {formulario.campos.followers_range.etiqueta} <span class="opcional">{formulario.opcional}</span>
+            </label>
+            <select id="campo-followers-range" name="followers_range">
+              <option value="">{formulario.elegirOpcion}</option>
+              {seguidores.map((s) => (
+                <option value={s.valor}>{s.texto}</option>
+              ))}
+            </select>
+            <p id="error-followers-range" class="error" hidden></p>
+          </div>
+
+          <div class="campo">
+            <label for="campo-country">
+              {formulario.campos.country.etiqueta} <span class="opcional">{formulario.opcional}</span>
+            </label>
+            <select id="campo-country" name="country" autocomplete="country">
+              <option value="">{formulario.elegirOpcion}</option>
+              {paises.map((p) => (
+                <option value={p.valor}>{p.texto}</option>
+              ))}
+            </select>
+            <p id="error-country" class="error" hidden></p>
+          </div>
+        </fieldset>
+
+        <fieldset id="campo-interests" class="grupo" aria-describedby="error-interests">
+          <legend>{formulario.grupos.interes}</legend>
+          <p class="ayuda">
+            {formulario.campos.interests.etiqueta} {formulario.campos.interests.ayuda}
+          </p>
+          <div class="intereses">
+            {categorias.map((c) => (
+              <label class="interes">
+                <input type="checkbox" name="interests" value={c.slug} />
+                <span class="interes__arte">
+                  <CategoryArt categoria={c.slug} decorativo />
+                </span>
+                <span class="interes__nombre">{c.nombre}</span>
+              </label>
+            ))}
+          </div>
+          <p id="error-interests" class="error" hidden></p>
+        </fieldset>
+
+        <fieldset class="grupo">
+          <legend>{formulario.grupos.consentimiento}</legend>
+          <div class="consentimiento">
+            <input id="campo-consent" name="consent" type="checkbox" aria-describedby="error-consent" />
+            <label for="campo-consent">{fmt(consentimientoV1.texto, { marca: BRAND.name })}</label>
+          </div>
+          <p class="enlace-privacidad">
+            <a href="/legal/privacidad" target="_blank" rel="noopener">
+              {consentimientoV1.enlacePrivacidad}
+            </a>
+          </p>
+          <p id="error-consent" class="error" hidden></p>
+        </fieldset>
+
+        <div class="verificacion">
+          <p class="verificacion__etiqueta">{formulario.verificacionEtiqueta}</p>
+          <div id="anotarme-turnstile" class="verificacion__ranura"></div>
+          <div id="anotarme-verificacion-error" class="verificacion__error" role="alert" hidden>
+            <p class="error">{formulario.verificacionError}</p>
+            <button id="anotarme-reintentar" class="btn btn--sec" type="button">
+              {formulario.reintentar}
+            </button>
+          </div>
+        </div>
+
+        <button id="anotarme-enviar" class="btn btn--bloque" type="submit" disabled>
+          {formulario.enviar}
+        </button>
+      </form>
+
+      <div id="anotarme-exito" class="exito" role="status" tabindex="-1" hidden>
+        <Icon nombre="check" size={28} class="exito__icono" />
+        <h3>{formulario.exitoTitulo}</h3>
+        <p id="anotarme-exito-mensaje"></p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<style>
+  .formulario {
+    display: grid;
+    gap: var(--sp-6);
+    align-items: start;
+  }
+
+  .formulario__texto {
+    display: grid;
+    gap: var(--sp-3);
+    justify-items: start;
+  }
+
+  /* La tarjeta es el <details>: cerrada muestra solo el botón dorado */
+  .anotarme {
+    min-width: 0;
+    padding: var(--sp-5);
+    border-radius: var(--radius-panel);
+    background: var(--surface-2);
+  }
+
+  .anotarme__abrir {
+    width: 100%;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .anotarme__abrir::-webkit-details-marker {
+    display: none;
+  }
+
+  .anotarme__abrir :global(.anotarme__icono) {
+    flex-shrink: 0;
+  }
+
+  .anotarme[open] .anotarme__abrir :global(.anotarme__icono) {
+    transform: rotate(180deg);
+  }
+
+  .anotarme[open] .anotarme__abrir {
+    margin-block-end: var(--sp-5);
+  }
+
+  .anotarme__aviso {
+    margin-block-end: var(--sp-4);
+    color: var(--error);
+    font-weight: 700;
+  }
+
+  .anotarme__form {
+    display: grid;
+    gap: var(--sp-5);
+  }
+
+  fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  legend {
+    padding: 0;
+    font-weight: 800;
+  }
+
+  .grupo {
+    display: grid;
+    gap: var(--sp-4);
+  }
+
+  .grupo > legend {
+    margin-block-end: var(--sp-3);
+    font-size: var(--fs-xl);
+  }
+
+  .campo {
+    display: grid;
+    gap: var(--sp-2);
+    min-width: 0;
+  }
+
+  label {
+    font-weight: 700;
+  }
+
+  .opcional {
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .ayuda {
+    color: var(--muted);
+  }
+
+  .opciones {
+    display: grid;
+    gap: var(--sp-2);
+  }
+
+  .opciones > legend {
+    margin-block-end: var(--sp-2);
+  }
+
+  .opcion {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    min-height: 44px;
+    font-weight: 500;
+  }
+
+  input[type='radio'],
+  input[type='checkbox'] {
+    flex-shrink: 0;
+    width: 1.375rem;
+    height: 1.375rem;
+    margin: 0;
+  }
+
+  .intereses {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3);
+  }
+
+  /* Tarjeta de categoría: el borde dorado marca la elegida; el anillo de foco sigue al control de adentro */
+  .interes {
+    position: relative;
+    display: grid;
+    gap: var(--sp-2);
+    justify-items: start;
+    min-width: 0;
+    padding: var(--sp-3);
+    border: 2px solid var(--line-strong);
+    border-radius: var(--radius-card);
+    background: var(--surface-1);
+    cursor: pointer;
+  }
+
+  .interes:has(input:checked) {
+    border-color: var(--gold);
+  }
+
+  .interes:has(input:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+  }
+
+  .interes input {
+    position: absolute;
+    inset-block-start: var(--sp-2);
+    inset-inline-end: var(--sp-2);
+  }
+
+  .interes__arte {
+    width: 3.5rem;
+    height: 3.5rem;
+    overflow: hidden;
+    border-radius: var(--radius-field);
+  }
+
+  .interes__arte :global(.arte) {
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+  .interes__nombre {
+    overflow-wrap: anywhere;
+  }
+
+  .consentimiento {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--sp-3);
+    align-items: start;
+  }
+
+  .consentimiento input {
+    margin-block-start: 0.2rem;
+  }
+
+  .consentimiento label {
+    font-weight: 500;
+  }
+
+  .enlace-privacidad a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .error {
+    color: var(--error);
+    font-size: 0.9375rem;
+    font-weight: 700;
+  }
+
+  /* El resumen de errores: un panel, el tono va en el texto y el icono (sin franja de color lateral) */
+  .resumen {
+    display: flex;
+    gap: var(--sp-3);
+    align-items: flex-start;
+    padding: var(--sp-4);
+    border-radius: var(--radius-card);
+    background: var(--surface-1);
+  }
+
+  .resumen :global(.resumen__icono) {
+    flex-shrink: 0;
+    margin-block-start: 0.1em;
+    color: var(--error);
+  }
+
+  .resumen__texto {
+    color: var(--error);
+    font-weight: 800;
+  }
+
+  .resumen__lista {
+    display: grid;
+    gap: var(--sp-1);
+    margin-block-start: var(--sp-2);
+  }
+
+  .resumen__lista :global(a) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+
+  /* La ranura de Turnstile reserva su altura para que el formulario no salte al cargar: 65px flexible, 140px compacto */
+  .verificacion {
+    display: grid;
+    gap: var(--sp-2);
+  }
+
+  .verificacion__etiqueta {
+    color: var(--muted);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .verificacion__ranura {
+    min-height: 140px;
+  }
+
+  .verificacion__error {
+    display: grid;
+    gap: var(--sp-3);
+    justify-items: start;
+  }
+
+  .btn--sec {
+    border: 2px solid var(--line-strong);
+    background: var(--surface-1);
+    color: var(--text);
+  }
+
+  .btn--bloque {
+    width: 100%;
+  }
+
+  .exito {
+    display: grid;
+    gap: var(--sp-3);
+    justify-items: start;
+  }
+
+  .exito :global(.exito__icono) {
+    color: var(--ok);
+  }
+
+  .exito:focus {
+    outline: none;
+  }
+
+  @media (min-width: 340px) {
+    .verificacion__ranura {
+      min-height: 65px;
+    }
+  }
+
+  @media (min-width: 860px) {
+    .formulario {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+      column-gap: var(--sp-8);
+      justify-content: center;
+    }
+
+    .anotarme {
+      padding: var(--sp-6);
+    }
+
+    .intereses {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>

@@ -28,6 +28,19 @@ export const WAITLIST_URL = '/v1/waitlist';
 /** Id del título que recibe el foco cuando el envío sale bien. */
 export const SUCCESS_FOCUS_ID = 'anotarme-exito';
 
+/**
+ * El nombre legible de un campo, para el resumen de errores (junto al mensaje, así se sabe cuál es cuál).
+ * @param {string} campo
+ * @returns {string}
+ */
+export function fieldLabel(campo) {
+  if (campo === 'consent') return formulario.grupos.consentimiento;
+  const campos = /** @type {Record<string, { etiqueta: string }>} */ (formulario.campos);
+  const datos = campos[campo];
+  if (!datos) throw new Error(`campo desconocido: ${campo}`);
+  return datos.etiqueta;
+}
+
 /** @param {string} campo */
 export const fieldId = (campo) => `campo-${campo.replace(/_/g, '-')}`;
 /** @param {string} campo */

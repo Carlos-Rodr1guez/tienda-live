@@ -44,3 +44,10 @@ Los juegos 2 y 3 son de categorías distintas a la de ASEDIO: Acuario (Relax) y 
 - Cada producto tiene su categoría (`products.category`), y la ficha de cada juego la declara.
 - Los módulos del kit de juego son opcionales: un juego de Relax no carga el módulo de bandos.
 - Relax es la categoría con más riesgo frente a las reglas de TikTok, y además compite con opciones gratis como Fishbowl y Coin Jar. Necesita que la presencia del streamer se vea bien y una diferencia clara.
+
+## Nota (2026-11-05): Batalla de países
+
+- **Entra al catálogo.** Batalla de países se suma como concepto de la categoría Público (el chat elige su país y el streamer narra la batalla en cámara), a pedido del dueño. Todavía no es un juego: en la web es una tarjeta "Próximamente" sin página ni enlace, con el nombre marcado como provisional.
+- **Va antes que Carrera.** El dueño decidió que Batalla de países va antes que Carrera por equipos dentro de Público. Por eso los juegos 2 y 3 son Acuario (Relax) y Batalla de países (Público), y Carrera sigue como concepto, sin trabajo planeado.
+- **Qué sale primero sigue abierto.** Cuál de los dos sale primero lo sigue decidiendo el interés por categoría de la lista de espera, en el H4.
+- **Qué falta.** La ADR que enmienda el orden de los juegos 2 y 3 se escribe junto con el cambio guerra-paises. Esta nota solo deja constancia de la decisión; la ADR sigue Aceptada.

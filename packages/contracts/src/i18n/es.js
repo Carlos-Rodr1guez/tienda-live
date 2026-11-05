@@ -93,8 +93,11 @@ export const inicio = congelar({
   titulo: 'Tu público juega contigo en tu LIVE',
   bajada:
     'Juegos para TikTok LIVE que tu chat controla con comentarios, likes y regalos. Tú conduces el directo y el público decide qué pasa en el juego.',
-  videoPosterAlt: 'Captura de ASEDIO LIVE: naves de dos bandos peleando sobre una base',
+  // Describe la escena, no el texto del HUD que aparece en la captura
+  videoPosterAlt:
+    'Captura de ASEDIO LIVE: naves rojas contra naves azules, con la base azul abajo y explosiones en el centro',
   videoProximamente: 'Video próximamente',
+  subtitulosEtiqueta: 'Español',
 });
 
 /** Cómo funciona, en tres verbos. */
@@ -116,16 +119,39 @@ export const juego = congelar({
   titulo: 'ASEDIO LIVE',
   resumen:
     'Tu público elige bando y con sus regalos invoca naves y robots. Tú juegas como el Comandante y defiendes tu base en vivo.',
-  escaleraTitulo: 'Más valor, unidad más grande',
-  escaleraIntro: 'Cada regalo trae una unidad según su valor en monedas. Para el mismo valor, siempre llega la misma.',
-  escalera: [
-    { monedas: '1 a 9', unidad: 'Caza', detalle: 'Una nave ligera por moneda.' },
-    { monedas: '10 a 99', unidad: 'Bombardero', detalle: 'Uno cada 10 monedas.' },
-    { monedas: '100 a 999', unidad: 'Coloso', detalle: 'Un robot gigante.' },
-    { monedas: '1000 o más', unidad: 'Acorazado', detalle: 'Una nave capital que baja del cielo.' },
+  mecanicasTitulo: 'Así se juega',
+  // Las cinco filas de la portada. `tono` es el color de la tecla: def azul (Defensores), inv rojo (Invasores), gold dorado.
+  mecanicasPortada: [
+    { tecla: '1', tono: 'def', texto: 'Comenta 1 para unirte a los Defensores. Unirse es gratis.' },
+    { tecla: '2', tono: 'inv', texto: 'Comenta 2 para unirte a los Invasores. Unirse es gratis.' },
+    { tecla: 'Likes', tono: 'def', texto: 'Cada 300 likes llegan 3 cazas.' },
+    { tecla: 'Chat', tono: 'inv', texto: 'Con 15 comentarios de un equipo cae un bombardeo sobre los enemigos.' },
+    { tecla: 'Tú', tono: 'gold', texto: 'Juegas como el Comandante, en cámara, y defiendes la base.' },
   ],
+  escaleraTitulo: 'Más valor, unidad más grande',
+  escaleraEtiqueta: 'Niveles de regalo',
+  escaleraIntro: 'Cada regalo trae una unidad según su valor en monedas. Para el mismo valor, siempre llega la misma.',
+  // Va después del rango de cada nivel: "1 a 9 monedas"
+  monedasPalabra: 'monedas',
+  escalera: [
+    { desde: '1', monedas: '1 a 9', unidad: 'Caza', detalle: 'Una nave ligera por moneda.' },
+    { desde: '10', monedas: '10 a 99', unidad: 'Bombardero', detalle: 'Uno cada 10 monedas.' },
+    { desde: '100', monedas: '100 a 999', unidad: 'Coloso', detalle: 'Un robot gigante.' },
+    { desde: '1000', monedas: '1000 o más', unidad: 'Acorazado', detalle: 'Una nave capital que baja del cielo.' },
+  ],
+  // La frase va en tres partes porque la palabra del medio se resalta; el componente las une con espacios
+  tesis: { antes: 'El efecto lo decide el', destacada: 'valor', despues: 'del regalo.' },
   unirseGratis: 'Unirse al juego con un comentario es gratis.',
+  regalarOpcional: 'Regalar es opcional: el juego tiene acción aunque nadie regale.',
   verFicha: 'Ver la ficha de ASEDIO LIVE',
+  // Títulos de la página de cada juego (/juegos/<juego>)
+  ficha: {
+    mecanicas: 'Cómo se juega',
+    regalos: 'Regalos y unidades',
+    requisitos: 'Qué necesitas',
+    anotarme: 'Anotarme en la lista de espera',
+    volver: 'Volver al inicio',
+  },
 });
 
 /** Introducción del bloque de categorías (los datos de cada una están en `opciones.categorias`). */
@@ -190,6 +216,9 @@ export const reglas = congelar({
 /** Formulario de la lista de espera. Los errores por campo y los mensajes de la API están en `respuestas`. */
 export const formulario = congelar({
   titulo: 'Anótate en la lista de espera',
+  bajada:
+    'Te avisamos cuando haya novedades. Cuéntanos cómo haces LIVE y qué tipo de juegos te interesan: así decidimos cuál sigue.',
+  verificacionEtiqueta: 'Verificación de seguridad',
   abrir: 'Quiero anotarme',
   opcional: '(opcional)',
   elegirOpcion: 'Elige una opción',

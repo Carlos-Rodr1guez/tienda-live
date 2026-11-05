@@ -40,7 +40,7 @@ test('layout: canonical y Open Graph con URLs absolutas del sitio, og:locale es_
   assert.equal(meta(home, 'og:type'), 'website');
   assert.equal(meta(home, 'og:locale'), 'es_ES');
   assert.equal(meta(home, 'og:site_name'), BRAND.name);
-  assert.equal(meta(home, 'og:image'), `${SITIO}/og/sitio.png`);
+  assert.equal(meta(home, 'og:image'), `${SITIO}/og/sitio.jpg`);
   assert.equal(meta(home, 'og:image:width'), '1200');
   assert.equal(meta(home, 'og:image:height'), '630');
 });
@@ -49,7 +49,7 @@ test('layout: tarjeta de Twitter grande con título, descripción e imagen absol
   assert.equal(meta(home, 'twitter:card'), 'summary_large_image');
   assert.equal(meta(home, 'twitter:title'), fmt(sitio.tituloInicio, { marca: BRAND.name }));
   assert.equal(meta(home, 'twitter:description'), sitio.descripcion);
-  assert.equal(meta(home, 'twitter:image'), `${SITIO}/og/sitio.png`);
+  assert.equal(meta(home, 'twitter:image'), `${SITIO}/og/sitio.jpg`);
 });
 
 test('layout: la fuente que se precarga es el mismo archivo que pide el CSS (latino, woff2, crossorigin)', () => {

@@ -3,12 +3,17 @@
 // buenas y malas, sin construir nada.
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'parse5';
 
-/** Carpeta de la construcción (apps/web/dist). */
-export const DIST = fileURLToPath(new URL('../../../dist/', import.meta.url));
+/**
+ * Carpeta de la construcción (apps/web/dist). DIST_DIR la cambia: sirve para probar estas pruebas contra HTML guardado
+ * de otra fuente sin construir.
+ */
+export const DIST = process.env.DIST_DIR
+  ? resolve(process.env.DIST_DIR)
+  : fileURLToPath(new URL('../../../dist/', import.meta.url));
 
 /** Páginas que no existen a propósito: la portada es la única vitrina (no hay índice de juegos ni de categorías). */
 export const PREFIJOS_AUSENTES = ['/juegos', '/categorias', '/como-funciona'];

@@ -118,8 +118,8 @@ test('robots: bloquea /confirmar y /v1/, no bloquea el resto y apunta al sitemap
   assert.match(buildRobots('http://localhost:8790/'), /Sitemap: http:\/\/localhost:8790\/sitemap\.xml/);
 });
 
-test('imagen de vista previa: la ruta por defecto es /og/sitio.png y se vuelve URL absoluta (el archivo llega con la portada)', () => {
-  assert.equal(OG_IMAGE_PATH, '/og/sitio.png');
+test('imagen de vista previa: la ruta por defecto es /og/sitio.jpg (JPEG liviano) y se vuelve URL absoluta', () => {
+  assert.equal(OG_IMAGE_PATH, '/og/sitio.jpg');
   const seo = buildSeo({
     site: 'https://ejemplo.test',
     path: '/',
@@ -128,6 +128,6 @@ test('imagen de vista previa: la ruta por defecto es /og/sitio.png y se vuelve U
     nombreSitio: 'Sitio',
     imagen: OG_IMAGE_PATH,
   });
-  assert.equal(meta(seo.openGraph, 'og:image'), 'https://ejemplo.test/og/sitio.png');
-  assert.equal(meta(seo.twitter, 'twitter:image'), 'https://ejemplo.test/og/sitio.png');
+  assert.equal(meta(seo.openGraph, 'og:image'), 'https://ejemplo.test/og/sitio.jpg');
+  assert.equal(meta(seo.twitter, 'twitter:image'), 'https://ejemplo.test/og/sitio.jpg');
 });

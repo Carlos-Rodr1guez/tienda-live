@@ -102,6 +102,92 @@ export function problemasDeCss(css) {
 }
 
 /**
+ * Las declaraciones de un CSS con el contexto (cabeceras de los bloques que las contienen).
+ * @param {string} css
+ * @returns {{ prop: string, valor: string, contexto: string[] }[]}
+ */
+export function declaraciones(css) {
+  const salida = [];
+  const pila = [];
+  let pendiente = '';
+  const soltar = () => {
+    const m = /^\s*([\w-]+)\s*:\s*([\s\S]*?)\s*$/.exec(pendiente);
+    if (m) salida.push({ prop: m[1], valor: m[2], contexto: pila.map((h) => h.replace(/\s+/g, ' ')) });
+    pendiente = '';
+  };
+  for (const c of sinComentarios(css)) {
+    if (c === '{') {
+      pila.push(pendiente.trim());
+      pendiente = '';
+    } else if (c === '}') {
+      soltar();
+      pila.pop();
+    } else if (c === ';') {
+      soltar();
+    } else {
+      pendiente += c;
+    }
+  }
+  return salida;
+}
+
+/**
+ * Reglas del revelado por scroll (la escalera de regalos): anima SOLO transform, nunca la opacidad (un estado a medias
+ * con opacidad baja se queda ahí si la persona deja de hacer scroll y no llega a AA), y solo bajo
+ * `@supports (animation-timeline: view())` y `prefers-reduced-motion: no-preference`, con el estado final por defecto.
+ * @param {string} css
+ * @returns {string[]}
+ */
+export function problemasDeRevelado(css) {
+  const problemas = [];
+  const decls = declaraciones(css);
+  const dentroDe = (d, patron) => d.contexto.some((h) => patron.test(h));
+  for (const d of decls) {
+    if (dentroDe(d, /^@keyframes\b/) && /opacity/.test(d.prop)) problemas.push('@keyframes anima opacity');
+    if (/^(?:animation|transition)/.test(d.prop) && /opacity/.test(d.valor)) {
+      problemas.push(`${d.prop} anima opacity: ${d.valor}`);
+    }
+    if (
+      /^animation(?:-name|-timeline|-range|-timing-function|-fill-mode)?$/.test(d.prop) &&
+      !dentroDe(d, /^@keyframes/)
+    ) {
+      if (!dentroDe(d, /^@supports[^{]*animation-timeline:\s*view\(\)/))
+        problemas.push(`${d.prop} fuera de @supports (animation-timeline: view())`);
+      if (!dentroDe(d, /^@media[^{]*prefers-reduced-motion:\s*no-preference/)) {
+        problemas.push(`${d.prop} fuera de @media (prefers-reduced-motion: no-preference)`);
+      }
+    }
+  }
+  return [...new Set(problemas)];
+}
+
+/**
+ * Valores que solo pueden vivir en tokens.css: colores, radios, sombras y curvas de movimiento. Fuera de ese archivo
+ * se usan con var(--token). `excepciones` son textos exactos que el diseño fija a mano (se ignoran).
+ * @param {string} css
+ * @param {string[]} [excepciones]
+ * @returns {string[]}
+ */
+export function problemasDeTokens(css, excepciones = []) {
+  let limpio = sinComentarios(css);
+  for (const e of excepciones) limpio = limpio.split(e).join('');
+  const problemas = [];
+  if (/#[0-9a-fA-F]{3,8}\b/.test(limpio)) problemas.push('color hexadecimal escrito a mano');
+  if (/\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\(/.test(limpio)) problemas.push('color funcional escrito a mano');
+  if (/cubic-bezier\(/.test(limpio)) problemas.push('curva de movimiento escrita a mano');
+  const permitido = (valor) => /^(?:var\([^)]*\)|0|50%|inherit|none)$/.test(valor);
+  for (const m of limpio.matchAll(/border-radius\s*:\s*([^;}]+)/g)) {
+    const partes = m[1].trim().match(/var\([^)]*\)|\S+/g) ?? [];
+    if (!partes.every(permitido)) problemas.push(`radio escrito a mano: ${m[1].trim()}`);
+  }
+  for (const m of limpio.matchAll(/box-shadow\s*:\s*([^;}]+)/g)) {
+    const partes = m[1].trim().match(/var\([^)]*\)|\S+/g) ?? [];
+    if (!partes.every(permitido)) problemas.push(`sombra escrita a mano: ${m[1].trim()}`);
+  }
+  return problemas;
+}
+
+/**
  * Reglas de un componente .astro: sin style=, sin is:inline, scripts solo agrupados (sin atributos), sin emoji ni
  * símbolos como iconos y sin fuentes o CDN externos.
  * @param {string} texto

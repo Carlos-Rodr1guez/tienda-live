@@ -1,8 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { checkCopy } from '@tienda/contracts/copy-rules';
 import { BRAND } from '@tienda/contracts/brand';
+import { juego as juegoTextos } from '@tienda/contracts/i18n';
+// Solo lectura: la configuración real de ASEDIO es la fuente de los niveles de regalo.
+import { DEFAULT_CONFIG } from '../../../../games/asedio/public/js/sim/defaults.js';
 import { createJuegoSchema, createLegalSchema } from '../../src/content/schema.js';
 import { parseFrontmatter } from '../support/frontmatter.js';
 
@@ -22,10 +25,84 @@ function leerCarpeta(carpeta) {
 const juegos = leerCarpeta(CARPETA_JUEGOS);
 const legales = leerCarpeta(CARPETA_LEGAL);
 
-test('entradas: la carpeta de juegos tiene los conceptos carrera y acuario', () => {
+test('entradas: la carpeta de juegos tiene asedio y los conceptos batalla, carrera y acuario', () => {
   const slugs = juegos.map((j) => j.slug);
-  assert.ok(slugs.includes('carrera'), 'falta carrera.md');
-  assert.ok(slugs.includes('acuario'), 'falta acuario.md');
+  for (const esperado of ['asedio', 'batalla', 'carrera', 'acuario']) {
+    assert.ok(slugs.includes(esperado), `falta ${esperado}.md`);
+  }
+});
+
+test('asedio: prototipo de Acción que juega el streamer, con póster real, sin video y todo sacado del juego', () => {
+  const asedio = juegos.find((j) => j.slug === 'asedio').data;
+  assert.equal(asedio.categoria, 'accion');
+  assert.equal(asedio.rolStreamer, 'juega');
+  assert.equal(asedio.estado, 'prototipo');
+  assert.deepEqual(asedio.idealPara, ['gaming']);
+  assert.equal(asedio.orden, 1);
+  assert.equal(asedio.poster, 'juegos/asedio/poster.png');
+  assert.equal(asedio.video, undefined, 'todavía no hay un clip: la ficha muestra "Video próximamente"');
+  assert.ok(existsSync(new URL(`../../src/assets/${asedio.poster}`, import.meta.url)), 'falta el archivo del póster');
+  assert.ok(asedio.mecanicas.length >= 3);
+  assert.ok(asedio.requisitos.length >= 1);
+  assert.ok(asedio.nombre.length <= 60 && asedio.resumen.length <= 160);
+});
+
+test('asedio: los regalos de la ficha son los niveles de la configuración real del juego (nada inventado)', () => {
+  const asedio = juegos.find((j) => j.slug === 'asedio').data;
+  const niveles = DEFAULT_CONFIG.tiers;
+  assert.equal(asedio.regalos.length, niveles.length);
+  niveles.forEach((nivel, i) => {
+    const siguiente = niveles[i + 1];
+    const esperado = siguiente ? `${nivel.minCoins}-${siguiente.minCoins - 1}` : `${nivel.minCoins}+`;
+    // una moneda sola no es un rango: 1-9 sí, pero el último nivel es "1000+"
+    assert.equal(asedio.regalos[i].monedas, esperado, `nivel ${nivel.unit}`);
+    assert.match(asedio.regalos[i].efecto.toLowerCase(), new RegExp(nivel.unit), `el efecto nombra ${nivel.unit}`);
+  });
+});
+
+test('asedio: la escalera del diccionario sigue los mismos niveles y unidades que el juego', () => {
+  const niveles = DEFAULT_CONFIG.tiers;
+  assert.deepEqual(
+    juegoTextos.escalera.map((n) => n.unidad.toLowerCase()),
+    niveles.map((n) => n.unit),
+  );
+  niveles.forEach((nivel, i) => {
+    const siguiente = niveles[i + 1];
+    const esperado = siguiente ? `${nivel.minCoins} a ${siguiente.minCoins - 1}` : `${nivel.minCoins} o más`;
+    assert.equal(juegoTextos.escalera[i].monedas, esperado, nivel.unit);
+  });
+});
+
+test('batalla: concepto de Público que conduce el streamer, antes que carrera y acuario, con nombre provisional', () => {
+  const batalla = juegos.find((j) => j.slug === 'batalla');
+  assert.equal(batalla.data.nombre, 'Batalla de países');
+  assert.equal(batalla.data.estado, 'concepto');
+  assert.equal(batalla.data.categoria, 'publico');
+  assert.equal(batalla.data.rolStreamer, 'conduce');
+  assert.deepEqual(batalla.data.idealPara, ['charla', 'gaming']);
+  assert.match(batalla.body, /nombre es provisional/i);
+  assert.match(batalla.data.resumen, /narras/, 'el streamer narra la batalla en cámara');
+});
+
+test('batalla: nada de banderas, escudos, himnos, conflictos reales ni la palabra guerra (decisión del dueño)', () => {
+  const batalla = juegos.find((j) => j.slug === 'batalla');
+  // los comentarios del encabezado también cuentan: el texto completo del archivo
+  assert.doesNotMatch(batalla.texto, /guerra/i);
+  assert.doesNotMatch(batalla.texto, /bandera|escudo|himno|conflicto/i);
+  assert.doesNotMatch(batalla.texto, /[\u{1F1E6}-\u{1F1FF}]/u, 'sin emoji de bandera');
+  assert.doesNotMatch(batalla.texto, /\p{Extended_Pictographic}/u);
+});
+
+test('orden del catálogo: ASEDIO, Batalla de países, Acuario y Carrera, sin repetidos', () => {
+  const orden = Object.fromEntries(juegos.map((j) => [j.slug, j.data.orden]));
+  assert.deepEqual(
+    juegos.toSorted((a, b) => a.data.orden - b.data.orden).map((j) => j.slug),
+    ['asedio', 'batalla', 'acuario', 'carrera'],
+  );
+  assert.equal(new Set(Object.values(orden)).size, juegos.length, JSON.stringify(orden));
+  assert.equal(orden.carrera, 4);
+  assert.equal(orden.acuario, 3);
+  assert.equal(orden.batalla, 2);
 });
 
 test('entradas: cada juego tiene un slug válido, cuerpo de hasta 8000 caracteres y pasa el esquema', () => {

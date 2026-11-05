@@ -1,0 +1,128 @@
+---
+// Juegos que todavía son ideas: tarjetas "Próximamente" SIN enlace (un concepto no tiene página). Reciben las entradas ya
+// ordenadas por `orden` (hoy Batalla de países, Acuario y Carrera). En móvil van en una columna; desde 860px, tres
+// columnas iguales, para que no quede una tarjeta sola en una fila de dos.
+import { opciones, proximos } from '@tienda/contracts/i18n';
+import CategoryArt from './CategoryArt.astro';
+
+interface Props {
+  juegos: { id: string; data: { nombre: string; resumen: string; categoria: string } }[];
+}
+
+const { juegos } = Astro.props;
+const categorias = opciones.categorias as Record<string, { nombre: string }>;
+---
+
+<section class="sec container proximos" aria-labelledby="titulo-proximos">
+  <div class="proximos__cabeza">
+    <h2 id="titulo-proximos">{proximos.titulo}</h2>
+    <p>{proximos.intro}</p>
+  </div>
+  <ul class="proximos__lista">
+    {juegos.map((juego) => (
+      <li class="tarjeta">
+        <div class="tarjeta__miniatura">
+          <CategoryArt categoria={juego.data.categoria} decorativo />
+        </div>
+        <div class="tarjeta__texto">
+          <h3 class="tarjeta__nombre">{juego.data.nombre}</h3>
+          <p class="tarjeta__etiquetas">
+            <span class="chip tarjeta__chip">{proximos.chip}</span>
+            <span class="tarjeta__dato">{categorias[juego.data.categoria].nombre}</span>
+            <span class="tarjeta__dato">{proximos.provisional}</span>
+          </p>
+          <p class="tarjeta__resumen">{juego.data.resumen}</p>
+        </div>
+      </li>
+    ))}
+  </ul>
+</section>
+
+<style>
+  .proximos {
+    display: grid;
+    gap: var(--sp-6);
+  }
+
+  .proximos__cabeza {
+    display: grid;
+    gap: var(--sp-3);
+    justify-items: start;
+  }
+
+  .proximos__lista {
+    display: grid;
+    gap: var(--sp-4);
+  }
+
+  .tarjeta {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: var(--sp-4);
+    align-items: start;
+    min-width: 0;
+    padding: var(--sp-4);
+    border-radius: var(--radius-card);
+    background: var(--surface-2);
+  }
+
+  .tarjeta__miniatura {
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: var(--radius-field);
+  }
+
+  .tarjeta__miniatura :global(.arte) {
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+  .tarjeta__texto {
+    display: grid;
+    gap: var(--sp-2);
+    min-width: 0;
+  }
+
+  .tarjeta__nombre {
+    font-size: 1.375rem;
+    overflow-wrap: anywhere;
+  }
+
+  .tarjeta__etiquetas {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-1) var(--sp-3);
+  }
+
+  /* Etiqueta de estado: dorada con texto oscuro, igual que las teclas */
+  .tarjeta__chip {
+    background: var(--gold);
+    color: var(--on-gold);
+  }
+
+  .tarjeta__dato {
+    color: var(--muted);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .tarjeta__resumen {
+    color: var(--text);
+    font-size: 0.9375rem;
+  }
+
+  @media (min-width: 860px) {
+    .proximos__lista {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    /* Tres columnas angostas: la miniatura pasa arriba del texto */
+    .tarjeta {
+      grid-template-columns: minmax(0, 1fr);
+      align-content: start;
+    }
+  }
+</style>

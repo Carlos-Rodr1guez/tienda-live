@@ -1,0 +1,237 @@
+---
+// La escalera de regalos: cuatro escalones (1, 10, 100 y 1000 monedas) con la nave que trae cada uno. Los niveles son
+// los de la configuración de ASEDIO (games/asedio/public/js/sim/defaults.js) y salen del diccionario; una prueba los
+// compara con el juego. Es el único momento animado de la página: al entrar en pantalla, cada escalón sube con un
+// desplazamiento y una escala suaves. SOLO se anima transform (la opacidad queda en 1 en todo momento, así el contraste
+// se cumple aunque alguien deje de hacer scroll a medio camino), y solo si el navegador sabe animar con el scroll y la
+// persona no pidió menos movimiento. El estado final es el de por defecto: sin movimiento la página está completa.
+import { juego } from '@tienda/contracts/i18n';
+import { shipPath } from '../lib/ships.js';
+
+const niveles = juego.escalera.map((nivel, i) => ({
+  ...nivel,
+  indice: i + 1,
+  // La nave es la que nombra la unidad ("Caza" -> caza); si el diccionario trae otra, shipPath falla al construir
+  forma: shipPath(nivel.unidad.toLowerCase(), { x: 0, y: 0, tamano: 48, clase: 'nave__forma' }),
+}));
+---
+
+<div class="bloque">
+  <h3 class="bloque__titulo">{juego.escaleraTitulo}</h3>
+  <p class="bloque__intro">{juego.escaleraIntro}</p>
+
+  <ol class="escalera" aria-label={juego.escaleraEtiqueta}>
+    {niveles.map((nivel) => (
+      <li class={`nivel nivel--${nivel.indice}`}>
+        <svg class="nave" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <Fragment set:html={nivel.forma} />
+        </svg>
+        <p class="num nivel__num">{nivel.desde}</p>
+        <p class="nivel__leyenda">
+          {nivel.monedas} {juego.monedasPalabra}
+        </p>
+        <h4 class="nivel__unidad">{nivel.unidad}</h4>
+        <p class="nivel__detalle">{nivel.detalle}</p>
+      </li>
+    ))}
+  </ol>
+
+  <p class="tesis">
+    {juego.tesis.antes} <b>{juego.tesis.destacada}</b> {juego.tesis.despues}
+  </p>
+  <p class="nota">
+    {juego.unirseGratis} {juego.regalarOpcional}
+  </p>
+</div>
+
+<style>
+  .bloque {
+    display: grid;
+    gap: var(--sp-5);
+  }
+
+  .bloque__titulo {
+    font-size: var(--fs-2xl);
+  }
+
+  .bloque__intro,
+  .nota {
+    color: var(--muted);
+  }
+
+  .escalera {
+    display: grid;
+    gap: var(--sp-3);
+  }
+
+  /* Cada escalón fija sus medidas con variables; el cuerpo de la regla es el mismo para los cuatro */
+  .nivel {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-areas:
+      'nave num'
+      'nave leyenda'
+      'nave unidad'
+      'nave detalle';
+    align-content: center;
+    column-gap: var(--sp-4);
+    min-width: 0;
+    padding: var(--sp-4);
+    border-radius: var(--radius-card);
+    background: var(--nivel-fondo);
+    color: var(--text);
+  }
+
+  .nivel--1 {
+    --nivel-fondo: var(--surface-1);
+    --nave: 26px;
+    --num: 1.75rem;
+    --alto: 13rem;
+  }
+
+  .nivel--2 {
+    --nivel-fondo: var(--surface-2);
+    --nave: 36px;
+    --num: 2.25rem;
+    --alto: 16rem;
+  }
+
+  .nivel--3 {
+    --nivel-fondo: var(--surface-3);
+    --nave: 48px;
+    --num: 2.75rem;
+    --alto: 19rem;
+  }
+
+  .nivel--4 {
+    --nivel-fondo: var(--gold);
+    --nave: 62px;
+    --num: 3.25rem;
+    --alto: 22rem;
+    box-shadow: var(--glow-gold);
+    color: var(--on-gold);
+  }
+
+  .nave {
+    grid-area: nave;
+    align-self: center;
+    justify-self: center;
+    flex-shrink: 0;
+    width: var(--nave);
+    height: var(--nave);
+  }
+
+  .nave :global(.nave__forma) {
+    fill: var(--def);
+  }
+
+  .nivel--4 .nave :global(.nave__forma) {
+    fill: var(--on-gold);
+  }
+
+  .nivel__num {
+    grid-area: num;
+    color: var(--gold);
+    font-size: var(--num);
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .nivel--4 .nivel__num {
+    color: var(--on-gold);
+  }
+
+  .nivel__leyenda {
+    grid-area: leyenda;
+    color: var(--muted);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .nivel--4 .nivel__leyenda {
+    color: var(--on-gold);
+  }
+
+  .nivel__unidad {
+    grid-area: unidad;
+    margin-block-start: var(--sp-1);
+    font-size: var(--fs-xl);
+  }
+
+  .nivel__detalle {
+    grid-area: detalle;
+    overflow-wrap: anywhere;
+  }
+
+  .tesis {
+    max-inline-size: 32ch;
+    font-size: clamp(1.375rem, 1.1rem + 1.2vw, 2rem);
+    font-weight: 800;
+    line-height: var(--lh-head);
+  }
+
+  .tesis b {
+    color: var(--gold);
+  }
+
+  /* Desde 860px: los cuatro escalones lado a lado, alineados abajo, como una escalera que sube hacia la derecha */
+  @media (min-width: 860px) {
+    .escalera {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      align-items: end;
+    }
+
+    .nivel {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas:
+        'nave'
+        'num'
+        'leyenda'
+        'unidad'
+        'detalle';
+      align-content: end;
+      justify-items: start;
+      min-height: var(--alto);
+    }
+
+    .nave {
+      justify-self: start;
+      width: calc(var(--nave) * 1.6);
+      height: calc(var(--nave) * 1.6);
+      margin-block-end: var(--sp-3);
+    }
+  }
+
+  /* El revelado: solo si el navegador anima con el scroll y no se pidió menos movimiento */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .nivel {
+        animation: escalon-sube var(--ease-out) both;
+        animation-timeline: view();
+        animation-range: entry 0% entry 70%;
+      }
+
+      .nivel--2 {
+        animation-range: entry 6% entry 76%;
+      }
+
+      .nivel--3 {
+        animation-range: entry 12% entry 82%;
+      }
+
+      .nivel--4 {
+        animation-range: entry 18% entry 88%;
+      }
+    }
+  }
+
+  @keyframes escalon-sube {
+    from {
+      transform: translateY(0.75rem) scale(0.94);
+    }
+
+    to {
+      transform: none;
+    }
+  }
+</style>

@@ -133,6 +133,37 @@ test('contraste: los valores de referencia de la dirección A (rojo ~5.8, azul ~
   assert.ok(contraste(t('ink'), t('gold')) >= 10);
 });
 
+// ---- portada: chip sobre el póster y brillos de equipo ----
+
+/** Mezcla un rgb(r g b / a) sobre un color #rrggbb y devuelve el resultado en #rrggbb. */
+function mezclar(rgba, fondoHex) {
+  const m = /^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\/\s*([\d.]+)\s*\)$/.exec(rgba);
+  assert.ok(m, `no es rgb(r g b / a): ${rgba}`);
+  const alfa = Number(m[4]);
+  const canales = [1, 2, 3].map((i, k) => {
+    const fondo = parseInt(fondoHex.slice(1 + k * 2, 3 + k * 2), 16);
+    return Math.round(Number(m[i]) * alfa + fondo * (1 - alfa));
+  });
+  return `#${canales.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+test('contraste: el texto del chip "Video próximamente" se lee aunque el cuadro del póster sea blanco puro', () => {
+  const peor = mezclar(t('scrim'), '#ffffff');
+  assert.ok(contraste(t('text'), peor) >= 4.5, `texto sobre el chip: ${contraste(t('text'), peor).toFixed(2)}:1`);
+  // el caso real (el póster es oscuro) es todavía mejor
+  assert.ok(contraste(t('text'), mezclar(t('scrim'), '#3a4a6a')) >= contraste(t('text'), peor));
+  assert.ok(Number(/\/\s*([\d.]+)\)/.exec(t('scrim'))[1]) >= 0.8, 'el chip es casi opaco');
+});
+
+test('tokens: los brillos de equipo tienen desplazamiento vertical y desenfoque suave (un halo sin desplazamiento es decoración)', () => {
+  for (const nombre of ['glow-gold', 'glow-def']) {
+    const m = /^0 ([\d.]+)rem ([\d.]+)rem -?[\d.]+rem rgb\(/.exec(t(nombre));
+    assert.ok(m, `${nombre}: ${t(nombre)}`);
+    assert.ok(Number(m[1]) > 0, `${nombre} sin desplazamiento`);
+    assert.ok(Number(m[2]) >= 2, `${nombre} sin desenfoque suave`);
+  }
+});
+
 test('contraste: el helper calcula bien los extremos (blanco/negro 21:1, igual 1:1)', () => {
   assert.equal(contraste('#ffffff', '#000000').toFixed(2), '21.00');
   assert.equal(contraste('#123456', '#123456').toFixed(2), '1.00');

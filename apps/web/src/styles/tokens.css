@@ -67,6 +67,13 @@
   /* Sombra con desplazamiento y desenfoque suave; el brillo de equipo va solo en el marco del póster y el escalón alto */
   --shadow: 0 0.75rem 2rem -0.75rem rgb(0 0 0 / 0.7);
 
+  /* Fondo del chip que va sobre el póster: oscuro y casi opaco, así el texto se lee sobre cualquier cuadro */
+  --scrim: rgb(4 6 12 / 0.86);
+
+  /* Brillos de equipo: con desplazamiento vertical y desenfoque suave; solo el marco del póster y el escalón alto */
+  --glow-gold: 0 1rem 2.5rem -1rem rgb(255 194 61 / 0.55);
+  --glow-def: 0 1.25rem 3rem -1rem rgb(47 155 255 / 0.55);
+
   /* Movimiento: una sola curva de salida y un solo tiempo de pulsación */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --dur-press: 120ms;

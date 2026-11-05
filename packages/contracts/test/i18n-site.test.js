@@ -204,6 +204,65 @@ test('inicio, pasos, juego y proximos: lo que la portada necesita', () => {
   assert.equal(es.proximos.chip, 'Próximamente');
 });
 
+// ---- portada: póster, ASEDIO, escalera de regalos y formulario ----
+
+test('inicio: el texto alternativo del póster describe la escena (naves rojas contra azules, base azul abajo), no el HUD', () => {
+  const alt = es.inicio.videoPosterAlt;
+  assert.ok(alt.length <= 150, `el alt mide ${alt.length}`);
+  assert.match(alt, /naves rojas/);
+  assert.match(alt, /naves azules/);
+  assert.match(alt, /base azul abajo/);
+  // lo que dice el HUD del juego (puntajes, ronda, panel de regalos) no se repite en el alt
+  assert.doesNotMatch(alt, /RONDA|REGALOS|Bombardero|puntos?\b/i);
+  assert.equal(es.inicio.subtitulosEtiqueta, 'Español');
+});
+
+test('juego: las mecánicas de la portada son cinco filas con tecla y tono de equipo, y salen del README del juego', () => {
+  const filas = es.juego.mecanicasPortada;
+  assert.deepEqual(
+    filas.map((f) => f.tecla),
+    ['1', '2', 'Likes', 'Chat', 'Tú'],
+  );
+  for (const f of filas) {
+    assert.deepEqual(claves(f), ['tecla', 'texto', 'tono']);
+    assert.ok(['def', 'inv', 'gold'].includes(f.tono), `${f.tecla}: tono ${f.tono}`);
+  }
+  // 1 es Defensores (azul) y 2 Invasores (rojo), como en el juego
+  assert.equal(filas[0].tono, 'def');
+  assert.equal(filas[1].tono, 'inv');
+  assert.match(filas[0].texto, /Defensores/);
+  assert.match(filas[1].texto, /Invasores/);
+  assert.match(filas[2].texto, /300 likes/);
+  assert.match(filas[3].texto, /15 comentarios/);
+  assert.match(filas[4].texto, /Comandante/);
+});
+
+test('juego: cada nivel de la escalera trae su número, su rango de monedas y su detalle; la tesis y la nota de regalar son opcionales', () => {
+  assert.deepEqual(
+    es.juego.escalera.map((n) => n.desde),
+    ['1', '10', '100', '1000'],
+  );
+  for (const nivel of es.juego.escalera) {
+    assert.deepEqual(claves(nivel), ['desde', 'detalle', 'monedas', 'unidad']);
+    assert.match(`${nivel.monedas} ${es.juego.monedasPalabra}`, /^\d+( a \d+| o más) monedas$/);
+  }
+  const { antes, destacada, despues } = es.juego.tesis;
+  assert.equal(`${antes} ${destacada} ${despues}`, 'El efecto lo decide el valor del regalo.');
+  assert.equal(destacada, 'valor');
+  assert.match(es.juego.regalarOpcional, /opcional/);
+  assert.match(es.juego.escaleraEtiqueta, /regalo/);
+});
+
+test('juego.ficha: la página de cada juego tiene sus títulos de sección', () => {
+  assert.deepEqual(claves(es.juego.ficha), ['anotarme', 'mecanicas', 'regalos', 'requisitos', 'volver']);
+});
+
+test('formulario: tiene el texto de la portada y la etiqueta de la verificación', () => {
+  assert.ok(es.formulario.bajada.length > 30);
+  assert.match(es.formulario.verificacionEtiqueta, /Verificación/);
+  assert.match(es.formulario.verificacionError, /verificación/);
+});
+
 test('faq: cada pregunta trae su respuesta y la primera aclara que el streamer está en el directo', () => {
   assert.ok(es.faq.preguntas.length >= 4);
   for (const p of es.faq.preguntas) {

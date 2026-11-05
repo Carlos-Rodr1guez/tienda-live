@@ -40,6 +40,37 @@ test('estrellas: archivo SVG propio, decorativo, de puntos claros pequeños y te
   }
 });
 
+/** Ancho y alto de un JPEG leyendo el primer marcador SOF (sin dependencias). */
+function medirJpeg(bytes) {
+  assert.equal(bytes[0], 0xff);
+  assert.equal(bytes[1], 0xd8, 'no empieza con el marcador SOI de JPEG');
+  let i = 2;
+  while (i + 9 < bytes.length) {
+    assert.equal(bytes[i], 0xff, `marcador esperado en ${i}`);
+    const marcador = bytes[i + 1];
+    const largo = bytes.readUInt16BE(i + 2);
+    const esSof = marcador >= 0xc0 && marcador <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marcador);
+    if (esSof) return { alto: bytes.readUInt16BE(i + 5), ancho: bytes.readUInt16BE(i + 7) };
+    i += 2 + largo;
+  }
+  throw new Error('no se encontró el marcador SOF');
+}
+
+test('medirJpeg: lee las medidas de un JPEG mínimo y rechaza lo que no es JPEG', () => {
+  // SOI, SOF0 (largo 11, precisión 8, alto 630, ancho 1200, 1 componente)
+  const minimo = Buffer.from([
+    0xff, 0xd8, 0xff, 0xc0, 0x00, 0x0b, 0x08, 0x02, 0x76, 0x04, 0xb0, 0x01, 0x01, 0x11, 0x00,
+  ]);
+  assert.deepEqual(medirJpeg(minimo), { alto: 630, ancho: 1200 });
+  assert.throws(() => medirJpeg(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0, 0, 0, 0, 0])));
+});
+
+test('og/sitio.jpg: JPEG de 1200x630 y menos de 300 KB (WhatsApp descarta vistas previas más pesadas)', () => {
+  const bytes = readFileSync(new URL('public/og/sitio.jpg', raiz));
+  assert.ok(bytes.length < 300 * 1024, `pesa ${bytes.length} bytes`);
+  assert.deepEqual(medirJpeg(bytes), { alto: 630, ancho: 1200 });
+});
+
 test('licencias: el aviso de la OFL de Oxanium es la LICENSE del paquete, palabra por palabra', () => {
   const del_paquete = readFileSync(new URL('../../node_modules/@fontsource-variable/oxanium/LICENSE', raiz), 'utf8');
   const publicada = leer('public/licencias/oxanium-OFL.txt');

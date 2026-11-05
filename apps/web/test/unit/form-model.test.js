@@ -8,6 +8,7 @@ import {
   buildRequest,
   errorId,
   fieldId,
+  fieldLabel,
   initialState,
   interpretResponse,
   isSubmitDisabled,
@@ -117,6 +118,18 @@ test('formulario: cada campo y cada código de error de contracts tiene un mensa
     assert.equal(typeof respuestas[codigo], 'string', codigo);
     assert.ok(respuestas[codigo].length > 0, codigo);
   }
+});
+
+test('fieldLabel: cada campo con error tiene un nombre legible para el resumen (así dos "Elige una opción" no se confunden)', () => {
+  assert.equal(fieldLabel('email'), formulario.campos.email.etiqueta);
+  assert.equal(fieldLabel('live_frequency'), formulario.campos.live_frequency.etiqueta);
+  assert.equal(fieldLabel('stream_type'), formulario.campos.stream_type.etiqueta);
+  assert.equal(fieldLabel('interests'), formulario.campos.interests.etiqueta);
+  assert.equal(fieldLabel('consent'), formulario.grupos.consentimiento);
+  for (const campo of FIELD_ORDER) assert.ok(fieldLabel(campo).length > 3, campo);
+  const nombres = FIELD_ORDER.map(fieldLabel);
+  assert.equal(new Set(nombres).size, nombres.length, 'sin nombres repetidos');
+  assert.throws(() => fieldLabel('desconocido'), /desconocido/);
 });
 
 test('respuesta 202: éxito con el texto del diccionario', () => {

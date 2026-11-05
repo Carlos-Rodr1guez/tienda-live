@@ -1,6 +1,6 @@
 ---
 # Concepto: todavía no es un juego. No tiene página propia, solo una tarjeta "Próximamente" en la portada.
-# El orden entre este juego y la carrera lo decide el interés por categoría de la lista de espera (ADR-008, H4).
+# El orden entre este juego y Batalla de países lo decide el interés por categoría de la lista de espera (ADR-008, H4).
 nombre: Acuario
 resumen: Una escena tranquila de peces y linternas que cambia y crece con los regalos. Nadie gana; tú acompañas en cámara.
 categoria: relax

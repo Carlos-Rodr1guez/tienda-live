@@ -9,6 +9,7 @@ import {
   legible,
   problemasDeAstro,
   problemasDeCss,
+  problemasDeTokens,
 } from '../support/source-rules.js';
 
 const SRC = fileURLToPath(new URL('../../src/', import.meta.url));
@@ -85,6 +86,35 @@ const x = 'style="no es un atributo, es una cadena del frontmatter"';
   assert.deepEqual(problemasDeAstro(limpio), []);
 });
 
+test('tokens: encuentra colores, radios, sombras y curvas escritos a mano fuera de tokens.css', () => {
+  const malos = {
+    'color hexadecimal': '.a { color: #ffc23d; }',
+    'color rgb': '.a { background: rgb(4 6 12 / .86); }',
+    'color hsl': '.a { color: hsl(40 100% 60%); }',
+    'radio escrito a mano': '.a { border-radius: 8px; }',
+    'radio mezclado': '.a { border-radius: var(--radius-card) 8px 0 0; }',
+    'sombra escrita a mano': '.a { box-shadow: 0 1px 2px black; }',
+    'curva escrita a mano': '.a { transition: transform 120ms cubic-bezier(.2,.8,.2,1); }',
+  };
+  for (const [esperado, css] of Object.entries(malos)) {
+    assert.ok(
+      problemasDeTokens(css).some((p) => p.includes(esperado.split(' ')[0])),
+      esperado,
+    );
+  }
+});
+
+test('tokens: lo que sale de los tokens no da problemas (var(), 0, 50%, none) y las excepciones declaradas se respetan', () => {
+  const bueno = `
+    .a { color: var(--text); border-radius: var(--radius-card) var(--radius-card) 0 0; box-shadow: var(--shadow); }
+    .b { border-radius: 50%; box-shadow: none; transition: transform var(--dur-press) var(--ease-out); }
+    .c { background: url('./estrellas.svg'); }
+  `;
+  assert.deepEqual(problemasDeTokens(bueno), []);
+  assert.deepEqual(problemasDeTokens('html { scrollbar-color: #2a3550 var(--bg); }', ['#2a3550']), []);
+  assert.equal(problemasDeTokens('html { scrollbar-color: #2a3551 var(--bg); }', ['#2a3550']).length, 1);
+});
+
 // ---- los archivos reales ----
 
 test('src: ningún CSS ni componente de la web rompe las reglas (sin style=, sin is:inline, sin fuentes externas, hover con compuerta)', () => {
@@ -95,6 +125,20 @@ test('src: ningún CSS ni componente de la web rompe las reglas (sin style=, sin
     const texto = leer(ruta);
     const encontrados = ruta.endsWith('.astro') ? problemasDeAstro(texto) : problemasDeCss(cssDe(ruta, texto));
     for (const p of encontrados) problemas.push(`${legible(SRC, ruta)}: ${p}`);
+  }
+  assert.deepEqual(problemas, []);
+});
+
+// Los dos únicos valores a mano que el diseño fija sin token: el pulgar de la barra de desplazamiento y la selección
+const EXCEPCIONES_BASE = ['#2a3550', 'rgb(47 155 255 / 0.35)'];
+
+test('src: ningún color, radio, sombra ni curva se escribe a mano fuera de tokens.css', () => {
+  const problemas = [];
+  for (const ruta of archivos(SRC, ['.css', '.astro'])) {
+    if (ruta.endsWith('tokens.css')) continue;
+    const css = cssDe(ruta, leer(ruta));
+    const excepciones = ruta.endsWith('base.css') ? EXCEPCIONES_BASE : [];
+    for (const p of problemasDeTokens(css, excepciones)) problemas.push(`${legible(SRC, ruta)}: ${p}`);
   }
   assert.deepEqual(problemas, []);
 });

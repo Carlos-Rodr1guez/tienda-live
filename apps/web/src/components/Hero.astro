@@ -1,0 +1,94 @@
+---
+// Primer pantallazo. En móvil el orden es: título, el marco de teléfono con el póster de ASEDIO y, después, el texto con el
+// botón. Desde 860px son dos columnas: el título y el texto a la izquierda, el teléfono a la derecha. El marco 9:16 es lo
+// primero que se ve, así que el video (hoy el póster) guía todo lo demás. Un solo llamado a la acción: anotarse.
+import { formulario, inicio } from '@tienda/contracts/i18n';
+import VideoPoster from './VideoPoster.astro';
+
+interface Props {
+  poster: string;
+  video?: string;
+}
+
+const { poster, video } = Astro.props;
+---
+
+<section class="hero sec container" aria-labelledby="titulo-inicio">
+  <h1 id="titulo-inicio" class="hero__titulo">
+    {inicio.titulo}
+  </h1>
+  <div class="hero__marco">
+    <VideoPoster poster={poster} video={video} alt={inicio.videoPosterAlt} prioridad />
+  </div>
+  <div class="hero__texto">
+    <p>{inicio.bajada}</p>
+    <a class="btn" href="#anotarme">
+      {formulario.abrir}
+    </a>
+  </div>
+</section>
+
+<style>
+  .hero {
+    display: grid;
+    grid-template-areas:
+      'titulo'
+      'marco'
+      'texto';
+    gap: var(--sp-6);
+    padding-block-start: var(--sp-6);
+  }
+
+  .hero__titulo {
+    grid-area: titulo;
+  }
+
+  .hero__marco {
+    grid-area: marco;
+    justify-self: center;
+    width: min(54vw, 230px);
+    padding: 6px;
+    border-radius: var(--radius-phone-outer);
+    background: var(--surface-2);
+    box-shadow: var(--glow-def);
+  }
+
+  .hero__texto {
+    grid-area: texto;
+    display: grid;
+    gap: var(--sp-5);
+    justify-items: start;
+  }
+
+  @media (min-width: 860px) {
+    .hero {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      grid-template-areas:
+        'titulo marco'
+        'texto marco';
+      column-gap: var(--sp-8);
+      row-gap: var(--sp-5);
+      padding-block-start: var(--sp-7);
+    }
+
+    /* el título se apoya abajo y el texto arriba: juntos, a media altura del teléfono */
+    .hero__titulo {
+      align-self: end;
+    }
+
+    .hero__texto {
+      align-self: start;
+    }
+
+    .hero__marco {
+      width: clamp(260px, 26vw, 330px);
+    }
+  }
+
+  /* Pantallas muy angostas: el botón ocupa todo el ancho para que sea fácil de tocar */
+  @media (max-width: 420px) {
+    .hero__texto .btn {
+      width: 100%;
+    }
+  }
+</style>

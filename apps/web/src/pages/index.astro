@@ -1,16 +1,40 @@
 ---
-// Portada provisoria: la portada real (póster, formulario, escalera de regalos) llega en el lote siguiente. Ya usa el
-// diseño base para que tenga cabecera, pie con el aviso de no afiliación y metadatos.
+// Portada: es la vitrina entera. Orden fijo: póster, formulario, cómo funciona, ASEDIO con la escalera de regalos, las
+// cuatro categorías, los próximos juegos, preguntas frecuentes y las dos reglas. Hay un único h1 (en Hero). Las
+// secciones alternan fondo (fondo y franja) para que se lean como bloques; los conceptos no tienen página ni enlace.
+import { getCollection } from 'astro:content';
 import { BRAND } from '@tienda/contracts/brand';
-import { fmt, inicio, sitio } from '@tienda/contracts/i18n';
+import { fmt, sitio } from '@tienda/contracts/i18n';
+import CategoryGrid from '../components/CategoryGrid.astro';
+import Faq from '../components/Faq.astro';
+import GameSpotlight from '../components/GameSpotlight.astro';
+import Hero from '../components/Hero.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Rules from '../components/Rules.astro';
+import UpcomingGames from '../components/UpcomingGames.astro';
+import WaitlistForm from '../components/WaitlistForm.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { fichaHref, splitCatalog } from '../lib/catalog.js';
+
+const { fichas, proximos } = splitCatalog(await getCollection('juegos'));
+// El juego de la portada es la primera ficha por orden (hoy ASEDIO LIVE). Sin ninguna, la construcción falla.
+const destacado = fichas[0];
+if (!destacado?.data.poster) throw new Error('la portada necesita al menos un juego que no sea concepto, con póster');
 
 const titulo = fmt(sitio.tituloInicio, { marca: BRAND.name });
 ---
 
 <BaseLayout title={titulo} description={sitio.descripcion} path="/">
-  <section class="sec container apoyo">
-    <h1>{inicio.titulo}</h1>
-    <p>{sitio.descripcion}</p>
-  </section>
+  <Hero poster={destacado.data.poster} video={destacado.data.video} />
+  <WaitlistForm />
+  <HowItWorks />
+  <GameSpotlight href={fichaHref(destacado) ?? '/'} />
+  <CategoryGrid />
+  <UpcomingGames juegos={proximos} />
+  <Faq />
+  <Rules />
 </BaseLayout>
+
+<script>
+  import '../lib/home-entry.js';
+</script>
