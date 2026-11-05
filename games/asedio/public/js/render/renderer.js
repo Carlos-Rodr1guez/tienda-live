@@ -79,7 +79,7 @@ export class GameRenderer {
     this.effects = new Effects(scene);
     // plataforma flotando en el espacio, con nebulosa y planeta de fondo
     this.platform = new Platform(scene);
-    this.space = new SpaceBackdrop(r, scene, sun.position);
+    this.space = new SpaceBackdrop(r, scene);
     this.buildBase();
     this.buildPortal();
     this.buildShadows();

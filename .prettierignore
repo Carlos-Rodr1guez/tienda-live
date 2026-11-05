@@ -1,0 +1,8 @@
+# Prettier ya respeta .gitignore (node_modules, dist, coverage). Además:
+
+# lo escribe npm
+package-lock.json
+
+# build-demo recorta index.html entre los marcadores <!--APP--> y <!--/APP-->,
+# así que el HTML se edita a mano y no se reformatea
+*.html

@@ -1,0 +1,15 @@
+{
+  // Solo verifica tipos, no compila: el código corre tal cual en Node y en el navegador.
+  // Los archivos .ts se verifican siempre. Los .js, solo si empiezan con // @ts-check.
+  "compilerOptions": {
+    "target": "es2024",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["apps", "games", "packages", "scripts"]
+}

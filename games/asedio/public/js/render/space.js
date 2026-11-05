@@ -159,9 +159,8 @@ function ringTexture() {
 }
 
 export class SpaceBackdrop {
-  constructor(renderer, scene, sunPos) {
+  constructor(renderer, scene) {
     this.scene = scene;
-    const sunDir = sunPos.clone().normalize();
     // el planeta se ilumina de costado para que tenga lado de noche (más volumen)
     const planetSun = new THREE.Vector3(0.85, 0.25, -0.45).normalize();
 
