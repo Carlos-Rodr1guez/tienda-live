@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createTikTokBridge } from './tiktok.js';
+import { packageDir } from './package-dir.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -50,7 +51,7 @@ function safeJoin(dir, rel) {
 
 export async function startServer({ config = {}, port = 3000, host = '127.0.0.1', root = ROOT, tiktok = true, log = console } = {}) {
   const mounts = [
-    { prefix: '/vendor/three/', dir: path.join(root, 'node_modules', 'three') },
+    { prefix: '/vendor/three/', dir: packageDir('three', root) },
     { prefix: '/models/', dir: path.join(root, 'models') },
     { prefix: '/', dir: path.join(root, 'public') },
   ];

@@ -6,10 +6,11 @@ import { build } from 'esbuild';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { packageDir } from '../server/package-dir.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const local = process.argv.includes('--local');
-const threeVersion = JSON.parse(await readFile(path.join(ROOT, 'node_modules/three/package.json'), 'utf8')).version;
+const threeVersion = JSON.parse(await readFile(path.join(packageDir('three', ROOT), 'package.json'), 'utf8')).version;
 const threeBase = local ? '/vendor/three/' : `https://cdn.jsdelivr.net/npm/three@${threeVersion}/`;
 
 const result = await build({

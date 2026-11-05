@@ -1,0 +1,25 @@
+{
+  "name": "asedio-live",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Juego interactivo para TikTok LIVE: los regalos del público invocan unidades en batalla.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test",
+    "build:demo": "node tools/build-demo.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "three": "0.186.1",
+    "tiktok-live-connector": "2.5.0",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "license": "MIT"
+}

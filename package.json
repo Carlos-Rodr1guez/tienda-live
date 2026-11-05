@@ -1,24 +1,20 @@
 {
-  "name": "asedio-live",
+  "name": "tienda-live",
   "version": "0.1.0",
-  "description": "Juego interactivo para TikTok LIVE: los regalos del público invocan unidades en batalla.",
+  "private": true,
+  "description": "Monorepo de juegos interactivos para TikTok LIVE. Nombre provisorio hasta definir la marca.",
   "type": "module",
-  "main": "server/index.js",
+  "workspaces": [
+    "apps/*",
+    "games/*",
+    "packages/*"
+  ],
   "scripts": {
-    "start": "node server/index.js",
-    "test": "node --test",
-    "build:demo": "node tools/build-demo.mjs"
+    "start": "npm run start -w asedio-live --",
+    "test": "npm test --workspaces --if-present",
+    "build:demo": "npm run build:demo -w asedio-live"
   },
   "engines": {
     "node": ">=20"
-  },
-  "dependencies": {
-    "three": "0.186.1",
-    "tiktok-live-connector": "2.5.0",
-    "ws": "^8.22.0"
-  },
-  "devDependencies": {
-    "esbuild": "0.28.2"
-  },
-  "license": "MIT"
+  }
 }

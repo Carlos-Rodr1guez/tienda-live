@@ -1,9 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import WebSocket from 'ws';
 import { createNormalizer, userOf } from '../server/normalize.js';
 import { cleanUsername } from '../server/tiktok.js';
-import { startServer } from '../server/app.js';
+import { startServer, ROOT } from '../server/app.js';
+import { packageDir } from '../server/package-dir.js';
 
 const quiet = { info() {}, warn() {}, error() {} };
 
@@ -49,6 +52,11 @@ test('limpieza del usuario de TikTok', () => {
   assert.equal(cleanUsername('@silver'), 'silver');
   assert.equal(cleanUsername('https://www.tiktok.com/@silver/live'), 'silver');
   assert.equal(cleanUsername('tu_usuario_de_tiktok'), '');
+});
+
+test('encuentra three aunque npm lo haya subido a la raíz del monorepo', () => {
+  const dir = packageDir('three', path.join(ROOT, 'public', 'js'));
+  assert.equal(JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8')).name, 'three');
 });
 
 test('servidor: sirve el juego, la config y reenvía eventos por WebSocket', async () => {
