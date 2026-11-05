@@ -31,6 +31,7 @@ const SECCIONES = [
   'confirmar',
   'pie',
   'pagina404',
+  'legal',
 ];
 
 /** Todas las cadenas de un árbol, con su ruta. */
@@ -67,10 +68,10 @@ test('i18n-site: ningún texto incumple las reglas de redacción (sin voseo, sin
   for (const [ruta, texto] of TODAS) assert.deepEqual(checkCopy(texto), [], ruta);
 });
 
-test('i18n-site: el único marcador que usan los textos del sitio es {marca}, y ninguno trae el nombre escrito', () => {
+test('i18n-site: los marcadores de los textos del sitio son los conocidos ({marca} y los de las páginas legales), y ninguno trae el nombre escrito', () => {
   const sitio = SECCIONES.filter((s) => !['correo'].includes(s));
   for (const [ruta, texto] of cadenas(Object.fromEntries(sitio.map((s) => [s, es[s]])))) {
-    assert.doesNotThrow(() => fmt(texto, { marca: BRAND.name }), ruta);
+    assert.doesNotThrow(() => fmt(texto, { marca: BRAND.name, titulo: 'x', version: 'x', fecha: 'x' }), ruta);
     assert.ok(!texto.toLowerCase().includes(BRAND.name.toLowerCase()), `${ruta} trae el nombre de la marca escrito`);
   }
 });
@@ -146,7 +147,15 @@ test('pie: el aviso de no afiliación nombra a TikTok y a ByteDance y lleva la m
 });
 
 test('pie: tiene los enlaces legales, el contacto y el texto de "pendiente"', () => {
-  assert.deepEqual(claves(es.pie), ['aviso', 'contacto', 'licencias', 'noAfiliacion', 'pendiente', 'privacidad']);
+  assert.deepEqual(claves(es.pie), [
+    'aviso',
+    'contacto',
+    'licencias',
+    'navegacion',
+    'noAfiliacion',
+    'pendiente',
+    'privacidad',
+  ]);
   assert.equal(es.pie.pendiente, 'pendiente');
 });
 
@@ -215,4 +224,22 @@ test('sitio: lleva el título y la descripción de la portada, con la marca como
   assert.match(es.sitio.tituloInicio, /\{marca\}/);
   assert.ok(es.sitio.descripcion.length > 40 && es.sitio.descripcion.length <= 160);
   assert.equal(es.sitio.idioma, 'es');
+});
+
+test('páginas de apoyo: título de página con la marca, descripciones, aviso sin JavaScript y textos del borrador legal', () => {
+  assert.equal(fmt(es.sitio.tituloPagina, { titulo: 'Aviso legal', marca: BRAND.name }), `Aviso legal | ${BRAND.name}`);
+  assert.match(es.pie.navegacion, /legal/);
+  assert.match(es.confirmar.noscript, /JavaScript/);
+  for (const descripcion of [es.confirmar.descripcion, es.pagina404.descripcion]) {
+    assert.ok(descripcion.length > 20 && descripcion.length <= 160);
+  }
+  assert.equal(es.legal.borradorTitulo, 'Borrador');
+  assert.equal(
+    fmt(es.legal.versionActualizado, { version: '0.1', fecha: '5 de noviembre de 2026' }),
+    'Versión 0.1, actualizada el 5 de noviembre de 2026',
+  );
+  assert.equal(
+    fmt(es.legal.descripcion, { titulo: 'Aviso legal', marca: BRAND.name }),
+    `Aviso legal de ${BRAND.name}.`,
+  );
 });

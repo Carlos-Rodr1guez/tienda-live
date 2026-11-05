@@ -5,6 +5,12 @@
 /** Tamaño de la imagen de vista previa. */
 export const OG_IMAGE_SIZE = Object.freeze({ width: 1200, height: 630 });
 
+/**
+ * Ruta de la imagen de vista previa por defecto. El archivo (1200x630, una captura real de ASEDIO) llega con la
+ * portada: hasta entonces no existe, y no se crea una imagen de relleno. Una página puede pasar otra en `ogImage`.
+ */
+export const OG_IMAGE_PATH = '/og/sitio.png';
+
 /** Valor válido de og:locale para español (la especificación pide "es_ES neutro"). */
 export const OG_LOCALE = 'es_ES';
 

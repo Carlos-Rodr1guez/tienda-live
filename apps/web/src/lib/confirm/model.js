@@ -83,6 +83,50 @@ export function messageFor(estado) {
 }
 
 /**
+ * Qué muestra la página en cada estado: el mensaje, su tono, el botón y si hay enlace para volver al inicio.
+ * @typedef {{
+ *   mensaje: string,
+ *   tono: 'neutro' | 'ok' | 'error',
+ *   boton: { visible: boolean, deshabilitado: boolean, texto: string },
+ *   volver: boolean,
+ * }} VistaConfirmar
+ * @param {EstadoConfirmar} estado
+ * @returns {VistaConfirmar}
+ */
+export function viewFor(estado) {
+  const mensaje = messageFor(estado);
+  const sinBoton = { visible: false, deshabilitado: false, texto: confirmar.boton };
+  switch (estado.fase) {
+    case 'listo':
+      return {
+        mensaje,
+        tono: 'neutro',
+        boton: { visible: true, deshabilitado: false, texto: confirmar.boton },
+        volver: false,
+      };
+    case 'enviando':
+      return {
+        mensaje,
+        tono: 'neutro',
+        boton: { visible: true, deshabilitado: true, texto: confirmar.enviando },
+        volver: false,
+      };
+    case 'confirmado':
+      return { mensaje, tono: 'ok', boton: sinBoton, volver: true };
+    case 'error-red':
+      return {
+        mensaje,
+        tono: 'error',
+        boton: { visible: true, deshabilitado: false, texto: confirmar.reintentar },
+        volver: false,
+      };
+    case 'sin-enlace':
+    case 'invalido':
+      return { mensaje, tono: 'error', boton: sinBoton, volver: true };
+  }
+}
+
+/**
  * El pedido de fetch de la confirmación: el token va en el cuerpo, nunca en la URL.
  * @param {string} token
  */

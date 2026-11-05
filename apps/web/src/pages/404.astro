@@ -1,0 +1,22 @@
+---
+// Página 404: dice qué pasó, ofrece volver a la portada y no se indexa. El pie con el aviso lo pone el diseño base.
+import { BRAND } from '@tienda/contracts/brand';
+import { fmt, pagina404, sitio } from '@tienda/contracts/i18n';
+import Icon from '../components/Icon.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const titulo = fmt(sitio.tituloPagina, { titulo: pagina404.titulo, marca: BRAND.name });
+---
+
+<BaseLayout title={titulo} description={pagina404.descripcion} path="/404" noindex analytics={false}>
+  <section class="sec container apoyo">
+    <h1>{pagina404.titulo}</h1>
+    <div class="aviso-panel">
+      <Icon nombre="alert" class="aviso-panel__icono" />
+      <p>{pagina404.texto}</p>
+    </div>
+    <a class="btn" href="/">
+      {pagina404.volver}
+    </a>
+  </section>
+</BaseLayout>

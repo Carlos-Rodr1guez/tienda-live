@@ -8,6 +8,7 @@ import {
   messageFor,
   parseFragment,
   reduceConfirm,
+  viewFor,
 } from '../../src/lib/confirm/model.js';
 
 const TOKEN = 'A'.repeat(43);
@@ -103,4 +104,65 @@ test('petición: POST /v1/waitlist/confirm con el token en el cuerpo, nunca en l
   assert.equal(init.body, JSON.stringify({ token: TOKEN }));
   assert.equal(url.includes(TOKEN), false);
   assert.equal(CLEAN_PATH, '/confirmar');
+});
+
+// ---- viewFor: qué muestra la página en cada estado ----
+
+const ESTADOS = {
+  'sin-enlace': { fase: 'sin-enlace', token: null },
+  listo: { fase: 'listo', token: TOKEN },
+  enviando: { fase: 'enviando', token: TOKEN },
+  confirmado: { fase: 'confirmado', token: null },
+  invalido: { fase: 'invalido', token: null },
+  'error-red': { fase: 'error-red', token: TOKEN },
+};
+
+test('vista: listo muestra el botón Confirmar activo y nada más', () => {
+  assert.deepEqual(viewFor(ESTADOS.listo), {
+    mensaje: confirmar.listo,
+    tono: 'neutro',
+    boton: { visible: true, deshabilitado: false, texto: confirmar.boton },
+    volver: false,
+  });
+});
+
+test('vista: enviando deja el botón visible pero desactivado, con el texto "Confirmando…"', () => {
+  const v = viewFor(ESTADOS.enviando);
+  assert.deepEqual(v.boton, { visible: true, deshabilitado: true, texto: confirmar.enviando });
+  assert.equal(v.mensaje, confirmar.enviando);
+  assert.equal(v.volver, false);
+});
+
+test('vista: confirmado y enlace inválido ocultan el botón y ofrecen volver; el inválido es un error', () => {
+  const ok = viewFor(ESTADOS.confirmado);
+  assert.equal(ok.mensaje, respuestas.confirmado);
+  assert.equal(ok.tono, 'ok');
+  assert.equal(ok.boton.visible, false);
+  assert.equal(ok.volver, true);
+
+  const malo = viewFor(ESTADOS.invalido);
+  assert.equal(malo.mensaje, respuestas.enlace_invalido);
+  assert.equal(malo.tono, 'error');
+  assert.equal(malo.boton.visible, false);
+  assert.equal(malo.volver, true);
+});
+
+test('vista: sin enlace ofrece volver y no hay botón; el error de red deja reintentar con el texto de reintento', () => {
+  const sin = viewFor(ESTADOS['sin-enlace']);
+  assert.equal(sin.mensaje, confirmar.sinEnlace);
+  assert.equal(sin.boton.visible, false);
+  assert.equal(sin.volver, true);
+  assert.equal(sin.tono, 'error');
+
+  const red = viewFor(ESTADOS['error-red']);
+  assert.equal(red.mensaje, confirmar.errorRed);
+  assert.equal(red.tono, 'error');
+  assert.deepEqual(red.boton, { visible: true, deshabilitado: false, texto: confirmar.reintentar });
+  assert.equal(red.volver, false);
+});
+
+test('vista: cada estado del modelo tiene vista, con su mensaje igual al de messageFor', () => {
+  for (const [nombre, estado] of Object.entries(ESTADOS)) {
+    assert.equal(viewFor(estado).mensaje, messageFor(estado), nombre);
+  }
 });

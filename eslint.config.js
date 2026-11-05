@@ -6,7 +6,16 @@ import globals from 'globals';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
 export default defineConfig([
-  globalIgnores(['**/node_modules/', '**/dist/', '**/coverage/', '**/.astro/', '**/.wrangler/', '**/.dev-state/']),
+  // `apps/web/test/dist` son pruebas de la construcción, no una salida: se revisan como el resto
+  globalIgnores([
+    '**/node_modules/',
+    '**/dist/',
+    '!apps/web/test/dist/',
+    '**/coverage/',
+    '**/.astro/',
+    '**/.wrangler/',
+    '**/.dev-state/',
+  ]),
   {
     files: ['**/*.{js,mjs}'],
     extends: [js.configs.recommended],

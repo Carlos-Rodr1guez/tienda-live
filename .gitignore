@@ -1,6 +1,8 @@
 # dependencias y salidas
 node_modules/
 dist/
+# las pruebas de la construcción viven en apps/web/test/dist (no son una salida de construcción)
+!apps/web/test/dist/
 coverage/
 *.tsbuildinfo
 .eslintcache

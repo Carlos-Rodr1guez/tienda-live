@@ -82,6 +82,7 @@ export const sitio = congelar({
   idioma: 'es',
   saltar: 'Ir al contenido',
   tituloInicio: '{marca}: juegos interactivos para tu LIVE',
+  tituloPagina: '{titulo} | {marca}',
   descripcion:
     'Juegos que tu público controla con comentarios, likes y regalos mientras haces LIVE en TikTok. Anótate en la lista de espera.',
   borrador: 'Borrador: este texto aún no es definitivo.',
@@ -318,6 +319,8 @@ export const opciones = congelar({
 /** Página /confirmar. El resultado de confirmar usa `respuestas.confirmado` y `respuestas.enlace_invalido`. */
 export const confirmar = congelar({
   titulo: 'Confirma tu lugar',
+  descripcion: 'Confirma tu correo para quedar en la lista de espera.',
+  noscript: 'Para confirmar tu correo necesitas activar JavaScript en tu navegador.',
   sinEnlace: 'No encontramos un enlace de confirmación. Abre el enlace que te llegó por correo.',
   listo: 'Pulsa el botón para confirmar tu correo y quedar en la lista de espera.',
   boton: 'Confirmar',
@@ -331,6 +334,7 @@ export const confirmar = congelar({
 export const pie = congelar({
   noAfiliacion:
     '{marca} es un proyecto independiente: no está afiliado a TikTok ni a ByteDance, ni cuenta con su respaldo.',
+  navegacion: 'Información legal y contacto',
   aviso: 'Aviso legal',
   privacidad: 'Política de privacidad',
   contacto: 'Contacto',
@@ -341,6 +345,14 @@ export const pie = congelar({
 /** Página 404. */
 export const pagina404 = congelar({
   titulo: 'No encontramos esta página',
+  descripcion: 'La página que buscas no existe o cambió de lugar.',
   texto: 'Puede que el enlace esté mal escrito o que la página ya no exista.',
   volver: 'Volver al inicio',
+});
+
+/** Páginas legales (aviso y privacidad). El texto de cada una vive en su archivo de src/content/legal. */
+export const legal = congelar({
+  borradorTitulo: 'Borrador',
+  versionActualizado: 'Versión {version}, actualizada el {fecha}',
+  descripcion: '{titulo} de {marca}.',
 });
