@@ -1,0 +1,14 @@
+# Texto con finales de línea LF en el repositorio y en todas las PCs
+* text=auto eol=lf
+
+# Binarios: git no los toca ni intenta mostrar diferencias
+*.glb binary
+*.mp3 binary
+*.ogg binary
+*.wav binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ktx2 binary
+*.woff2 binary

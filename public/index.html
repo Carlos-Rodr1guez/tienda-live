@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Asedio LIVE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/build/three.module.js",
+        "three/addons/": "./vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+<!--APP-->
+<div id="app">
+  <div id="game">
+    <canvas id="gl"></canvas>
+    <canvas id="ov"></canvas>
+
+    <div id="hud">
+      <div id="conn" class="conn"><i></i><span>DEMO</span></div>
+
+      <div class="top">
+        <div class="row">
+          <div class="team t0">
+            <small>DEFENSORES</small>
+            <strong id="cnt0">0</strong>
+            <span class="king" id="king0"></span>
+          </div>
+          <div class="clock">
+            <small id="roundLbl">RONDA 1</small>
+            <strong id="time">4:00</strong>
+            <span id="score">0 · 0</span>
+          </div>
+          <div class="team t1">
+            <small>INVASORES</small>
+            <strong id="cnt1">0</strong>
+            <span class="king" id="king1"></span>
+          </div>
+        </div>
+        <div class="power"><i id="pow0"></i><i id="pow1"></i></div>
+        <div class="basehp">
+          <span>BASE</span>
+          <div class="bar"><i id="baseBar"></i></div>
+          <em id="basePct">100%</em>
+        </div>
+      </div>
+
+      <div class="rail left">
+        <div class="card join">
+          <h3>COMENTA</h3>
+          <div class="opt t0"><b>1</b><span>DEFENDER</span></div>
+          <div class="opt t1"><b>2</b><span>INVADIR</span></div>
+          <div class="opt likes"><b>❤</b><span>LIKES = REFUERZOS</span></div>
+          <div class="meter"><i id="like0"></i></div>
+          <div class="meter red"><i id="like1"></i></div>
+          <div class="opt energy"><b>⚡</b><span>COMENTAR = BOMBARDEO</span></div>
+          <div class="meter energy"><i id="energy0"></i></div>
+          <div class="meter energy red"><i id="energy1"></i></div>
+        </div>
+      </div>
+      <div id="feed" class="feed"></div>
+
+      <div class="rail right">
+        <div class="card gifts">
+          <h3>REGALOS</h3>
+          <div id="giftList"></div>
+        </div>
+      </div>
+
+      <div id="banner" class="banner"></div>
+      <div id="center" class="center"></div>
+
+      <div id="cmd" class="cmdhud">
+        <div class="cmdbar"><span>COMANDANTE</span><div class="bar"><i id="cmdHp"></i></div><em id="cmdKills">0 bajas</em></div>
+        <div class="skills">
+          <div class="skill" id="skStrike"><i></i><b>ESPACIO / CLIC</b><span>Bombardeo</span></div>
+          <div class="skill" id="skDash"><i></i><b>SHIFT</b><span>Impulso</span></div>
+        </div>
+        <div id="cmdDown" class="cmddown"></div>
+      </div>
+
+      <!-- Marco para la cámara del streamer: la cámara la pone LIVE Studio encima. -->
+      <div id="camFrame" class="camframe off">
+        <div class="cf-tag"><i></i>EN VIVO · COMANDANTE</div>
+        <div class="cf-screen"><div id="camGuide" class="cf-guide"></div></div>
+        <span class="cf-c tl"></span><span class="cf-c tr"></span><span class="cf-c bl"></span><span class="cf-c br"></span>
+      </div>
+
+      <div id="safe" class="safe">
+        <div class="zone top">Zona tapada por TikTok (perfil y espectadores)</div>
+        <div class="zone bottom">Zona tapada por TikTok (comentarios y botones)</div>
+      </div>
+    </div>
+
+    <div id="start" class="start">
+      <div class="start-box">
+        <h1>ASEDIO</h1>
+        <p class="tag">El directo decide: ¿defienden la base o la destruyen?</p>
+        <ul>
+          <li><kbd>W A S D</kbd> mover al comandante</li>
+          <li><kbd>Clic</kbd> / <kbd>Espacio</kbd> bombardeo donde apuntas</li>
+          <li><kbd>Shift</kbd> impulso</li>
+          <li><kbd>F1</kbd> simulador de regalos · <kbd>F3</kbd> zonas de TikTok · <kbd>C</kbd> marco de cámara · <kbd>M</kbd> sonido</li>
+        </ul>
+        <button id="startBtn" type="button">JUGAR</button>
+        <p id="startInfo" class="info"></p>
+      </div>
+    </div>
+  </div>
+  <aside id="sim" class="sim"></aside>
+</div>
+<!--/APP-->
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+{
+  "tiktokUsername": "cath4lldg",
+  "port": 3000,
+  "signApiKey": "",
+
+  "game": {
+    "round": { "seconds": 240, "intermission": 12, "baseHp": 30000 },
+
+    "teams": { "defaultTeam": "balance" },
+
+    "tiers": [
+      { "minCoins": 1, "unit": "caza", "coinsPerUnit": 1, "maxPerGift": 10, "example": "Rosa" },
+      { "minCoins": 10, "unit": "bombardero", "coinsPerUnit": 10, "maxPerGift": 5, "example": "Rosquilla" },
+      { "minCoins": 100, "unit": "coloso", "coinsPerUnit": 100, "maxPerGift": 4, "example": "Corazón con las manos" },
+      { "minCoins": 1000, "unit": "acorazado", "coinsPerUnit": 1000, "maxPerGift": 3, "example": "Galaxia" }
+    ],
+
+    "giftOverrides": {},
+
+    "likes": { "perReinforcement": 300, "unit": "caza", "count": 3 },
+    "follow": { "unit": "caza", "count": 2 },
+    "share": { "unit": "caza", "count": 3 },
+    "joinSpawn": { "enabled": true, "unit": "dron", "count": 1 },
+    "energy": { "enabled": true, "perCharge": 15, "userCooldown": 3 },
+
+    "cpu": { "enabled": true },
+
+    "camera": { "enabled": true, "size": 1 },
+
+    "graphics": { "bloom": true, "bloomStrength": 0.85, "cinematics": true },
+
+    "audio": { "volume": 0.5, "music": true, "musicVolume": 0.35 }
+  }
+}

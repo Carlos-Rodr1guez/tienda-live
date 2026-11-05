@@ -1,0 +1,16 @@
+# dependencias y salidas
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.eslintcache
+
+# entorno y secretos: nunca al repositorio
+.env
+.env.*
+!.env.example
+
+# sistema y editores
+.DS_Store
+Thumbs.db
+*.log
