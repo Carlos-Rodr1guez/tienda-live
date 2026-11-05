@@ -66,7 +66,7 @@ Para un script de un paquete en particular se usa `-w` con el nombre del paquete
 Astro y Wrangler guardan configuración, registros y temporales por su cuenta, y por defecto lo hacen en la carpeta del usuario (`%APPDATA%`, `~/.wrangler`), que en este equipo está en C:. Para que **nada** de eso toque C:, todos los scripts de desarrollo pasan por `scripts/run.mjs`, que redirige ese estado a una carpeta aparte:
 
 - Por defecto: `D:\TIKTOK\asedio-live\.dev-state\tienda-live` (la carpeta `.dev-state`, hermana del repositorio, y fuera de git).
-- Para cambiarla: la variable `TIENDA_DEV_STATE` con la ruta que quieras (la CI la apunta a la carpeta temporal del runner).
+- Para cambiarla: la variable `TIENDA_DEV_STATE` con la ruta que quieras. La CI no la define: usa la carpeta por defecto, que en el runner queda fuera del checkout.
 - El lanzador también apaga la telemetría de Astro y Wrangler y no define nunca variables con credenciales de Cloudflare.
 - Esa carpeta se puede borrar en cualquier momento; se vuelve a crear sola. Si ves que aparecen `%APPDATA%\astro` o `%APPDATA%\xdg.config\.wrangler`, alguien corrió Astro o Wrangler sin pasar por el lanzador.
 

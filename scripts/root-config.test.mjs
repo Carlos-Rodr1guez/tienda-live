@@ -156,13 +156,37 @@ test('CI: el job pruebas tipa, construye la web, prueba el dist y comprueba el e
   );
 });
 
-test('CI: la construcción lleva el entorno que las pruebas de dist esperan y deja el estado dentro del runner', () => {
+test('CI: la construcción lleva el entorno que las pruebas de dist esperan', () => {
   const bloque = bloqueJob(read('.github/workflows/ci.yml'), 'pruebas');
   assert.match(bloque, /SITE_URL: http:\/\/localhost:8790$/m);
   assert.match(bloque, /PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA$/m);
-  assert.match(bloque, /TIENDA_DEV_STATE: \$\{\{ runner\.temp \}\}/);
   // Sin token del beacon: la construcción de CI no debe llevar analítica.
   assert.doesNotMatch(bloque, /PUBLIC_CF_BEACON_TOKEN/);
+});
+
+/**
+ * Contextos que GitHub permite en `jobs.<job_id>.env` (tabla "Context availability" de la documentación de Actions).
+ * `runner`, `env`, `job` y `steps` solo existen dentro de los pasos: usarlos en el env del job invalida el workflow
+ * entero, y entonces no corre ningún job.
+ */
+const CONTEXTOS_ENV_JOB = new Set(['github', 'needs', 'strategy', 'matrix', 'vars', 'secrets', 'inputs']);
+
+/** Las líneas del `env:` propio de un job (clave a 4 espacios), no el de sus pasos. */
+function envDelJob(bloque) {
+  const m = bloque.match(/^ {4}env:\n((?: {6}.*(?:\n|$))*)/m);
+  return m ? m[1] : '';
+}
+
+test('CI: el env de cada job solo usa contextos que GitHub permite a nivel de job', () => {
+  const yml = read('.github/workflows/ci.yml');
+  for (const job of ['calidad', 'pruebas']) {
+    for (const [, contexto] of envDelJob(bloqueJob(yml, job)).matchAll(/\$\{\{\s*([a-z_]+)\./g)) {
+      assert.ok(
+        CONTEXTOS_ENV_JOB.has(contexto),
+        `el env del job ${job} usa el contexto "${contexto}", que no existe a nivel de job: el workflow no arranca`,
+      );
+    }
+  }
 });
 
 test('.gitattributes: los formatos binarios nuevos no se tocan', () => {

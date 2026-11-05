@@ -47,11 +47,12 @@ jobs:
     timeout-minutes: 15
     # Entorno de la construcción de la web. Las pruebas de dist leen SITE_URL y esperan este origen.
     # El sitekey es el de PRUEBA de Turnstile (siempre aprueba). No hay token del beacon: la CI no lleva analítica.
-    # El estado de las herramientas (Astro, Wrangler) queda dentro del runner, no en la carpeta de usuario.
+    # El estado de las herramientas (Astro, Wrangler) va a la carpeta por defecto de scripts/run.mjs,
+    # `<repo>/../.dev-state/tienda-live`: fuera del checkout y dentro de la carpeta de trabajo del runner.
+    # Aquí no se puede usar el contexto `runner` (no existe a nivel de job y el workflow no arrancaría).
     env:
       SITE_URL: http://localhost:8790
       PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
-      TIENDA_DEV_STATE: ${{ runner.temp }}/tienda-dev-state
     strategy:
       fail-fast: false
       matrix:

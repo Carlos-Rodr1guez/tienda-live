@@ -102,7 +102,7 @@ El job `pruebas` de `.github/workflows/ci.yml` hace, en orden: `npm ci`, `npm te
 
 - `SITE_URL=http://localhost:8790`: las pruebas de dist esperan ese origen para las URL absolutas (canónica, Open Graph, sitemap).
 - `PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA`: la clave pública de **prueba** de Turnstile.
-- `TIENDA_DEV_STATE` dentro de la carpeta temporal del runner, para que Astro y Wrangler no escriban en la carpeta del usuario.
+- Sin `TIENDA_DEV_STATE`: el estado de Astro y Wrangler va a la carpeta por defecto de `scripts/run.mjs` (`<repo>/../.dev-state/tienda-live`), que en el runner queda fuera del checkout. El `env` de un job no puede usar el contexto `runner` (por ejemplo `runner.temp`): GitHub rechaza el workflow entero y no corre ningún job. Una prueba de `scripts/root-config.test.mjs` lo impide.
 - Sin `PUBLIC_CF_BEACON_TOKEN`: la construcción de la CI no lleva analítica.
 
 Las pruebas de dist leen la carpeta que indique `DIST_DIR` (por defecto `apps/web/dist`), así que se pueden probar contra HTML guardado sin construir.
