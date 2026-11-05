@@ -92,6 +92,79 @@ test('.gitignore: cubre caches, estado local y variables de Wrangler, pero deja 
   }
 });
 
+/** El texto del job `nombre` en ci.yml: desde su clave hasta el siguiente job (o el final). */
+function bloqueJob(yml, nombre) {
+  const inicio = yml.search(new RegExp(`^  ${nombre}:`, 'm'));
+  assert.ok(inicio >= 0, `falta el job ${nombre}`);
+  const resto = yml.slice(inicio + 1);
+  const siguiente = resto.search(/^ {2}[a-z][\w-]*:/m);
+  return siguiente < 0 ? resto : resto.slice(0, siguiente);
+}
+
+/** Los comandos `run:` de un bloque, en orden. */
+const comandos = (bloque) => [...bloque.matchAll(/^\s*(?:- )?run: (.+)$/gm)].map((m) => m[1].trim());
+
+test('CI: permisos mínimos y todas las acciones fijadas por SHA completo con la versión al lado', () => {
+  const yml = read('.github/workflows/ci.yml');
+  assert.match(yml, /^permissions:\n {2}contents: read$/m);
+  const usos = [...yml.matchAll(/^\s*- uses: (\S+)(.*)$/gm)];
+  assert.ok(usos.length >= 4, 'se esperaban checkout y setup-node en cada uno de los dos jobs');
+  for (const [, accion, resto] of usos) {
+    assert.match(accion, /@[0-9a-f]{40}$/, `${accion} no está fijada por SHA`);
+    assert.match(resto, /# v\d+\.\d+\.\d+/, `${accion} no lleva la versión en un comentario`);
+  }
+});
+
+test('CI: el job calidad conserva sus comprobaciones', () => {
+  const pasos = comandos(bloqueJob(read('.github/workflows/ci.yml'), 'calidad'));
+  for (const paso of [
+    'npm run lint',
+    'npm run format:check',
+    'npm run typecheck',
+    'npm run licenses',
+    'npm audit --omit=dev --audit-level=high',
+    'npm run check:bundle -w @tienda/api',
+    'npm run db:migrate -w @tienda/api',
+  ]) {
+    assert.ok(pasos.includes(paso), `calidad perdió: ${paso}`);
+  }
+});
+
+test('CI: el job pruebas corre en ubuntu y windows, con 15 minutos de tope', () => {
+  const bloque = bloqueJob(read('.github/workflows/ci.yml'), 'pruebas');
+  assert.match(bloque, /^ {4}timeout-minutes: 15$/m);
+  assert.match(bloque, /os: \[ubuntu-latest, windows-latest\]/);
+  assert.match(bloque, /runs-on: \$\{\{ matrix\.os \}\}/);
+});
+
+test('CI: el job pruebas tipa, construye la web, prueba el dist y comprueba el esquema, en ese orden', () => {
+  const pasos = comandos(bloqueJob(read('.github/workflows/ci.yml'), 'pruebas'));
+  const orden = [
+    'npm ci',
+    'npm test',
+    'npm run typecheck -w @tienda/web',
+    'npm run build -w @tienda/web',
+    'npm run test:dist -w @tienda/web',
+    'npm run check:schema -w @tienda/web',
+  ];
+  const posiciones = orden.map((paso) => pasos.indexOf(paso));
+  orden.forEach((paso, i) => assert.ok(posiciones[i] >= 0, `pruebas no corre: ${paso}`));
+  assert.deepEqual(
+    posiciones,
+    [...posiciones].sort((a, b) => a - b),
+    'los pasos están desordenados',
+  );
+});
+
+test('CI: la construcción lleva el entorno que las pruebas de dist esperan y deja el estado dentro del runner', () => {
+  const bloque = bloqueJob(read('.github/workflows/ci.yml'), 'pruebas');
+  assert.match(bloque, /SITE_URL: http:\/\/localhost:8790$/m);
+  assert.match(bloque, /PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA$/m);
+  assert.match(bloque, /TIENDA_DEV_STATE: \$\{\{ runner\.temp \}\}/);
+  // Sin token del beacon: la construcción de CI no debe llevar analítica.
+  assert.doesNotMatch(bloque, /PUBLIC_CF_BEACON_TOKEN/);
+});
+
 test('.gitattributes: los formatos binarios nuevos no se tocan', () => {
   const lineas = read('.gitattributes').split('\n');
   for (const ext of ['avif', 'mp4', 'webm', 'ico']) {

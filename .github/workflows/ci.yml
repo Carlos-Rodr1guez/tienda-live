@@ -44,7 +44,14 @@ jobs:
   pruebas:
     name: Pruebas (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 15
+    # Entorno de la construcción de la web. Las pruebas de dist leen SITE_URL y esperan este origen.
+    # El sitekey es el de PRUEBA de Turnstile (siempre aprueba). No hay token del beacon: la CI no lleva analítica.
+    # El estado de las herramientas (Astro, Wrangler) queda dentro del runner, no en la carpeta de usuario.
+    env:
+      SITE_URL: http://localhost:8790
+      PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+      TIENDA_DEV_STATE: ${{ runner.temp }}/tienda-dev-state
     strategy:
       fail-fast: false
       matrix:
@@ -60,3 +67,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      # La vitrina: tipos, construcción real, pruebas sobre el HTML construido y el esquema de contenido.
+      - name: Tipos de la web (astro check)
+        run: npm run typecheck -w @tienda/web
+      - name: Construcción de la web
+        run: npm run build -w @tienda/web
+      - name: Pruebas del dist (HTML, cabeceras, imágenes y presupuesto de JS)
+        run: npm run test:dist -w @tienda/web
+      - name: El esquema rechaza contenido inválido y nombra archivo y campo
+        run: npm run check:schema -w @tienda/web

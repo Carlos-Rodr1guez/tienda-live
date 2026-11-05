@@ -4,13 +4,19 @@ Monorepo de los juegos interactivos para TikTok LIVE y de la página que los ven
 
 ## Qué hay adentro
 
-| Carpeta        | Qué guarda                                                           | Llega en |
-| -------------- | -------------------------------------------------------------------- | -------- |
-| `games/asedio` | ASEDIO LIVE, el primer juego (categoría Acción)                      | Ya está  |
-| `games/*`      | Los próximos juegos, por ejemplo Acuario (Relax) y Carrera (Público) | H5       |
-| `apps/*`       | La página de la tienda y la app de escritorio                        | H1 y H2  |
-| `packages/*`   | Código compartido: conexión con TikTok, kit de juego y licencias     | H2       |
-| `docs/`        | Plan de producto y decisiones de arquitectura                        | Ya está  |
+| Carpeta              | Qué guarda                                                                    | Llega en |
+| -------------------- | ----------------------------------------------------------------------------- | -------- |
+| `games/asedio`       | ASEDIO LIVE, el primer juego (categoría Acción)                               | Ya está  |
+| `games/*`            | Los próximos juegos, por ejemplo Acuario (Relax) y Carrera (Público)          | H5       |
+| `apps/web`           | La vitrina estática (Astro): portada, ficha de ASEDIO, lista de espera, legal | Ya está  |
+| `apps/api`           | El Worker de Cloudflare: lista de espera, contadores del embudo y la web      | Ya está  |
+| `apps/*`             | La app de escritorio                                                          | H2       |
+| `packages/contracts` | Enumeraciones, validadores, textos en español y cabeceras, compartidos        | Ya está  |
+| `packages/*`         | Código compartido: conexión con TikTok, kit de juego y licencias              | H2       |
+| `scripts/`           | Lanzador de desarrollo, compuerta de licencias y pruebas de la configuración  | Ya está  |
+| `docs/`              | Plan de producto y decisiones de arquitectura                                 | Ya está  |
+
+Cada app tiene su README: [apps/web](apps/web/README.md) (cómo agregar un juego, textos, imágenes, CSP, pruebas de dist y lista de comprobación del dueño) y [apps/api](apps/api/README.md) (rutas, datos y runbooks).
 
 ## Requisitos
 
@@ -40,6 +46,50 @@ npm test
 - `npm run build:demo` genera la demo de ASEDIO en un solo archivo.
 
 Para un script de un paquete en particular se usa `-w` con el nombre del paquete, por ejemplo `npm test -w asedio-live`.
+
+### La vitrina y su API
+
+| Comando              | Qué hace                                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`        | Web (puerto 4400) y API (puerto 8790) a la vez, con las líneas prefijadas `[web]` y `[api]`; Ctrl+C frena las dos |
+| `npm run dev:web`    | Solo la web en el puerto 4400; `/v1` se redirige a la API                                                         |
+| `npm run dev:api`    | Solo el Worker en el puerto 8790 (inspector 9290), con la base D1 local                                           |
+| `npm run preview`    | Construye la web y la sirve con el Worker en `http://localhost:8790`: es la topología de producción               |
+| `npm run db:migrate` | Aplica las migraciones a la base D1 **local**                                                                     |
+| `npm run embudo`     | Informe del embudo sobre la base local (altas, intereses, eventos de los últimos 14 días; sin correos)            |
+| `npm run check`      | Lint, formato, tipos, pruebas y licencias. No construye nada                                                      |
+
+`npm run preview` construye la web: es cosa del dueño y de la CI, no de las herramientas automáticas. Qué comprobar en esa vista previa: la lista del [README de la web](apps/web/README.md#lista-de-comprobación-del-dueño).
+
+### Estado de las herramientas, fuera de C:
+
+Astro y Wrangler guardan configuración, registros y temporales por su cuenta, y por defecto lo hacen en la carpeta del usuario (`%APPDATA%`, `~/.wrangler`), que en este equipo está en C:. Para que **nada** de eso toque C:, todos los scripts de desarrollo pasan por `scripts/run.mjs`, que redirige ese estado a una carpeta aparte:
+
+- Por defecto: `D:\TIKTOK\asedio-live\.dev-state\tienda-live` (la carpeta `.dev-state`, hermana del repositorio, y fuera de git).
+- Para cambiarla: la variable `TIENDA_DEV_STATE` con la ruta que quieras (la CI la apunta a la carpeta temporal del runner).
+- El lanzador también apaga la telemetría de Astro y Wrangler y no define nunca variables con credenciales de Cloudflare.
+- Esa carpeta se puede borrar en cualquier momento; se vuelve a crear sola. Si ves que aparecen `%APPDATA%\astro` o `%APPDATA%\xdg.config\.wrangler`, alguien corrió Astro o Wrangler sin pasar por el lanzador.
+
+### Variables locales (`.dev.vars`)
+
+El Worker lee sus variables de `apps/api/.dev.vars`, que git ignora. `npm run dev:api` (y `npm run dev`) lo crea copiando [`apps/api/.dev.vars.example`](apps/api/.dev.vars.example) si no existe. Para cambiar algo, edita `.dev.vars`; el ejemplo es el único que se versiona.
+
+| Variable               | En local                               | Para qué                                           |
+| ---------------------- | -------------------------------------- | -------------------------------------------------- |
+| `ENVIRONMENT`          | `development`                          | Activa el correo de consola y los orígenes locales |
+| `SITE_URL`             | `http://localhost:4400`                | Origen permitido y base de los enlaces del correo  |
+| `TURNSTILE_SECRET_KEY` | La clave secreta de **prueba** (abajo) | Verifica el widget de Turnstile                    |
+
+`npm run preview` pasa `--var SITE_URL:http://localhost:8790` para que el enlace de confirmación apunte al Worker; si en tu versión de Wrangler eso no gana a `.dev.vars`, ver la comprobación M9.
+
+### Claves de prueba de Turnstile
+
+Cloudflare publica claves de prueba que **siempre aprueban** y que solo sirven en local. No son secretos:
+
+- Clave pública (del sitio, `PUBLIC_TURNSTILE_SITE_KEY`): `1x00000000000000000000AA`. Si no defines ninguna, la web usa esta.
+- Clave secreta (`TURNSTILE_SECRET_KEY` en `.dev.vars`): `1x0000000000000000000000000000000AA`.
+
+En producción la API rechaza la clave pública de prueba. Las claves reales se cargan solo con `wrangler secret put` y en la construcción de la web; nunca van al repositorio (ver la lista de despliegue en [apps/api/README.md](apps/api/README.md)).
 
 Cómo se juega y cómo se transmite: [games/asedio/README.md](games/asedio/README.md).
 
