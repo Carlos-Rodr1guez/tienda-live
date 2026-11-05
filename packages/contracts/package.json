@@ -5,6 +5,7 @@
   "description": "Contratos compartidos entre la web y la API: enumeraciones, validadores, marca, diccionario en español y política de cabeceras.",
   "type": "module",
   "exports": {
+    "./i18n": "./src/i18n/index.js",
     "./*": "./src/*.js"
   },
   "scripts": {
