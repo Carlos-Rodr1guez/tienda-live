@@ -11,23 +11,31 @@
   ],
   "scripts": {
     "start": "npm run start -w asedio-live --",
-    "test": "npm test --workspaces --if-present && node --test scripts/check-licenses.test.mjs",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "npm run dev -w @tienda/web",
+    "dev:api": "npm run dev -w @tienda/api",
+    "build:web": "npm run build -w @tienda/web",
+    "preview": "npm run build:web && npm run preview -w @tienda/api",
+    "db:migrate": "npm run db:migrate -w @tienda/api",
+    "embudo": "npm run embudo -w @tienda/api --",
+    "test": "npm test --workspaces --if-present && node --test \"scripts/*.test.mjs\"",
     "build:demo": "npm run build:demo -w asedio-live",
     "lint": "eslint . --cache",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && npm run typecheck -w @tienda/web",
     "licenses": "node scripts/check-licenses.mjs",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm test && npm run licenses"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.23.4"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.14.0",
     "globals": "^17.14.0",
     "prettier": "3.9.10",
+    "prettier-plugin-astro": "1.1.2",
     "typescript": "^7.0.2"
   }
 }

@@ -11,5 +11,8 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["apps", "games", "packages", "scripts"]
+  "include": ["apps", "games", "packages", "scripts"],
+  // apps/web lo revisa `astro check` con su propio TypeScript 6 (ADR-009). Al declarar "exclude" se pierde la
+  // exclusión por defecto de node_modules, así que hay que repetirla.
+  "exclude": ["apps/web", "**/node_modules", "**/dist", "**/.wrangler"]
 }

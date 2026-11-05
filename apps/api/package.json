@@ -1,0 +1,22 @@
+{
+  "name": "@tienda/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Worker de Cloudflare: lista de espera con doble confirmación, contadores del embudo y la web estática.",
+  "type": "module",
+  "scripts": {
+    "dev": "node ../../scripts/run.mjs --port 8790 --port 9290 wrangler dev",
+    "preview": "node ../../scripts/run.mjs --port 8790 --port 9290 wrangler dev --var SITE_URL:http://localhost:8790",
+    "db:migrate": "node ../../scripts/run.mjs wrangler d1 migrations apply DB --local",
+    "embudo": "node scripts/embudo.mjs",
+    "borrar": "node scripts/borrar.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "test": "node --test --disable-warning=ExperimentalWarning \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "@tienda/contracts": "*"
+  },
+  "devDependencies": {
+    "wrangler": "4.157.0"
+  }
+}

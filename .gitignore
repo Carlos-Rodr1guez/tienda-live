@@ -10,6 +10,19 @@ coverage/
 .env.*
 !.env.example
 
+# variables locales de Wrangler: solo se versiona el ejemplo
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# caches y estado local de Astro y Wrangler (la base D1 local incluida)
+.astro/
+.wrangler/
+.dev-state/
+
+# registro de skills del agente: tiene rutas de esta máquina
+.atl/
+
 # sistema y editores
 .DS_Store
 Thumbs.db

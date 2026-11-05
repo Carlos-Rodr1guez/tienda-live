@@ -1,0 +1,13 @@
+{
+  "name": "@tienda/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contratos compartidos entre la web y la API: enumeraciones, validadores, marca, diccionario en español y política de cabeceras.",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.js"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  }
+}

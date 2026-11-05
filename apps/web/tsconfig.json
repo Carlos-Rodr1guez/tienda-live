@@ -1,0 +1,6 @@
+{
+  // Lo revisa `astro check` con el TypeScript 6 de este paquete. La raíz (TypeScript 7) excluye apps/web: ADR-009.
+  "extends": "astro/tsconfigs/strict",
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist", "test"]
+}

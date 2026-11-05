@@ -14,7 +14,7 @@ Monorepo de los juegos interactivos para TikTok LIVE y de la página que los ven
 
 ## Requisitos
 
-Node.js 20 o superior; la CI usa la versión de `.nvmrc`. npm ya trae workspaces desde la versión 7.
+Node.js 22.23.4 o superior (lo exige Astro 7); la CI usa la versión de `.nvmrc`. npm ya trae workspaces desde la versión 7.
 
 ## Uso
 
