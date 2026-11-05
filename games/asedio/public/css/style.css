@@ -287,9 +287,11 @@ body {
   left: 0.5em;
   width: 6.6em;
 }
+/* REGALOS es más ancho que COMENTA: con 6.6em, tras la miniatura de 2.5em quedaban 2.7em para el texto y
+   «Bombardero» (3.8em) se salía de la tarjeta hasta que lo cortaba el borde del juego. */
 .rail.right {
   right: 0.5em;
-  width: 6.6em;
+  width: 8.2em;
 }
 .card {
   padding: 0.5em 0.5em 0.55em;
@@ -395,11 +397,16 @@ body {
 .gifts .gift > div {
   min-width: 0;
 }
+/* El nombre de la unidad es una sola palabra y no se parte; si algún día no entra, se recorta con «…»
+   en lugar de salirse de la tarjeta. */
 .gifts strong {
   display: block;
   font-size: 0.64em;
   font-weight: 800;
   line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .gifts .cost {
   display: flex;
@@ -410,14 +417,18 @@ body {
   color: var(--gold);
   line-height: 1.1;
 }
+/* Ejemplo de regalo: hasta 2 líneas; si lo que se configura en tiers[].example es más largo, se recorta con «…». */
 .gifts small {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   font-size: 0.5em;
   font-weight: 600;
+  line-height: 1.1;
   color: var(--muted);
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 .coin {
   display: inline-block;
