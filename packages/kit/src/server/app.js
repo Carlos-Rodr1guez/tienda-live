@@ -10,7 +10,7 @@ import { WebSocketServer } from 'ws';
 import { createTikTokBridge } from './tiktok.js';
 import { packageDir } from './package-dir.js';
 
-export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const KIT_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -33,7 +33,12 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
-export async function loadConfigFile(root = ROOT) {
+/**
+ * Lee `config.json` de la carpeta del juego. Si falta o no es JSON válido devuelve `{}`.
+ * @param {string} root carpeta del juego (obligatoria)
+ */
+export async function loadConfigFile(root) {
+  if (typeof root !== 'string' || !root) throw new TypeError('loadConfigFile: falta "root", la carpeta del juego');
   try {
     const raw = await readFile(path.join(root, 'config.json'), 'utf8');
     return JSON.parse(raw);
@@ -49,17 +54,23 @@ function safeJoin(dir, rel) {
   return full;
 }
 
-export async function startServer({
-  config = {},
-  port = 3000,
-  host = '127.0.0.1',
-  root = ROOT,
-  tiktok = true,
-  log = console,
-} = {}) {
+/**
+ * Arranca el servidor local de un juego.
+ * @param {{ root: string, config?: object, port?: number, host?: string, tiktok?: boolean,
+ *   log?: {info?:Function, warn?:Function, error?:Function}, mounts?: {prefix:string, dir:string}[] }} opts
+ */
+export async function startServer(opts) {
+  if (typeof opts?.root !== 'string' || !opts.root) {
+    throw new TypeError('startServer: falta "root", la carpeta del juego');
+  }
+  const { root, config = {}, port = 3000, host = '127.0.0.1', tiktok = true, log = console } = opts;
+  // El orden importa: gana el primer prefijo que coincide. `src/server` no tiene montaje a propósito (KIT-2).
   const mounts = [
     { prefix: '/vendor/three/', dir: packageDir('three', root) },
+    { prefix: '/kit/sim/', dir: path.join(KIT_SRC, 'sim') },
+    { prefix: '/kit/client/', dir: path.join(KIT_SRC, 'client') },
     { prefix: '/models/', dir: path.join(root, 'models') },
+    ...(opts.mounts ?? []),
     { prefix: '/', dir: path.join(root, 'public') },
   ];
 

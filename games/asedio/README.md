@@ -97,12 +97,12 @@ Todo está en `config.json`, dentro de `"game"`:
 - **`ESPERANDO LIVE`**: tu directo aún no empezó. El juego reintenta solo.
 - **Error de límite de firmas:** espera unos minutos o pon una `signApiKey` de eulerstream.com en `config.json`.
 - **Puerto ocupado:** cambia `"port"` en `config.json`.
-- La conexión usa `tiktok-live-connector`, una librería no oficial, porque TikTok no ofrece una API pública para LIVE. Si TikTok cambia algo y deja de conectar, actualízala desde la raíz con `npm update tiktok-live-connector -w asedio-live`.
+- La conexión usa `tiktok-live-connector`, una librería no oficial, porque TikTok no ofrece una API pública para LIVE. Si TikTok cambia algo y deja de conectar, actualízala desde la raíz con `npm update tiktok-live-connector -w @tienda/kit`.
 
 ## Estructura
 
 ```
-server/            servidor local y conexión con TikTok LIVE
+server/            arranque del servidor (el servidor y la conexión con TikTok LIVE están en packages/kit)
 public/js/sim/     reglas del juego (unidades, combate, rondas, regalos)
 public/js/render/  escena 3D con Three.js, efectos y nombres
 public/js/ui/      HUD y simulador de público

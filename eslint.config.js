@@ -38,6 +38,15 @@ export default defineConfig([
     languageOptions: { globals: globals['shared-node-browser'] },
   },
   {
+    // El servidor del kit corre solo en Node; el cliente del kit, solo en el navegador (más específicos que el bloque anterior)
+    files: ['packages/kit/src/server/**'],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    files: ['packages/kit/src/client/**'],
+    languageOptions: { globals: globals.browser },
+  },
+  {
     // Código que corre en Node: servidores, pruebas, herramientas, scripts y configuración
     files: [
       'games/*/server/**',

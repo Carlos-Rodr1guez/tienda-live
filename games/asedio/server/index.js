@@ -4,10 +4,11 @@
 //   npm start -- tu_usuario        (o pásalo aquí)
 //   PORT=4000 npm start            (otro puerto)
 
-import { startServer, loadConfigFile } from './app.js';
+import { startServer, loadConfigFile } from '@tienda/kit/server';
+import { ROOT } from './root.js';
 
 const args = process.argv.slice(2);
-const config = await loadConfigFile();
+const config = await loadConfigFile(ROOT);
 
 const cliUser = args.find((a) => !a.startsWith('-'));
 const userFlag = args.find((a) => a.startsWith('--user='));
@@ -18,7 +19,7 @@ if (process.env.TIKTOK_USERNAME) config.tiktokUsername = process.env.TIKTOK_USER
 const port = Number(process.env.PORT || config.port || 3000);
 
 try {
-  const app = await startServer({ config, port });
+  const app = await startServer({ root: ROOT, config, port });
   const url = `http://localhost:${app.port}`;
   console.log('');
   console.log('  ASEDIO LIVE listo');
