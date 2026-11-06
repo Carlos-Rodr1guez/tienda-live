@@ -278,7 +278,7 @@ export function stepSquadAnchors(world) {
       wy = sq.sideStep * sc.slideSpeedFactor * sp;
     } else if (sq.state === 'converting') {
       const dy = sq.slideY - a.y;
-      if (Math.abs(dy) < 0.5) {
+      if (Math.abs(dy) < 0.05) {
         a.y = sq.slideY;
         a.vy = 0;
         sq.lane = sq.nextLane;

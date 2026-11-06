@@ -13,6 +13,7 @@ import {
   quotaQuarters,
   reachablePost,
   roleFor,
+  scaleL,
   shareQ,
   squadWeight,
 } from '../public/js/sim/commander.js';
@@ -70,7 +71,7 @@ function ataque(w, side, kind, x, corridor = 1, lane = 0, n) {
 const lugar = (i) => [i % 3, Math.floor(i / 3) % 3, 130 + Math.floor(i / 9) * 60];
 
 /** Un grupo enemigo quieto e inofensivo en (x, y). */
-function enemigo(w, side, kind, x, y, n = 1) {
+function enemigo(w, side, kind, x, y, n = w.cfg.squads.size[kind]) {
   const sq = seedSquad(w, { side, kind, count: n, x, y, state: 'holding' }).squad;
   sq.postPos = { x, y };
   for (const u of sq.members) {
@@ -112,7 +113,7 @@ test('un enemigo solo en la zona durante 180 s nunca sube la cuota de 26,25', ()
   let max = 0;
   for (let i = 0; i < 5400; i++) {
     stepWorld(w);
-    max = Math.max(max, w.cmd[0].q / 4);
+    max = Math.max(max, w.cmd[0].q / (4 * scaleL(w.cfg)));
   }
   assert.equal(max, 26.25);
 });
@@ -382,7 +383,7 @@ test('intercepción: la DEFENSA sale hacia el enemigo dentro de la zona, nadie s
   }
   assert.ok(maxX <= zona[1] + 1, `un miembro salió de la zona: ${maxX}`);
   // el intruso se va: la vuelta tarda ≤ distancia/(0,9·v) + 1,5 s
-  intruso.members[0].alive = false;
+  for (const u of intruso.members) u.alive = false;
   run(w, 2);
   const dist = Math.hypot(sq.anchor.x - sq.postPos.x, sq.anchor.y - sq.postPos.y);
   const limite = Math.ceil((dist / (0.9 * w.stats.soldado.speed) + 1.5) * 30) + 30;
@@ -411,7 +412,7 @@ function diez(w, d, extra = {}) {
     [0, 1],
     [2, 1],
   ];
-  for (let i = 0; i < d; i++) defensa(w, 0, 'soldado', ...lugares[i], 5 + i, 'holding', false);
+  for (let i = 0; i < d; i++) defensa(w, 0, 'soldado', ...lugares[i], 10, 'holding', false);
 }
 
 test('2 de 10 con cuota 15 no arranca (|d| = 5)', () => {
@@ -434,8 +435,8 @@ test('1 de 10 con enemigo (cuota 26,25) convierte en t y t + 4 s (3 de 10) y se 
 test('1 de 10 con cuota 60 convierte cada 4 s hasta 6 de 10', () => {
   const w = mundo({ ...QUIETOS, commander: { bias: 45 } });
   diez(w, 1);
-  assert.equal(w.cmd[0].q, 60);
   const c = conversiones(w, 1200);
+  assert.equal(w.cmd[0].q, 240 * scaleL(w.cfg), 'cuota 60 puntos');
   assert.deepEqual(c, [0, 120, 240, 360, 480]);
   assert.equal(w.squads.filter((s) => s.side === 0 && s.role === 'defensa').length, 6);
 });

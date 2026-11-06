@@ -1,6 +1,8 @@
-// Medición H26 (diseño §14 y §21.1; tareas H26.1 y H26.2). Sin cambio de reglas: solo mide en el sim real si el
-// comandante, que cuenta GRUPOS (CB-21: un grupo de 1 soldado pesa lo mismo que uno de 10), se aparta de lo que
-// elegiría si contara MIEMBROS VIVOS. Se corre a propósito: `node tools/h26.mjs` (dentro de games/guerra).
+// Medición H26 (diseño §14 y §21.1; tareas H26.1 y H26.2). Mide en el sim real cuánto se aparta la regla de contar
+// GRUPOS (la anterior a la enmienda v2.5: un grupo de 1 soldado pesaba lo mismo que uno de 10) de la regla de MIEMBROS
+// VIVOS, que desde la enmienda v2.5 (CB-21, H26.3) es la que usa el comandante. "Por miembros" sale de los mismos
+// helpers del sim (`wL`, `cL`, `scaleL`, `currentQuota`), así el informe mide la regla real; "por grupos" queda como
+// la comparación con la regla anterior. Se corre a propósito: `node tools/h26.mjs` (dentro de games/guerra).
 //
 // Qué se compara, en cada tick del comandante (cada 15 pasos, 2 Hz; Duda 4 del desglose) y por lado:
 //  a) la elección: corredor (el de menor costo para un grupo de ataque nuevo) y sector (el de menor costo con puesto
@@ -12,8 +14,9 @@
 // Umbrales: la elección difiere en más del 20 % de los ticks, o la racha pasa de 30 s. Si alguno se cumple, hay que
 // enmendar la spec (CB-21 fija el peso por grupo) antes de H26.3.
 //
-// "Por miembros vivos" aquí: cada grupo pesa `peso · vivos / tamaño` (un grupo entero pesa lo mismo que hoy; uno
-// diezmado, proporcionalmente menos), y `S` y `D` suman `vivos / tamaño` en lugar de 1 por grupo.
+// "Por miembros vivos": cada grupo pesa `peso · vivos / tamaño` (un grupo entero pesa lo mismo que antes; uno
+// diezmado, proporcionalmente menos), y `S` y `D` suman `vivos / tamaño` en lugar de 1 por grupo. La herramienta trabaja
+// en unidades humanas (los L-avos del sim divididos por `L`).
 //
 // Las rondas salen de logs deterministas que genera esta herramienta con su propio generador sembrado (no el del
 // sim, que no tiene azar): 20 rondas de 120 s con pedidos de los dos lados, aviones y golpes de energía que
@@ -22,7 +25,7 @@
 import { fileURLToPath } from 'node:url';
 import { SIM_HZ } from '../public/js/sim/defaults.js';
 import { corridorOf } from '../public/js/sim/field.js';
-import { pressure, quotaQuarters, reachablePost, squadWeight } from '../public/js/sim/commander.js';
+import { cL, currentQuota, quotaQuarters, reachablePost, scaleL, squadWeight, wL } from '../public/js/sim/commander.js';
 import { applyEvent, createWorld, stepWorld } from '../public/js/sim/world.js';
 
 /** Un tick del comandante cada 15 pasos (2 Hz). */
@@ -42,13 +45,13 @@ const live = (sq) => sq.members.length > 0;
 // ---------------------------------------------------------------------------------------------------------------
 // Pesos: por grupos (el actual) y por miembros vivos
 
-/** Peso actual: 2 para tanques y pesado, 1 para el resto, vivan los que vivan. */
+/** Peso por grupos (la regla anterior a la v2.5): 2 para tanques y pesado, 1 para el resto, vivan los que vivan. */
 export const weightGroups = (_world, sq) => squadWeight(sq);
-/** Peso por miembros vivos: el peso del grupo por la fracción que sigue viva. */
-export const weightMembers = (world, sq) => (squadWeight(sq) * sq.members.length) / world.cfg.squads.size[sq.kind];
-/** Cuenta de un grupo para `S` y `D`: 1 por grupo, o la fracción viva. */
+/** Peso por miembros vivos (la regla del sim): `wL` del comandante en unidades humanas. */
+export const weightMembers = (world, sq) => wL(world.cfg, sq) / scaleL(world.cfg);
+/** Cuenta de un grupo para `S` y `D`: 1 por grupo, o la fracción viva (`cL` del comandante en unidades humanas). */
 export const countGroups = () => 1;
-export const countMembers = (world, sq) => sq.members.length / world.cfg.squads.size[sq.kind];
+export const countMembers = (world, sq) => cL(world.cfg, sq) / scaleL(world.cfg);
 
 // ---------------------------------------------------------------------------------------------------------------
 // Elección de corredor y de sector (misma regla que `commander.js`, con el peso como parámetro)
@@ -96,7 +99,7 @@ export function sectorPick(world, side, weight) {
 // ---------------------------------------------------------------------------------------------------------------
 // Cuota y parte de DEFENSA
 
-/** `H` y `Z` con el peso dado (mismo criterio que `pressure` de commander.js). */
+/** `H` y `Z` con el peso dado (mismo criterio que `pressure` de commander.js), en unidades humanas. */
 export function pressureWeighted(world, side, weight) {
   const { field } = world;
   const own = field.sides[side];
@@ -139,9 +142,8 @@ export const sharePoints = (S, D) => (S > 0 ? (100 * D) / S : null);
  *   shareM:number|null, quota:number, quotaM:number, decimated:number, groups:number}}
  */
 export function sampleSide(world, side) {
-  const { H, Z } = pressure(world, side);
   const bias = world.cfg.commander.bias;
-  const pm = pressureWeighted(world, side, weightMembers);
+  const pg = pressureWeighted(world, side, weightGroups);
   const g = shareCounts(world, side, countGroups);
   const m = shareCounts(world, side, countMembers);
   let decimated = 0;
@@ -158,8 +160,8 @@ export function sampleSide(world, side) {
     sectorM: sectorPick(world, side, weightMembers),
     shareG: sharePoints(g.S, g.D),
     shareM: sharePoints(m.S, m.D),
-    quota: quotaQuarters(H, Z, bias) / 4,
-    quotaM: quotaQuarters(pm.H, pm.Z, bias) / 4,
+    quota: quotaQuarters(pg.H, pg.Z, bias) / 4,
+    quotaM: currentQuota(world, side) / (4 * scaleL(world.cfg)),
   };
 }
 

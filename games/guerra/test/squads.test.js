@@ -573,7 +573,10 @@ test('métricas de movimiento: 60 s con ~340 unidades marchando, combatiendo y v
     // superposición amiga ≤ 10 % de la huella menor (fuera de los que arman y de quien camina a un lugar reasignado)
     if (s % 3 === 0) {
       for (const side of [0, 1]) {
-        const us = w.units.filter((u) => u.side === side && u.squad.state !== 'forming' && !caminantes.has(u.id));
+        const us = w.units.filter(
+          (u) =>
+            u.side === side && u.squad.state !== 'forming' && u.squad.state !== 'converting' && !caminantes.has(u.id),
+        );
         for (let i = 0; i < us.length; i++) {
           for (let j = i + 1; j < us.length; j++) {
             const a = us[i];
@@ -623,4 +626,21 @@ test('40 unidades que llegan al punto de reunión toman lugares distintos sin su
   assert.ok(muestras > 100, `solo ${muestras} muestras de unidades en su lugar de espera`);
   assert.ok(peor <= 0.1, `superposición en la puerta ${peor}`);
   assert.equal(w.units.length, 40);
+});
+
+test('cambio de calle: al llegar, el ancla se ajusta a la calle con un salto de ≤ 0,05 px (no empuja a los miembros)', () => {
+  const w = mk();
+  const { squad: sq } = seedSquad(w, { side: 0, kind: 'soldado', count: 10, x: 300, corridor: 1, lane: 0 });
+  sq.state = 'converting';
+  sq.slideY = sq.anchor.y + 30;
+  sq.nextLane = 1;
+  sq.afterConvert = 'holding';
+  let salto = -1;
+  for (let i = 0; i < 600 && sq.state === 'converting'; i++) {
+    const antes = sq.anchor.y;
+    stepWorld(w);
+    if (sq.state !== 'converting') salto = Math.abs(sq.anchor.y - antes - sq.anchor.vy * DT);
+  }
+  assert.ok(salto >= 0, 'terminó de deslizarse');
+  assert.ok(salto <= 0.05 + 1e-9, `salto de ${salto} px al ajustar el ancla`);
 });

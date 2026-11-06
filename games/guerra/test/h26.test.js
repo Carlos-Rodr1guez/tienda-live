@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, seedSquad } from '../public/js/sim/world.js';
 import { addUnit, createSquad, placeOffset } from '../public/js/sim/squads.js';
-import { corridorOrder, currentQuota, planAlta } from '../public/js/sim/commander.js';
+import { corridorOrder, currentQuota, planAlta, scaleL } from '../public/js/sim/commander.js';
 import {
   corridorPick,
   countGroups,
@@ -88,12 +88,13 @@ test('corredor: dos soldados sueltos en el de arriba cuestan 2 por grupos y 0,2 
   assert.deepEqual(choiceDiffers(s), { corridor: true, sector: true, any: true });
 });
 
-test('la elección por grupos de la herramienta es la del comandante (corridorOrder y planAlta)', () => {
+test('la elección por miembros de la herramienta es la del comandante (corridorOrder y planAlta)', () => {
+  // enmienda v2.5 (CB-21): la regla del sim es la de miembros vivos; la de grupos es solo la comparación
   const w = mundo();
   quieto(w, 1, 'tanque', 2, 0);
   quieto(w, 1, 'soldado', 3, 2);
   quieto(w, 0, 'soldado', 10, 1, { role: 'ataque', pinned: true });
-  assert.equal(corridorPick(w, 0, weightGroups), corridorOrder(w, 0)[0]);
+  assert.equal(corridorPick(w, 0, weightMembers), corridorOrder(w, 0)[0]);
   // sector: con la cuota máxima el próximo soldado va a DEFENSA y planAlta elige el sector de menor costo
   const w2 = createWorld({ hq: { hp: 1e12 }, commander: { bias: 100 } }, { phase: 'sandbox' });
   for (let i = 0; i < 6; i++)
@@ -101,7 +102,7 @@ test('la elección por grupos de la herramienta es la del comandante (corridorOr
   defensa(w2, 0, 'soldado', 1, 0, 4);
   const plan = planAlta(w2, 0, 'soldado');
   assert.equal(plan.role, 'defensa');
-  assert.equal(sectorPick(w2, 0, weightGroups), plan.sector);
+  assert.equal(sectorPick(w2, 0, weightMembers), plan.sector);
 });
 
 test('sector: dos DEFENSA de 1 soldado en el medio cuestan 2 por grupos y 0,2 por miembros', () => {
@@ -152,12 +153,12 @@ test('S y D: por grupos 4 y 1 (25 puntos); por miembros 2,3 y 1 (43,5 puntos), y
   assert.equal(hm.H, 0.5);
 });
 
-test('la cuota sale de H y Z por grupos; la de miembros usa lo vivo', () => {
+test('la cuota por grupos sale de H y Z por grupos; la de miembros es la del sim y usa lo vivo', () => {
   const w = mundo();
   quieto(w, 1, 'soldado', 1, 1, { x: 300 }); // en la mitad propia y en la zona de defensa del lado 0
   const s = sampleSide(w, 0);
-  assert.equal(s.quota, currentQuota(w, 0) / 4);
-  assert.equal(s.quota, 26.25); // H = 1, Z = 1
+  assert.equal(s.quota, 26.25); // por grupos: H = 1, Z = 1
+  assert.equal(s.quotaM, currentQuota(w, 0) / (4 * scaleL(w.cfg))); // enmienda v2.5: es la cuota real del comandante
   assert.ok(Math.abs(s.quotaM - (60 + 15 * 0.1 + 30 * 0.1) / 4) < 1e-9, `cuota por miembros ${s.quotaM}`); // 1 de 10 vivo: H = Z = 0,1
 });
 

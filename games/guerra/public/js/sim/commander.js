@@ -1,8 +1,10 @@
 // Comandante por lado (diseño D28, CB-21): reglas fijas, sin azar, sin reloj de pared y sin input del narrador.
 // Decide el rol, el corredor, la calle y el puesto de cada grupo en su alta; lleva la cuota de DEFENSA, el
 // rebalanceo con histéresis de Schmitt, la compactación de puestos y las intercepciones; y gobierna la reunión
-// (llegadas, cierres y salidas). Cuenta GRUPOS por ancla, con pesos 2/1, no monedas ni miembros vivos (H26 mide eso).
-// La aritmética de la cuota va en cuartos de punto (enteros): `q` es la cuota en cuartos.
+// (llegadas, cierres y salidas). Ubica los grupos por ancla y los pesa por SOLDADOS VIVOS (enmienda v2.5, CB-21):
+// un grupo pesa `peso × vivos / tamaño`, con peso 2 (tanque, pesado) o 1.
+// Todo en enteros: las cuentas van en L-avos de grupo (L = mcm de los tamaños, 20 por defecto) y la cuota en cuartos
+// de punto, también escalada por L. Solo el HUD divide por L, para mostrar.
 
 import { DT } from './defaults.js';
 import { ATTACK_LANES, corridorOf, laneY } from './field.js';
@@ -29,13 +31,37 @@ const POST_LANE = Object.freeze({ soldado: 'A', jeep: 'B' });
 // ---------------------------------------------------------------------------------------------------------------
 // Funciones puras (cuota, rol, orden de calles)
 
-/** Peso de un grupo: 2 si es de tanques o del pesado; 1 si no (un grupo de gratis pesa 1). */
+/** Peso de un grupo lleno: 2 si es de tanques o del pesado; 1 si no (un grupo de gratis pesa 1). */
 export const squadWeight = (sq) => (sq.kind === 'tanque' || sq.kind === 'pesado' ? 2 : 1);
 
-/** Cuota de DEFENSA en cuartos de punto: `60 + 15·min(4,H) + 30·min(4,Z) + 4·bias`, recortada a [0, 340]. */
-export function quotaQuarters(H, Z, bias = 0) {
-  const q = 60 + 15 * Math.min(4, H) + 30 * Math.min(4, Z) + 4 * bias;
-  return Math.max(0, Math.min(340, q));
+const mcd = (a, b) => (b === 0 ? a : mcd(b, a % b));
+const escalas = new WeakMap();
+
+/** `L`: mcm de los tamaños de grupo de la config (20 por defecto). Se calcula una vez por config. */
+export function scaleL(cfg) {
+  const sizes = cfg.squads.size;
+  let L = escalas.get(sizes);
+  if (L === undefined) {
+    L = 1;
+    for (const k of Object.keys(sizes)) L = (L / mcd(L, sizes[k])) * sizes[k];
+    escalas.set(sizes, L);
+  }
+  return L;
+}
+
+/** Cuenta de un grupo en L-avos: `vivos × L / tamaño`. Un grupo lleno cuenta L. */
+export const cL = (cfg, sq) => sq.members.length * (scaleL(cfg) / cfg.squads.size[sq.kind]);
+
+/** Peso de un grupo en L-avos: `peso × vivos × L / tamaño`. Un grupo lleno pesa `peso × L`. */
+export const wL = (cfg, sq) => squadWeight(sq) * cL(cfg, sq);
+
+/**
+ * Cuota de DEFENSA en cuartos de punto, escalada por `L`: `60L + 15·min(4L,H) + 30·min(4L,Z) + 4L·bias`, recortada a
+ * [0, 340L]. `H` y `Z` vienen en L-avos. Con `L = 1` (por defecto) es la cuota en cuartos sin escalar.
+ */
+export function quotaQuarters(H, Z, bias = 0, L = 1) {
+  const q = 60 * L + 15 * Math.min(4 * L, H) + 30 * Math.min(4 * L, Z) + 4 * L * bias;
+  return Math.max(0, Math.min(340 * L, q));
 }
 
 /** Cuota de DEFENSA en puntos (15 a 85). */
@@ -43,13 +69,14 @@ export const shareQ = (H, Z, bias = 0) => quotaQuarters(H, Z, bias) / 4;
 
 /**
  * Rol de un grupo nuevo. Tanques y pesado, siempre ATAQUE. Soldados y jeeps van a DEFENSA si
- * `400·(D + 1) ≤ q·(S + 1)` (enteros, `q` en cuartos) y su calle de puestos tiene un puesto alcanzable.
- * @param {{kind:string, S:number, D:number, q:number, postReachable:boolean}} o
+ * `400·L·(D + L) ≤ q·(S + L)` (enteros; `S` y `D` en L-avos, `q` en cuartos escalados por `L`) y su calle de puestos
+ * tiene un puesto alcanzable. El grupo nuevo se planea sin miembros y cuenta completo: suma `+L`.
+ * @param {{kind:string, S:number, D:number, q:number, postReachable:boolean, L?:number}} o
  * @returns {'ataque'|'defensa'}
  */
-export function roleFor({ kind, S, D, q, postReachable }) {
+export function roleFor({ kind, S, D, q, postReachable, L = 1 }) {
   if (kind !== 'soldado' && kind !== 'jeep') return 'ataque';
-  return postReachable && 400 * (D + 1) <= q * (S + 1) ? 'defensa' : 'ataque';
+  return postReachable && 400 * L * (D + L) <= q * (S + L) ? 'defensa' : 'ataque';
 }
 
 /** Calles de ataque en el orden de prueba: la de su tipo, centro, jeep, bajo, sin repetir. */
@@ -77,7 +104,7 @@ function squadsOf(world, side) {
   return out;
 }
 
-/** `H` y `Z`: peso de los grupos enemigos con el ancla en la mitad propia y en la zona de defensa propia. */
+/** `H` y `Z` en L-avos: peso (por vivos) de los grupos enemigos con el ancla en la mitad propia y en la zona de defensa propia. */
 export function pressure(world, side) {
   const { field } = world;
   const own = field.sides[side];
@@ -87,7 +114,7 @@ export function pressure(world, side) {
     if (e.side === side || !live(e)) continue;
     const x = e.anchor.x;
     if ((x - field.midX) * own.dir < 0) {
-      const w = squadWeight(e);
+      const w = wL(world.cfg, e);
       H += w;
       if (x >= own.defenseZone[0] && x <= own.defenseZone[1]) Z += w;
     }
@@ -95,19 +122,19 @@ export function pressure(world, side) {
   return { H, Z };
 }
 
-/** Cuota actual en cuartos de punto del lado. */
+/** Cuota actual del lado, en cuartos de punto escalados por `L`. */
 export function currentQuota(world, side) {
   const { H, Z } = pressure(world, side);
-  return quotaQuarters(H, Z, world.cfg.commander.bias);
+  return quotaQuarters(H, Z, world.cfg.commander.bias, scaleL(world.cfg));
 }
 
-/** Costo de cada corredor para un grupo de ATAQUE nuevo: Σw enemigos con el ancla en la franja + Σw propios de ATAQUE ahí. */
+/** Costo de cada corredor (L-avos) para un grupo de ATAQUE nuevo: Σw enemigos con el ancla en la franja + Σw propios de ATAQUE ahí. */
 function corridorCosts(world, side) {
   const costs = [0, 0, 0];
   for (const sq of world.squads) {
     if (!live(sq)) continue;
-    if (sq.side !== side) costs[corridorOf(world.field, sq.anchor.y)] += squadWeight(sq);
-    else if (sq.role === 'ataque') costs[sq.corridor] += squadWeight(sq);
+    if (sq.side !== side) costs[corridorOf(world.field, sq.anchor.y)] += wL(world.cfg, sq);
+    else if (sq.role === 'ataque') costs[sq.corridor] += wL(world.cfg, sq);
   }
   return costs;
 }
@@ -115,7 +142,7 @@ function corridorCosts(world, side) {
 /** Corredores en el orden en que los prueba un grupo de ATAQUE nuevo. */
 export const corridorOrder = (world, side) => orderByCost(corridorCosts(world, side));
 
-/** Costo de cada sector para la DEFENSA: Σw propios de DEFENSA ahí − Σw enemigos en la mitad propia y la franja − 1 si la torreta cayó. */
+/** Costo de cada sector para la DEFENSA: Σw propios de DEFENSA ahí − Σw enemigos en la mitad propia y la franja − L si la torreta cayó (en L-avos). */
 function sectorCosts(world, side) {
   const { field } = world;
   const own = field.sides[side];
@@ -123,13 +150,14 @@ function sectorCosts(world, side) {
   for (const sq of world.squads) {
     if (!live(sq)) continue;
     if (sq.side === side) {
-      if (sq.role === 'defensa' && sq.sector >= 0) costs[sq.sector] += squadWeight(sq);
+      if (sq.role === 'defensa' && sq.sector >= 0) costs[sq.sector] += wL(world.cfg, sq);
     } else if ((sq.anchor.x - field.midX) * own.dir < 0) {
-      costs[corridorOf(field, sq.anchor.y)] -= squadWeight(sq);
+      costs[corridorOf(field, sq.anchor.y)] -= wL(world.cfg, sq);
     }
   }
   const turrets = world.bases[side].turrets;
-  for (let c = 0; c < 3; c++) if (turrets[c].hp <= 0) costs[c] -= 1;
+  const L = scaleL(world.cfg);
+  for (let c = 0; c < 3; c++) if (turrets[c].hp <= 0) costs[c] -= L;
   return costs;
 }
 
@@ -228,11 +256,23 @@ function defenseSpot(world, side, kind) {
 export function planAlta(world, side, kind) {
   const s = world.field.sides[side];
   const squads = squadsOf(world, side);
+  let S = 0;
   let D = 0;
-  for (const sq of squads) if (sq.role === 'defensa') D++;
+  for (const sq of squads) {
+    const c = cL(world.cfg, sq);
+    S += c;
+    if (sq.role === 'defensa') D += c;
+  }
   const pl = postLaneOf(kind);
   const order = sectorOrder(world, side, kind);
-  const role = roleFor({ kind, S: squads.length, D, q: currentQuota(world, side), postReachable: order.length > 0 });
+  const role = roleFor({
+    kind,
+    S,
+    D,
+    q: currentQuota(world, side),
+    postReachable: order.length > 0,
+    L: scaleL(world.cfg),
+  });
   if (role === 'ataque') {
     const spot = attackSpot(world, side, kind);
     if (spot) {
@@ -457,20 +497,25 @@ function convertToAttack(world, side) {
 function rebalance(world, side) {
   const cmd = world.cmd[side];
   const squads = squadsOf(world, side);
-  const S = squads.length;
+  const L = scaleL(world.cfg);
+  let S = 0;
+  let D = 0;
+  for (const sq of squads) {
+    const c = cL(world.cfg, sq);
+    S += c;
+    if (sq.role === 'defensa') D += c;
+  }
   if (S === 0) {
     cmd.rebal = 0;
     return;
   }
-  let D = 0;
-  for (const sq of squads) if (sq.role === 'defensa') D++;
-  const val = 400 * D - cmd.q * S;
+  const val = 400 * L * D - cmd.q * S;
   let justOff = false;
   if (cmd.rebal !== 0 && ((cmd.rebal < 0 && val >= 0) || (cmd.rebal > 0 && val <= 0))) {
     cmd.rebal = 0;
     justOff = true;
   }
-  if (cmd.rebal === 0 && !justOff && Math.abs(val) > BAND_QUARTERS * S) cmd.rebal = val < 0 ? -1 : 1;
+  if (cmd.rebal === 0 && !justOff && Math.abs(val) > BAND_QUARTERS * L * S) cmd.rebal = val < 0 ? -1 : 1;
   if (cmd.rebal === 0 || world.step - cmd.lastConvert < CONVERT_GAP_STEPS) return;
   if (cmd.rebal < 0) convertToDefense(world, side);
   else convertToAttack(world, side);
@@ -478,12 +523,13 @@ function rebalance(world, side) {
 
 /** Paso 1 del orden: el tick del comandante de los dos lados (si `step % 15 === 0`, lo decide quien llama). */
 export function commanderTick(world) {
+  const L = scaleL(world.cfg);
   for (let side = 0; side < 2; side++) {
     const cmd = world.cmd[side];
     const { H, Z } = pressure(world, side);
     cmd.H = H;
     cmd.Z = Z;
-    cmd.q = quotaQuarters(H, Z, world.cfg.commander.bias);
+    cmd.q = quotaQuarters(H, Z, world.cfg.commander.bias, L);
     rebalance(world, side);
     compactPosts(world, side);
     interceptions(world, side);
@@ -496,7 +542,7 @@ export function commanderTick(world) {
       else if (sq.role === 'defensa') defensa++;
       else ataque++;
     }
-    cmd.hud = { defensa, ataque, forming, H, Z, q: cmd.q / 4 };
+    cmd.hud = { defensa, ataque, forming, H: H / L, Z: Z / L, q: cmd.q / (4 * L) };
   }
 }
 
