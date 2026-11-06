@@ -6,3 +6,6 @@ package-lock.json
 # build-demo recorta index.html entre los marcadores <!--APP--> y <!--/APP-->,
 # así que el HTML se edita a mano y no se reformatea
 *.html
+
+# golden.js lo escribe `npm run golden -w batalla-paises`
+games/guerra/public/js/data/golden.js
