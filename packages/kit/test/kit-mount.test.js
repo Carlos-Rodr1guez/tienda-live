@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // El kit solo se importa por su exports map (KIT-3) y sus carpetas del navegador se montan bajo /kit/ (KIT-2).
@@ -49,3 +51,37 @@ test('montajes /kit/: src/server nunca se sirve y los intentos de salirse no dev
     await app.close();
   }
 });
+
+// Los módulos puros del kit llegan por tres vías con los mismos bytes: Node (exports map), el navegador
+// (montaje /kit/sim/) y esbuild (exports map).
+const SIM_DIR = fileURLToPath(new URL('../src/sim/', import.meta.url));
+
+for (const modulo of ['words.js']) {
+  test(`kit/sim: ${modulo} se sirve en /kit/sim/ con los bytes del módulo y esbuild lo resuelve`, async () => {
+    const { startServer } = await import('@tienda/kit/server');
+    const { build } = await import('esbuild');
+    const app = await startServer({ root: FIXTURE, port: 0, tiktok: false, log: quiet });
+    try {
+      const res = await fetch(`http://127.0.0.1:${app.port}/kit/sim/${modulo}`);
+      assert.equal(res.status, 200);
+      assert.match(res.headers.get('content-type'), /^text\/javascript/);
+      const bytes = Buffer.from(await res.arrayBuffer());
+      assert.ok(bytes.equals(fs.readFileSync(path.join(SIM_DIR, modulo))));
+      // el mismo archivo que importa Node por el nombre del paquete
+      assert.ok(Object.keys(await import(`@tienda/kit/sim/${modulo}`)).length > 0);
+      const out = await build({
+        bundle: true,
+        write: false,
+        logLevel: 'silent',
+        format: 'esm',
+        stdin: {
+          contents: `import "@tienda/kit/sim/${modulo}"`,
+          resolveDir: fileURLToPath(new URL('.', import.meta.url)),
+        },
+      });
+      assert.equal(out.errors.length, 0);
+    } finally {
+      await app.close();
+    }
+  });
+}
