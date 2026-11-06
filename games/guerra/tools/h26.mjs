@@ -379,8 +379,8 @@ function main() {
   );
   console.log(
     v.needsH263
-      ? 'VEREDICTO: supera un umbral; H26.3 queda pendiente de la aprobación del dueño y de enmendar la spec.'
-      : 'VEREDICTO: no supera ningún umbral; queda como está y H26.3 no se hace.',
+      ? 'VEREDICTO: supera un umbral (informativo: el comandante ya pesa por miembros vivos desde la enmienda v2.5).'
+      : 'VEREDICTO: no supera ningún umbral.',
   );
   return { rounds, verdict: v };
 }
