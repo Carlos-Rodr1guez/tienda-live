@@ -1,13 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { createRegistry } from '@tienda/kit/sim/registry.js';
 import { mulberry32, seedFrom } from '@tienda/kit/sim/rng.js';
+import { createMatch } from '../public/js/sim/match.js';
 import { createWorld, seedSquad, stepWorld } from '../public/js/sim/world.js';
 import { hashWorld } from '../public/js/sim/hash.js';
-import { advance, createRecorder, replayLog } from '../public/js/sim/replay.js';
+import { advance, createRecorder, replayLog, replayMatch } from '../public/js/sim/replay.js';
+import { hashMatch } from '../public/js/sim/hash.js';
+import { PAISES } from '../public/js/data/paises.js';
 import { GOLDEN } from '../public/js/data/golden.js';
 
-// CB-13, CB-18: paso fijo de 30 Hz, repetición exacta, hash estable y hash dorado (PROVISORIO en el lote 4b: el
-// definitivo, de ~500 eventos, se regenera en 4d.7 con `npm run golden -w batalla-paises`).
+// CB-13, CB-18: paso fijo de 30 Hz, repetición exacta, hash estable y hash dorado. El dorado es un partido completo
+// de ~500 eventos (lote 4d, tarea 4d.7); se regenera a propósito con `npm run golden -w batalla-paises`.
 
 /** Log de prueba: grupos de los dos lados, un avión de cada uno y refuerzos a mitad de combate. */
 const LOG = [
@@ -142,25 +148,139 @@ test('el registro de eventos es un anillo en memoria que conserva el orden', () 
   );
 });
 
-test('hash dorado (provisorio): el log versionado corrido en Node da el hash versionado', () => {
-  assert.ok(GOLDEN.log.length > 0);
-  const w = replayLog(GOLDEN.log, { steps: GOLDEN.steps });
+// ---------------------------------------------------------------------------------------------------------------
+// Hash dorado definitivo (4d.7): un partido entero repetido sobre el partido real, con registro
+
+const jugar = (log = GOLDEN.log, o = {}) =>
+  replayMatch(log, { steps: GOLDEN.steps, paises: PAISES, game: GOLDEN.game, ...o });
+let _dorado = null;
+const dorado = () => (_dorado ??= jugar());
+const foto = (m) => ({
+  state: m.state,
+  wins: m.wins,
+  results: m.results,
+  step: m.world.step,
+  units: m.world.units.map((u) => [u.id, u.side, u.kind, u.hp, u.x, u.y, u.owner]),
+  squads: m.world.squads.map((s) => [s.id, s.role, s.state, s.corridor, s.members.length]),
+  bases: m.world.bases.map((b) => [b.hp, b.turrets.map((t) => t.hp)]),
+  users: m.registry
+    .users()
+    .map((u) => [u.key, u.team, u.rank, u.xp, u.coins, u.value, u.kills])
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1)),
+});
+
+test('hash dorado: el log versionado corrido en Node da el hash versionado', () => {
+  assert.equal(GOLDEN.version, 2);
   assert.equal(
-    hashWorld(w),
+    hashMatch(dorado()),
     GOLDEN.hash,
     'regenerar con `npm run golden -w batalla-paises` si el cambio es a propósito',
   );
 });
 
+test('el log dorado es un partido completo: ~500 eventos, todos los regalos, avión, energía, likes, uniones, una pausa y dos rondas', () => {
+  const tipos = new Set(GOLDEN.log.map((e) => e.payload.type));
+  for (const t of [
+    'pickPair',
+    'startMatch',
+    'pause',
+    'resume',
+    'startRound',
+    'gift',
+    'likes',
+    'follow',
+    'share',
+    'strike',
+    'chat',
+  ]) {
+    assert.ok(tipos.has(t), t);
+  }
+  const regalos = new Set(
+    GOLDEN.log.filter((e) => e.payload.type === 'gift').flatMap((e) => e.payload.orders.map((o) => o.kind)),
+  );
+  assert.deepEqual([...regalos].sort(), ['avion', 'jeep', 'pesado', 'soldado', 'tanque']);
+  assert.ok(GOLDEN.log.length >= 450 && GOLDEN.log.length <= 650, `${GOLDEN.log.length} eventos`);
+  // cada entrada va en orden de tick y el log pausa y reanuda una vez
+  assert.ok(GOLDEN.log.every((e, i, l) => i === 0 || l[i - 1].step <= e.step));
+  assert.equal(GOLDEN.log.filter((e) => e.payload.type === 'pause').length, 1);
+  const m = dorado();
+  assert.ok(m.results.length >= 2, 'dos rondas jugadas');
+  assert.ok(m.registry.users().length >= 60);
+  assert.ok(
+    m.registry.users().some((u) => u.xp.live > 0 && u.rank > 0),
+    'hubo XP y rangos',
+  );
+});
+
+test('repetir el log dorado dos veces da estados y hashes iguales, grupos y roles incluidos', () => {
+  const b = jugar();
+  assert.deepEqual(foto(b), foto(dorado()));
+  assert.equal(hashMatch(b), hashMatch(dorado()));
+});
+
+test('dos semillas cosméticas y un Math.random que lanza dan el mismo estado de reglas', () => {
+  const corrida = (semilla) => {
+    const cosmetico = mulberry32(seedFrom(semilla));
+    const alea = Math.random;
+    Math.random = () => {
+      throw new Error('las reglas no usan Math.random');
+    };
+    try {
+      return jugar(GOLDEN.log, { onStep: () => cosmetico() });
+    } finally {
+      Math.random = alea;
+    }
+  };
+  const a = corrida('semilla-uno');
+  const b = corrida('otra-semilla');
+  assert.equal(hashMatch(a), GOLDEN.hash);
+  assert.equal(hashMatch(b), GOLDEN.hash);
+  assert.deepEqual(foto(a), foto(b));
+  assert.ok(!('rng' in a.world) && !('seed' in a.world));
+});
+
+test('el mismo log a 20 fps y a 144 fps simulados da el mismo hash: depende de los ticks, no de los cuadros', () => {
+  const porCuadros = (fps) => {
+    const registry = createRegistry({ teams: [PAISES[0], PAISES[1]] });
+    const m = createMatch({ paises: PAISES, game: GOLDEN.game, registry });
+    let i = 0;
+    let tick = 0;
+    let acc = 0;
+    let guardas = 0;
+    while (tick < GOLDEN.steps && guardas++ < 1e7) {
+      const r = advance(acc, 1 / fps);
+      acc = r.acc;
+      for (let k = 0; k < r.steps && tick < GOLDEN.steps; k++) {
+        while (i < GOLDEN.log.length && GOLDEN.log[i].step <= tick) m.command(GOLDEN.log[i++].payload);
+        m.step();
+        tick++;
+      }
+    }
+    return m;
+  };
+  assert.equal(hashMatch(porCuadros(20)), GOLDEN.hash);
+  assert.equal(hashMatch(porCuadros(144)), GOLDEN.hash);
+});
+
+test('el layout es solo vista: el sim no lo nombra y letterbox da el mismo estado que horizontal', () => {
+  const raiz = fileURLToPath(new URL('../public/js/sim/', import.meta.url));
+  for (const f of fs.readdirSync(raiz)) {
+    const src = fs
+      .readFileSync(raiz + f, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+    assert.doesNotMatch(src, /layout|letterbox/i, f);
+  }
+  const letterbox = jugar(GOLDEN.log, { game: { ...GOLDEN.game, layout: 'letterbox' } });
+  assert.equal(hashMatch(letterbox), GOLDEN.hash);
+});
+
 test('cambiar el log o las reglas sin regenerar hace fallar el hash dorado', () => {
-  const masUno = [
-    ...GOLDEN.log,
-    { step: 5, kind: 'cmd', payload: { type: 'seedSquad', side: 0, kind: 'jeep', corridor: 1, lane: 1 } },
-  ];
+  const masUno = [...GOLDEN.log, { step: 400, kind: 'evt', payload: { type: 'follow', team: 1, owner: 'u0' } }];
   masUno.sort((a, b) => a.step - b.step);
-  assert.notEqual(hashWorld(replayLog(masUno, { steps: GOLDEN.steps })), GOLDEN.hash);
-  const otrasReglas = replayLog(GOLDEN.log, { steps: GOLDEN.steps, game: { turret: { dmg: 41 } } });
-  assert.notEqual(hashWorld(otrasReglas), GOLDEN.hash);
-  const otraConfig = replayLog(GOLDEN.log, { steps: GOLDEN.steps, game: { units: { soldado: { range: 29 } } } });
-  assert.notEqual(hashWorld(otraConfig), GOLDEN.hash);
+  assert.notEqual(hashMatch(jugar(masUno)), GOLDEN.hash);
+  const otrasReglas = jugar(GOLDEN.log, { game: { ...GOLDEN.game, turret: { dmg: 41 } } });
+  assert.notEqual(hashMatch(otrasReglas), GOLDEN.hash);
+  const otraConfig = jugar(GOLDEN.log, { game: { ...GOLDEN.game, units: { soldado: { range: 29 } } } });
+  assert.notEqual(hashMatch(otraConfig), GOLDEN.hash);
 });

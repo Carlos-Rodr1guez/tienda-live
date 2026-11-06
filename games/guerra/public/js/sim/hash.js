@@ -2,6 +2,8 @@
 // flotantes por sus bits (IEEE-754, big-endian). Lo usan el hash dorado, la repetición y F2. No depende del
 // motor: solo enteros de 32 bits y `Math.imul`.
 
+import { cmpCodePoints } from '@tienda/kit/sim/words.js';
+
 const FNV_OFFSET = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;
 
@@ -29,12 +31,8 @@ function str(h, s) {
 }
 const flag = (h, b) => byte(h, b ? 1 : 0);
 
-/**
- * Hash del estado de reglas del mundo, en 8 dígitos hexadecimales.
- * @param {any} w mundo (`createWorld`)
- */
-export function hashWorld(w) {
-  let h = FNV_OFFSET;
+/** Pliega el estado de reglas del mundo en `h`. */
+function foldWorld(h, w) {
   h = int(h, w.step);
   h = int(h, w.nextId);
   h = int(h, w.nextSquadId);
@@ -54,6 +52,11 @@ export function hashWorld(w) {
   h = int(h, w.round);
   h = str(h, w.phase);
   h = flag(h, w.paused);
+  // solo si hay golpes de energía pendientes por una pausa: así el mundo vacío conserva su hash
+  if (w.pendingStrikes[0] !== 0 || w.pendingStrikes[1] !== 0) {
+    h = int(h, w.pendingStrikes[0]);
+    h = int(h, w.pendingStrikes[1]);
+  }
   const c = w.credit;
   for (const v of [c.paid, c.destroyedUser, c.destroyedUnattr, c.retired, c.overflow[0], c.overflow[1]]) h = num(h, v);
   for (const v of [c.teamValue[0], c.teamValue[1], c.teamCoins[0], c.teamCoins[1]]) h = num(h, v);
@@ -168,5 +171,62 @@ export function hashWorld(w) {
       h = flag(h, t.on);
     }
   }
-  return h.toString(16).padStart(8, '0');
+  return h;
+}
+
+const hex = (h) => h.toString(16).padStart(8, '0');
+
+/**
+ * Hash del estado de reglas del mundo, en 8 dígitos hexadecimales.
+ * @param {any} w mundo (`createWorld`)
+ */
+export function hashWorld(w) {
+  return hex(foldWorld(FNV_OFFSET, w));
+}
+
+/**
+ * Hash del partido: el mundo, la máquina de estados (fase, rondas, pausa, reloj del log) y, si hay registro, los
+ * usuarios ordenados por clave (equipo, rango, XP, monedas, valor y bajas por alcance).
+ * @param {any} m partido (`createMatch`)
+ */
+export function hashMatch(m) {
+  let h = foldWorld(FNV_OFFSET, m.world);
+  h = str(h, m.state);
+  h = int(h, m.wins[0]);
+  h = int(h, m.wins[1]);
+  h = int(h, m.round);
+  h = int(h, m.tick);
+  h = int(h, m.stateSteps);
+  h = str(h, m.pause ?? '');
+  h = int(h, m.winner ?? -1);
+  h = int(h, m.joinSeq);
+  h = int(h, m.firstJoin[0] ?? -1);
+  h = int(h, m.firstJoin[1] ?? -1);
+  h = str(h, m.pair === null ? '' : m.pair.teams.map((t) => t.id).join('/'));
+  h = int(h, m.results.length);
+  for (const r of m.results) {
+    h = int(h, r.round);
+    h = int(h, r.winner);
+    h = str(h, r.reason);
+    h = int(h, r.step);
+  }
+  if (m.registry) {
+    const users = [...m.registry.users()].sort((a, b) => cmpCodePoints(a.key, b.key));
+    h = int(h, users.length);
+    for (const u of users) {
+      h = str(h, u.key);
+      h = int(h, u.team ?? -1);
+      h = int(h, u.rank);
+      h = flag(h, u.hidden);
+      for (const s of [u.xp, u.coins, u.value]) {
+        h = num(h, s.live);
+        h = num(h, s.match);
+        h = num(h, s.round);
+      }
+      h = int(h, u.kills.live);
+      h = int(h, u.kills.match);
+      h = int(h, u.kills.round);
+    }
+  }
+  return hex(h);
 }

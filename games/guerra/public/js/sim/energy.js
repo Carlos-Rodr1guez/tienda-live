@@ -59,3 +59,25 @@ export function fireEnergy(world, side) {
   world.emit({ type: 'energyStrike', side, squad: 0, x: field.sides[1 - side].frontX, y: field.sides[0].gates[1] });
   return { target: 'base', asked };
 }
+
+/**
+ * Pide el golpe de energía de un equipo. En pausa no se dispara (NM-9: el combate se detiene): queda pendiente y sale
+ * en el primer paso después de reanudar. Devuelve lo mismo que `fireEnergy`, o `{target:'deferred'}`.
+ */
+export function requestStrike(world, side) {
+  if (world.paused) {
+    world.pendingStrikes[side]++;
+    return { target: 'deferred' };
+  }
+  return fireEnergy(world, side);
+}
+
+/** Dispara los golpes que quedaron pendientes por una pausa (al empezar el primer paso sin pausa). */
+export function flushStrikes(world) {
+  for (let side = 0; side < 2; side++) {
+    while (world.pendingStrikes[side] > 0) {
+      world.pendingStrikes[side]--;
+      fireEnergy(world, side);
+    }
+  }
+}

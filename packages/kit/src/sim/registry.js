@@ -83,11 +83,16 @@ function compileTeams(teams) {
  *   names?: {maxGraphemes?: number, maxMarks?: number}, blocklist?: {isBlocked(n: string): boolean} | null}} o
  */
 export function createRegistry(o) {
-  const { aliases, isos, ids } = compileTeams(o?.teams);
-  const N = ids.length;
+  let { aliases, isos, ids } = compileTeams(o?.teams);
+  let N = ids.length;
   const policy = o.policy ?? 'balance';
-  const fixedTeam = policy === 'balance' ? 0 : ids.indexOf(policy) + 1;
-  if (policy !== 'balance' && !fixedTeam) throw new ConfigError(`política de equipos desconocida: "${policy}"`);
+  /** Equipo fijo de la política (1..N), o 0 con `balance`. */
+  const fixedFor = (teamIds) => {
+    const f = policy === 'balance' ? 0 : teamIds.indexOf(policy) + 1;
+    if (policy !== 'balance' && !f) throw new ConfigError(`política de equipos desconocida: "${policy}"`);
+    return f;
+  };
+  let fixedTeam = fixedFor(ids);
   const allowSwitch = o.allowSwitch !== false;
   const cooldown = Number.isFinite(o.switchCooldownSeconds) ? Number(o.switchCooldownSeconds) : 15;
   const nameOpts = o.names ?? {};
@@ -98,7 +103,7 @@ export function createRegistry(o) {
   /** @type {Map<string, User>} */
   const byKey = new Map();
   const hiddenKeys = new Set();
-  const sizes = Array.from({ length: N }, () => 0);
+  let sizes = Array.from({ length: N }, () => 0);
   /** @type {RegistryEvent[]} */
   let outbox = [];
   let allHidden = false;
@@ -281,6 +286,43 @@ export function createRegistry(o) {
         u.xp.round = 0;
         u.firstXpAt.round = NO_XP_YET;
       }
+    },
+
+    /**
+     * Cambia los equipos (el par del partido) sin tocar a los usuarios: nadie queda con equipo, el soldado gratis y el
+     * cooldown de cambio se reinician, y el rango y la XP de LIVE se conservan. Si la lista no es válida lanza
+     * `ConfigError` y todo queda como estaba.
+     * @param {TeamDef[]} teams
+     */
+    setTeams(teams) {
+      const next = compileTeams(teams);
+      const fixed = fixedFor(next.ids);
+      ({ aliases, isos, ids } = next);
+      N = ids.length;
+      fixedTeam = fixed;
+      sizes = Array.from({ length: N }, () => 0);
+      for (const u of byKey.values()) {
+        u.team = null;
+        u.joinedRound = -1;
+        u.lastSwitch = NEVER;
+      }
+      // los eventos pendientes hablan de los equipos viejos
+      outbox = outbox.filter((e) => e.type !== 'join').map((e) => ({ ...e, team: null }));
+    },
+
+    /**
+     * "Nuevo en vivo" (NM-2): reinicia lo que dura un LIVE: rangos, XP y alcances de LIVE, la lista de ocultos y
+     * "todos ocultos". Los usuarios y sus equipos siguen. Los `rankUp` pendientes del LIVE viejo se descartan.
+     */
+    resetLive() {
+      for (const u of byKey.values()) {
+        for (const s of [u.coins, u.value, u.kills, u.xp]) s.live = 0;
+        u.rank = 0;
+        u.hidden = false;
+      }
+      hiddenKeys.clear();
+      allHidden = false;
+      outbox = outbox.filter((e) => e.type !== 'rankUp');
     },
 
     teamSizes: () => [...sizes],

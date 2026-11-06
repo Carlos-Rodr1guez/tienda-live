@@ -11,7 +11,7 @@ import { createBases, decideTurrets, refillBuckets, resetBase, settleBases } fro
 import { commanderTick, createCommanderState, stepAssembly } from './commander.js';
 import { decideUnits, fireAll, processHits, reapUnits } from './combat.js';
 import { createCredit, retireRound } from './credit.js';
-import { fireEnergy } from './energy.js';
+import { flushStrikes, requestStrike } from './energy.js';
 import { launchPlane, stepPlanes } from './plane.js';
 import {
   createQueues,
@@ -89,6 +89,8 @@ export function createWorld(game = {}, opts = {}) {
     cmd: [createCommanderState(), createCommanderState()],
     counters: createTeamCounters(2, cfg.social),
     lastLaunch: [-1e9, -1e9],
+    /** Golpes de energía pedidos durante una pausa: salen al reanudar. */
+    pendingStrikes: [0, 0],
     over: null,
     events: [],
     /** Bandeja para la vista (paso 15): se vacía con `drain()`. */
@@ -129,6 +131,7 @@ function snapshotAndGrid(world) {
 /** Un paso de batalla, sin pausa (§7.2). Después del fin de ronda las reglas quedan congeladas. */
 export function stepWorld(world) {
   if (world.over !== null || world.paused) return;
+  flushStrikes(world);
   // 1. tick del comandante (2 Hz): H, Z, cuota, rebalanceo, puestos, intercepciones y cambios de calle
   if (world.step % COMMANDER_TICK === 0) {
     commanderTick(world);
@@ -186,6 +189,7 @@ export function resetRound(world) {
   world.cmd = [createCommanderState(), createCommanderState()];
   world.counters.resetRound();
   world.lastLaunch = [-1e9, -1e9];
+  world.pendingStrikes = [0, 0];
   world.over = null;
   world.roundStart = world.step;
 }
@@ -214,8 +218,10 @@ export function applyEvent(world, p) {
     case 'follow':
     case 'share':
       return { ok: true, queued: submitSocial(world, p.type, p.team, p.owner ?? null) };
-    case 'strike':
-      return { ok: true, ...fireEnergy(world, p.side) };
+    case 'strike': {
+      const r = requestStrike(world, p.side);
+      return { ok: true, deferred: r.target === 'deferred', ...r };
+    }
     default:
       // `spawn`, `damage`, `setScore`, `setRole`, `assignSquad`, `vote`...: el sim no los acepta (NM-2, CB-21)
       return { ok: false, reason: 'unknown' };

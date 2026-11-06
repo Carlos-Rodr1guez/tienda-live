@@ -569,3 +569,82 @@ test('KIT-10: el usuario con XP y rango es JSON puro (sobrevive a una copia)', (
   assert.deepEqual(copy.xp, { live: 30, match: 30, round: 30 });
   assert.equal(copy.rank, 2);
 });
+
+// NM-2 (`newLive`) y D20 (`pickPair` cambia los dos equipos del partido): lo que dura un LIVE y los equipos del par.
+
+test('resetLive: rangos en Recluta, XP y alcances de LIVE en 0, ocultos vacíos y "todos ocultos" apagado', () => {
+  const r = make();
+  joinAs(r, 'a');
+  joinAs(r, 'b');
+  r.addCoins('a', 80, 1);
+  r.addDestroyed('a', 20, 2);
+  r.addKill('a');
+  r.hide('b');
+  r.hide('zzz'); // todavía no llegó
+  r.setAllNamesHidden(true);
+  assert.equal(r.get('a').rank, 3);
+  r.resetLive();
+  const a = r.get('a');
+  assert.equal(a.rank, 0);
+  assert.deepEqual(r.rankOf('a'), { index: 0, label: 'Recluta' });
+  for (const s of [a.xp, a.coins, a.value, a.kills]) assert.equal(s.live, 0);
+  assert.equal(r.get('b').hidden, false);
+  assert.equal(r.allNamesHidden(), false);
+  assert.equal(r.displayName('b'), 'Ub');
+  // el oculto que todavía no llegaba tampoco sobrevive
+  assert.equal(r.touch({ userId: 'zzz', nickname: 'Zeta' }).hidden, false);
+  // el alcance de LIVE vuelve a subir desde 0 y el rango se recalcula
+  r.addCoins('a', 30, 3);
+  assert.equal(r.get('a').xp.live, 30);
+  assert.equal(r.get('a').rank, 2);
+});
+
+test('resetLive: los rankUp pendientes del LIVE anterior se descartan y los equipos de los usuarios no cambian', () => {
+  const r = make();
+  joinAs(r, 'a');
+  r.drain();
+  r.addCoins('a', 80, 1);
+  const team = r.get('a').team;
+  r.resetLive();
+  assert.deepEqual(r.drain(), []);
+  assert.equal(r.get('a').team, team);
+});
+
+test('setTeams: cambia el par, deja a todos sin equipo y conserva rangos y XP de LIVE', () => {
+  const r = make();
+  joinAs(r, 'a');
+  r.addCoins('a', 80, 1);
+  assert.deepEqual(r.teamSizes(), [1, 0]);
+  const before = r.get('a').rank;
+  r.setTeams([CL, CR]);
+  assert.deepEqual(r.teamSizes(), [0, 0]);
+  const a = r.get('a');
+  assert.equal(a.team, null);
+  assert.equal(a.rank, before);
+  assert.equal(a.xp.live, 80);
+  // la unión por nombre usa los alias NUEVOS y los viejos ya no unen
+  assert.equal(r.joinFromChat(chat('a', 'peru'), 0, 1), null);
+  assert.equal(r.joinFromChat(chat('a', 'costarica'), 0, 1).team, 2);
+  assert.equal(r.joinFromChat(chat('b', 'chile'), 0, 1).team, 1);
+  assert.deepEqual(r.teamSizes(), [1, 1]);
+  // el cooldown y el soldado gratis se reinician: se puede entrar de nuevo en la misma ronda
+  r.setTeams([PE, MX]);
+  assert.equal(r.joinFromChat(chat('a', 'mexico'), 0, 1).freeUnit, true);
+});
+
+test('setTeams: un par inválido lanza ConfigError y deja todo como estaba', () => {
+  const r = make();
+  joinAs(r, 'a');
+  const dup = { id: 'x', name: 'X', aliases: ['peru'] };
+  assert.throws(() => r.setTeams([PE, dup]), ConfigError);
+  assert.throws(() => r.setTeams([PE]), ConfigError);
+  assert.deepEqual(r.teamSizes(), [1, 0]);
+  assert.equal(r.joinFromChat(chat('c', 'mexico'), 0, 1).team, 2);
+});
+
+test('setTeams: la política de un equipo fijo exige que ese equipo siga en el par', () => {
+  const r = createRegistry({ teams: [PE, MX], policy: 'mx' });
+  assert.throws(() => r.setTeams([CL, CR]), ConfigError);
+  r.setTeams([CL, MX]);
+  assert.equal(r.ensureTeam(r.touch({ userId: 'q', nickname: 'Q' })), 2);
+});

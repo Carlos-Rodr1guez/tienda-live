@@ -8,7 +8,7 @@ import { freeOrder, likeOrders, socialOrder } from '@tienda/kit/sim/router.js';
 import { SIM_HZ } from './defaults.js';
 import { acceptsMember, findOpen, planAlta } from './commander.js';
 import { addPaid } from './credit.js';
-import { fireEnergy } from './energy.js';
+import { requestStrike } from './energy.js';
 import { canLaunchPlane, launchPlane } from './plane.js';
 import { addUnit, createSquad, placeOffset } from './squads.js';
 
@@ -110,7 +110,7 @@ export function submitChat(world, evt) {
   const u = reg.get(keyOf(evt));
   let strike = false;
   if (u && u.team && world.counters.chargeEnergy(u.team, u.key, world.time, world.phase === 'battle')) {
-    fireEnergy(world, u.team - 1);
+    requestStrike(world, u.team - 1);
     strike = true;
   }
   return { join, strike };
