@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "start": "npm run start -w asedio-live --",
+    "start:batalla": "npm run start -w batalla-paises --",
     "dev": "node scripts/dev.mjs",
     "dev:web": "npm run dev -w @tienda/web",
     "dev:api": "npm run dev -w @tienda/api",

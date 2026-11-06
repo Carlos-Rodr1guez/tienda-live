@@ -1,0 +1,20 @@
+{
+  "name": "batalla-paises",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Juego interactivo para TikTok LIVE: dos países se enfrentan y los regalos del público invocan sus tropas.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "golden": "node tools/golden.mjs"
+  },
+  "dependencies": {
+    "@tienda/kit": "*"
+  },
+  "devDependencies": {
+    "@tienda/contracts": "*"
+  },
+  "license": "MIT"
+}
