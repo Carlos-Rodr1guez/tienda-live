@@ -85,3 +85,37 @@ for (const modulo of ['words.js', 'registry.js']) {
     }
   });
 }
+
+// Lo mismo para los módulos del navegador: /kit/client/ sirve los bytes del archivo que importa Node.
+const CLIENT_DIR = fileURLToPath(new URL('../src/client/', import.meta.url));
+
+for (const modulo of ['net.js', 'simulator-events.js', 'simulator.js']) {
+  test(`kit/client: ${modulo} se sirve en /kit/client/ con los bytes del módulo y esbuild lo resuelve`, async () => {
+    const { startServer } = await import('@tienda/kit/server');
+    const { build } = await import('esbuild');
+    const app = await startServer({ root: FIXTURE, port: 0, tiktok: false, log: quiet });
+    try {
+      const res = await fetch(`http://127.0.0.1:${app.port}/kit/client/${modulo}`);
+      assert.equal(res.status, 200);
+      assert.match(res.headers.get('content-type'), /^text\/javascript/);
+      const bytes = Buffer.from(await res.arrayBuffer());
+      assert.ok(bytes.equals(fs.readFileSync(path.join(CLIENT_DIR, modulo))));
+      // importar el módulo no toca el DOM: solo declara
+      assert.ok(Object.keys(await import(`@tienda/kit/client/${modulo}`)).length > 0);
+      // y sus imports relativos a ../sim/ también existen en el navegador (montaje hermano /kit/sim/)
+      const out = await build({
+        bundle: true,
+        write: false,
+        logLevel: 'silent',
+        format: 'esm',
+        stdin: {
+          contents: `import "@tienda/kit/client/${modulo}"`,
+          resolveDir: fileURLToPath(new URL('.', import.meta.url)),
+        },
+      });
+      assert.equal(out.errors.length, 0);
+    } finally {
+      await app.close();
+    }
+  });
+}

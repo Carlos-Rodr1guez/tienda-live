@@ -29,3 +29,35 @@ for (const file of files) {
     assert.ok(Object.keys(mod).length > 0);
   });
 }
+
+// KIT-11 (marcado inerte) y KIT-27: src/client arma el DOM solo con textContent y no usa azar ni reloj propios.
+// Un nombre de espectador nunca puede llegar a un sumidero de HTML.
+const CLIENT = fileURLToPath(new URL('../src/client/', import.meta.url));
+const HTML_SINKS = /innerHTML|outerHTML|insertAdjacentHTML|document\.write/;
+const NO_CLOCK_OR_DICE = /Math\.random|Date\.now/;
+const clientFiles = fs.readdirSync(CLIENT).filter((f) => f.endsWith('.js'));
+
+test('el escáner de sumideros de HTML detecta cada uno de ellos con un nombre de por medio', () => {
+  for (const sink of [
+    'el.innerHTML = nombre',
+    'el.outerHTML = nombre',
+    'el.insertAdjacentHTML("beforeend", nombre)',
+    'document.write(nombre)',
+  ]) {
+    assert.match(sink, HTML_SINKS, sink);
+  }
+  assert.doesNotMatch('el.textContent = nombre', HTML_SINKS);
+});
+
+test('src/client trae net, simulator-events y simulator', () => {
+  for (const f of ['net.js', 'simulator-events.js', 'simulator.js']) assert.ok(clientFiles.includes(f), f);
+});
+
+for (const file of clientFiles) {
+  test(`aislamiento: ${file} (cliente) sin innerHTML ni afines, sin Math.random ni Date.now`, () => {
+    const src = fs.readFileSync(path.join(CLIENT, file), 'utf8');
+    assert.doesNotMatch(src, HTML_SINKS);
+    assert.doesNotMatch(src, NO_CLOCK_OR_DICE);
+    assert.doesNotMatch(src, /[\u{1F1E6}-\u{1F1FF}]/u);
+  });
+}
