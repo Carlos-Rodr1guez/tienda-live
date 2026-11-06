@@ -1,22 +1,28 @@
-// Registro de equipos y usuarios del LIVE (KIT-5 a KIT-13). Todo vive en memoria: este módulo no escribe nada
+// Registro de equipos y usuarios del LIVE (KIT-5 a KIT-13, KIT-20 a KIT-23). Todo vive en memoria: este módulo no escribe nada
 // a disco. No recibe azar: los desempates salen de una función estable de la clave del usuario.
 // El reloj (`now`) y la ronda (`round`) llegan por argumento, nunca se leen del entorno.
 
 import { ANON, sanitizeName } from './names.js';
-import { ConfigError } from './config.js';
+import { ConfigError, clampNumber } from './config.js';
+import { DEFAULT_LADDER, compileLadder, rankAt } from './ranks.js';
 import { hashKey, normWord, tokenize } from './words.js';
 
 /** Fecha lejana en el pasado: el primer ingreso nunca queda en cooldown (y sobrevive a JSON). */
 const NEVER = -1e9;
 const MAX_AVATAR = 2048;
+/** "Todavía sin XP" en `firstXpAt`: tarde a propósito, para que ordene al final y sobreviva a JSON. */
+const NO_XP_YET = 1e9;
 
 /**
  * @typedef {{id:string, name:string, iso?:string, aliases?:string[], firstOnly?:string[]}} TeamDef
  * @typedef {{live:number, match:number, round:number}} Scoped
  * @typedef {{key:string, name:string, avatar:string, team:number|null, blocked:boolean, hidden:boolean,
- *   joinedRound:number, lastSwitch:number, coins:Scoped, value:Scoped, kills:Scoped}} User
+ *   joinedRound:number, lastSwitch:number, coins:Scoped, value:Scoped, xp:Scoped, kills:Scoped,
+ *   firstXpAt:{match:number, round:number}, rank:number}} User
  *   `name` y `avatar` son los datos saneados REALES: las vistas pasan siempre por displayName() y avatarOf().
- * @typedef {{type:'join', key:string, team:number, switched:boolean, auto:boolean, freeUnit:boolean}} RegistryEvent
+ * @typedef {{type:'join', key:string, team:number, switched:boolean, auto:boolean, freeUnit:boolean}
+ *   | {type:'rankUp', key:string, team:number|null, from:number, to:number}} RegistryEvent
+ *   `rankUp` lleva la clave y nunca el nombre: la vista lo resuelve al mostrar (KIT-23).
  */
 
 /** @returns {Scoped} */
@@ -73,6 +79,7 @@ function compileTeams(teams) {
 
 /**
  * @param {{teams: TeamDef[], policy?: string, allowSwitch?: boolean, switchCooldownSeconds?: number,
+ *   ladder?: import('./ranks.js').Rank[], valueFactor?: number,
  *   names?: {maxGraphemes?: number, maxMarks?: number}, blocklist?: {isBlocked(n: string): boolean} | null}} o
  */
 export function createRegistry(o) {
@@ -85,6 +92,8 @@ export function createRegistry(o) {
   const cooldown = Number.isFinite(o.switchCooldownSeconds) ? Number(o.switchCooldownSeconds) : 15;
   const nameOpts = o.names ?? {};
   const blocklist = o.blocklist ?? null;
+  const ladder = compileLadder({ ladder: o.ladder ?? DEFAULT_LADDER });
+  const valueFactor = clampNumber(o.valueFactor, 0, 1000, 0.5);
 
   /** @type {Map<string, User>} */
   const byKey = new Map();
@@ -129,6 +138,25 @@ export function createRegistry(o) {
     sizes[team - 1]++;
   }
 
+  /**
+   * Suma XP en los tres alcances, fija `firstXpAt` una sola vez por alcance y, si el rango de LIVE sube,
+   * deja UN `rankUp` con from/to (un salto de varios rangos es un solo evento). La XP nunca baja.
+   * @param {User} u @param {number} xp @param {number} now
+   */
+  function giveXp(u, xp, now) {
+    u.xp.live += xp;
+    u.xp.match += xp;
+    u.xp.round += xp;
+    const t = Number.isFinite(now) ? now : 0;
+    if (u.firstXpAt.match >= NO_XP_YET) u.firstXpAt.match = t;
+    if (u.firstXpAt.round >= NO_XP_YET) u.firstXpAt.round = t;
+    const to = rankAt(ladder, u.xp.live);
+    if (to > u.rank) {
+      outbox.push({ type: 'rankUp', key: u.key, team: u.team, from: u.rank, to });
+      u.rank = to;
+    }
+  }
+
   const hideAll = (u) => allHidden || u.blocked || u.hidden;
 
   const api = {
@@ -148,7 +176,10 @@ export function createRegistry(o) {
           lastSwitch: NEVER,
           coins: scoped(),
           value: scoped(),
+          xp: scoped(),
           kills: scoped(),
+          firstXpAt: { match: NO_XP_YET, round: NO_XP_YET },
+          rank: 0,
         };
         byKey.set(key, u);
       }
@@ -199,22 +230,26 @@ export function createRegistry(o) {
       return team;
     },
 
-    addCoins(key, coins) {
+    /** Las monedas dan XP en el momento en que llega el regalo, aunque el juego esté en pausa. */
+    addCoins(key, coins, now) {
       const u = byKey.get(key);
       const n = positive(coins);
       if (!u || !n) return;
       u.coins.live += n;
       u.coins.match += n;
       u.coins.round += n;
+      giveXp(u, n, now);
     },
 
-    addDestroyed(key, value) {
+    /** El valor destruido da `valueFactor × valor` de XP. */
+    addDestroyed(key, value, now) {
       const u = byKey.get(key);
       const n = positive(value);
       if (!u || !n) return;
       u.value.live += n;
       u.value.match += n;
       u.value.round += n;
+      giveXp(u, n * valueFactor, now);
     },
 
     addKill(key) {
@@ -228,10 +263,12 @@ export function createRegistry(o) {
     /** Partido nuevo: reinicia los alcances de partido y de ronda. Lo de LIVE queda. */
     startMatch() {
       for (const u of byKey.values()) {
-        for (const s of [u.coins, u.value, u.kills]) {
+        for (const s of [u.coins, u.value, u.kills, u.xp]) {
           s.match = 0;
           s.round = 0;
         }
+        u.firstXpAt.match = NO_XP_YET;
+        u.firstXpAt.round = NO_XP_YET;
       }
     },
 
@@ -241,10 +278,17 @@ export function createRegistry(o) {
         u.coins.round = 0;
         u.value.round = 0;
         u.kills.round = 0;
+        u.xp.round = 0;
+        u.firstXpAt.round = NO_XP_YET;
       }
     },
 
     teamSizes: () => [...sizes],
+    /** Rango por XP de LIVE: índice en la escalera y su nombre. */
+    rankOf(key) {
+      const i = byKey.get(key)?.rank ?? 0;
+      return { index: i, label: ladder[i].label };
+    },
     get: (key) => byKey.get(key),
     users: () => [...byKey.values()],
 
