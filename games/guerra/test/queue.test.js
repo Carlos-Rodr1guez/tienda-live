@@ -465,6 +465,22 @@ test('la cabeza espera SOLO con todos los lugares ocupados: el pesado ve 9 cajas
   assert.equal(enCola(w, 0), 0);
 });
 
+test('saturación: la cabeza espera y el soldado que viene detrás NO se adelanta aunque tenga lugar de DEFENSA', () => {
+  const w = mundo({ commander: { bias: 100 } });
+  for (let i = 0; i < 9; i++) {
+    const plan = planAlta(w, 0, 'pesado');
+    const sq = createFromPlan(w, 0, 'pesado', plan);
+    addUnit(w, sq, w.field.sides[0].exitX, plan.y, {});
+  }
+  assert.ok(planAlta(w, 0, 'soldado'), 'el soldado sí tendría lugar');
+  submitOrder(w, orden('pesado', 1, 1, 0));
+  submitOrder(w, orden('soldado', 1, 1, 0));
+  run(w, 60);
+  assert.equal(w.units.filter((u) => u.kind === 'soldado').length, 0, 'el soldado esperó su turno detrás del pesado');
+  assert.equal(enCola(w, 0), 2, 'las dos unidades siguen en la cola');
+  assert.equal(w.queues[0].ground[0].kind, 'pesado', 'el orden de llegada se conserva');
+});
+
 test('los grupos que forman cuentan en S y D, no se convierten ni entran al HUD de salidos', () => {
   const w = mundo({ commander: { bias: 100 } });
   const plan = planAlta(w, 0, 'soldado');

@@ -274,6 +274,19 @@ test('sector: costos 1, −2, 0 eligen el medio; con todos iguales, medio, arrib
   assert.equal(planAlta(w3, 0, 'soldado').sector, 0, 'medio ocupado: arriba antes que abajo');
 });
 
+test('DEFENSA: si el lugar de espera del sector elegido está ocupado, el grupo nuevo pasa al siguiente sector', () => {
+  const w = paraDefensa();
+  const s = w.field.sides[0];
+  assert.equal(planAlta(w, 0, 'soldado').sector, 1, 'sin ocupar: el medio');
+  // un grupo propio esperando en el lugar de espera de DEFENSA del sector medio
+  const y = s.sectors[1].y + s.postLanes.A;
+  const sq = createSquad(w, { side: 0, kind: 'soldado', state: 'forming', corridor: 1, x: s.gateX.soldado, y });
+  addUnit(w, sq, s.gateX.soldado, y, {});
+  const plan = planAlta(w, 0, 'soldado');
+  assert.equal(plan.role, 'defensa');
+  assert.equal(plan.sector, 0, 'medio ocupado: arriba antes que abajo');
+});
+
 test('una torreta propia caída del corredor de arriba gana con costos empatados', () => {
   const w = paraDefensa();
   w.bases[0].turrets[0].hp = 0;
