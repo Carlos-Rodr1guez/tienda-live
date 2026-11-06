@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { startServer, loadConfigFile } from '@tienda/kit/server';
 import { ROOT } from '../server/root.js';
 
@@ -20,6 +22,12 @@ test('arranque: ASEDIO se sirve a través del kit', async () => {
 
     const cfg = await (await fetch(`${base}/api/config`)).json();
     assert.deepEqual(cfg.game, config.game ?? {});
+
+    // los módulos puros del kit se sirven con los mismos bytes que importa Node (KIT-3)
+    const reg = await fetch(`${base}/kit/sim/registry.js`);
+    assert.equal(reg.status, 200);
+    const delKit = fs.readFileSync(fileURLToPath(import.meta.resolve('@tienda/kit/sim/registry.js')));
+    assert.ok(Buffer.from(await reg.arrayBuffer()).equals(delKit));
 
     // el código del servidor del kit no se sirve y ASEDIO no tiene ruta de sesión (todavía no existe)
     assert.equal((await fetch(`${base}/kit/server/app.js`)).status, 404);

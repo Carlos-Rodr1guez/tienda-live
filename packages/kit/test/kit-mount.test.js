@@ -56,7 +56,7 @@ test('montajes /kit/: src/server nunca se sirve y los intentos de salirse no dev
 // (montaje /kit/sim/) y esbuild (exports map).
 const SIM_DIR = fileURLToPath(new URL('../src/sim/', import.meta.url));
 
-for (const modulo of ['words.js']) {
+for (const modulo of ['words.js', 'registry.js']) {
   test(`kit/sim: ${modulo} se sirve en /kit/sim/ con los bytes del módulo y esbuild lo resuelve`, async () => {
     const { startServer } = await import('@tienda/kit/server');
     const { build } = await import('esbuild');
