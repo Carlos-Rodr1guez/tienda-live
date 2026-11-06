@@ -1,9 +1,10 @@
 // Combate (diseño D16, D17, §7.2 pasos 5, 8 y 9): blancos, disparos programados, golpes que vencen y daño.
 // Sin azar: el blanco sale de las distancias (desempate por id) y cada disparo es un golpe programado en
-// `step + max(1, ceil(dist / velocidad · 30))`. El crédito por golpe (D17) se cuelga de `damageUnit` en el lote 4c.
+// `step + max(1, ceil(dist / velocidad · 30))`. El crédito por golpe (D17) se paga en `damageUnit` (credit.js).
 
 import { SIM_HZ } from './defaults.js';
 import { damageTurret, requestBaseDamage, turretAlive } from './base.js';
+import { creditHit } from './credit.js';
 import { isFacing } from './steer.js';
 import { removeMember, targetX } from './squads.js';
 
@@ -16,17 +17,22 @@ import { removeMember, targetX } from './squads.js';
  */
 export function damageUnit(world, u, dmg, src) {
   if (!u.alive || dmg <= 0) return 0;
-  const d = Math.min(dmg, u.hp);
+  const hpBefore = u.hp;
+  const d = Math.min(dmg, hpBefore);
   u.hp -= d;
   if (u.hp <= 0) {
     u.hp = 0;
     u.alive = false;
   }
+  creditHit(world, u, d, hpBefore, src);
   world.emit({ type: 'hit', id: u.id, x: u.x, y: u.y, dmg: d, side: src.side });
   return d;
 }
 
-/** Golpe de área (obús, bomba, energía): todo enemigo a ≤ radio del punto, torretas y base (por su x). */
+/**
+ * Golpe de área (obús, bomba, energía): todo enemigo a ≤ radio del punto, torretas y base (por su x). El golpe de
+ * energía lleva `noBase`: va al grupo, no a la base (CB-14); la base solo recibe los 600 de la energía sin grupos.
+ */
 export function applyArea(world, h) {
   const e = 1 - h.side;
   world.grids[e].forEachInRadius(h.tx, h.ty, h.splash, (u) => {
@@ -39,7 +45,7 @@ export function applyArea(world, h) {
     if (turretAlive(t) && dx * dx + dy * dy <= r2) damageTurret(world, t, h.dmg, h);
   }
   const b = world.bases[e];
-  if (b.hp > 0 && Math.abs(h.tx - b.frontX) <= h.splash) requestBaseDamage(world, e, h.dmg, h);
+  if (b.hp > 0 && !h.noBase && Math.abs(h.tx - b.frontX) <= h.splash) requestBaseDamage(world, e, h.dmg, h);
 }
 
 /** Programa un golpe para el paso `due`. */

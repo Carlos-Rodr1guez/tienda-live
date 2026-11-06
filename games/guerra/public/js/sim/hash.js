@@ -46,7 +46,35 @@ export function hashWorld(w) {
   }
   h = int(h, w.lastLaunch[0]);
   h = int(h, w.lastLaunch[1]);
-  for (const t of w.teams) h = num(h, t.structDamage);
+  for (const t of w.teams) {
+    h = num(h, t.structDamage);
+    h = num(h, t.energyAsked);
+  }
+  h = int(h, w.roundStart);
+  h = int(h, w.round);
+  h = str(h, w.phase);
+  h = flag(h, w.paused);
+  const c = w.credit;
+  for (const v of [c.paid, c.destroyedUser, c.destroyedUnattr, c.retired, c.overflow[0], c.overflow[1]]) h = num(h, v);
+  for (const v of [c.teamValue[0], c.teamValue[1], c.teamCoins[0], c.teamCoins[1]]) h = num(h, v);
+  for (const q of w.queues) {
+    h = num(h, q.tokens);
+    h = int(h, q.warnStep);
+    for (const list of [q.ground, q.air]) {
+      h = int(h, list.length);
+      for (const o of list) {
+        h = str(h, o.kind);
+        h = str(h, o.owner ?? '');
+        h = int(h, o.remaining);
+        h = num(h, o.unitValue);
+      }
+    }
+  }
+  for (const m of w.cmd) {
+    h = int(h, m.rebal);
+    h = int(h, m.lastConvert);
+    h = int(h, m.q);
+  }
 
   h = int(h, w.units.length);
   for (const u of w.units) {
@@ -56,6 +84,9 @@ export function hashWorld(w) {
     h = int(h, u.squad.id);
     h = flag(h, u.alive);
     h = num(h, u.hp);
+    h = num(h, u.valueAlive);
+    h = flag(h, u.arrived);
+    h = str(h, u.owner ?? '');
     h = num(h, u.x);
     h = num(h, u.y);
     h = num(h, u.vx);
@@ -76,6 +107,10 @@ export function hashWorld(w) {
     h = str(h, s.state);
     h = int(h, s.corridor);
     h = int(h, s.lane);
+    h = int(h, s.sector);
+    h = int(h, s.post);
+    h = int(h, s.firstArrivalStep);
+    h = flag(h, s.open);
     h = num(h, s.anchor.x);
     h = num(h, s.anchor.y);
     h = num(h, s.anchor.vx);
@@ -119,11 +154,13 @@ export function hashWorld(w) {
     h = num(h, p.y);
     h = num(h, p.vy);
     h = int(h, p.bombsLeft);
+    h = num(h, p.value);
     h = flag(h, p.decided);
   }
 
   for (const b of w.bases) {
     h = num(h, b.hp);
+    h = num(h, b.bucket);
     h = flag(h, b.fell);
     for (const t of b.turrets) {
       h = num(h, t.hp);

@@ -456,3 +456,171 @@ test('nadie se teletransporta al cerrar un hueco en combate: paso ≤ vMax·DT e
   assert.ok(maxStep <= 1 + 1e-9, `razón máxima ${maxStep}`);
   assert.ok(sq.members.length < 10 || w.squads.length > 0);
 });
+
+// ---------------------------------------------------------------------------------------------------- 4c.13
+// CB-22: métricas de movimiento sobre una corrida grabada de 60 s con ~340 unidades (marcha, combate y vuelta a puestos).
+// Fuera de las métricas, como dice la spec: los grupos que arman (puerta de la base), quien camina a un lugar
+// reasignado (cambio por el último o re-centrada) y los grupos que se deslizan de calle.
+
+import { submitOrder } from '../public/js/sim/queue.js';
+
+const FOOT = { soldado: [6, 4], jeep: [18, 8], tanque: [24, 10], pesado: [34, 14] };
+
+function corridaGrabada() {
+  const w = createWorld({ hq: { hp: 1e12 } }, { phase: 'sandbox' });
+  for (const team of [1, 2]) {
+    for (const [kind, count] of [
+      ['soldado', 120],
+      ['jeep', 36],
+      ['tanque', 16],
+      ['pesado', 3],
+    ]) {
+      submitOrder(w, { kind, team, owner: null, count, unitValue: 0, source: 'gift' });
+    }
+  }
+  return w;
+}
+
+test('métricas de movimiento: 60 s con ~340 unidades marchando, combatiendo y volviendo a puestos', () => {
+  const w = corridaGrabada();
+  const dir = (sq) => w.field.sides[sq.side].dir;
+  const distLugar = (u) => {
+    const sq = u.squad;
+    const o = placeOffset(w.cfg, sq.kind, sq.members.indexOf(u), sq.members.length, dir(sq));
+    return Math.hypot(sq.anchor.x + o.x - u.x, sq.anchor.y + o.y - u.y);
+  };
+  const ultimoGiro = new Map();
+  const dirPrevia = new Map();
+  const previo = new Map();
+  const signos = new Map();
+  const bloqueado = new Map();
+  const cambio = new Map();
+  const cuenta = new Map();
+  const peor = { giro: 0, solape: 0, lateral: -Infinity, dv: 0, desp: 0, tartamudeo: 0, zigzag: 0, enLinea: 0 };
+  let maxUnidades = 0;
+  for (let s = 0; s < 1800; s++) {
+    stepWorld(w);
+    maxUnidades = Math.max(maxUnidades, w.units.length);
+    const caminantes = new Set();
+    for (const u of w.units) if (u.squad.state !== 'forming' && distLugar(u) > 2) caminantes.add(u.id);
+    for (const u of w.units) {
+      // orientación: a lo sumo un cambio cada 0,3 s
+      if (dirPrevia.has(u.id) && dirPrevia.get(u.id) !== u.dir) {
+        if (ultimoGiro.has(u.id) && s - ultimoGiro.get(u.id) < 9) peor.giro++;
+        ultimoGiro.set(u.id, s);
+      }
+      dirPrevia.set(u.id, u.dir);
+      // aceleración y desplazamiento
+      const p = previo.get(u.id);
+      if (p) {
+        const vmax = u.stats.speed;
+        peor.desp = Math.max(peor.desp, Math.hypot(u.x - p.x, u.y - p.y) / (vmax * DT));
+        peor.dv = Math.max(peor.dv, Math.hypot(u.vx - p.vx, u.vy - p.vy) / (vmax * w.cfg.squads.unitAccel * DT));
+      }
+      previo.set(u.id, { x: u.x, y: u.y, vx: u.vx, vy: u.vy });
+      // lateral ≤ avance cuando el grupo marcha en formación (no desliza, ancla a régimen)
+      const sq = u.squad;
+      const vA = sq.stats.speed * w.cfg.squads.anchorSpeedFactor;
+      if (
+        sq.state === 'advance' &&
+        !sq.locked &&
+        sq.sideStep === 0 &&
+        Math.abs(sq.anchor.vx) > 0.9 * vA &&
+        !caminantes.has(u.id)
+      ) {
+        peor.lateral = Math.max(peor.lateral, Math.abs(u.vy) - Math.abs(sq.anchor.vx));
+      }
+      // un cambio de signo lateral en 2 s a lo sumo (con histéresis de 1 px/s)
+      let sg = signos.get(u.id);
+      if (!sg) signos.set(u.id, (sg = { ultimo: 0, cambios: [] }));
+      const signo = u.vy > 1 ? 1 : u.vy < -1 ? -1 : 0;
+      if (signo !== 0 && sg.ultimo !== 0 && signo !== sg.ultimo) sg.cambios.push(s);
+      if (signo !== 0) sg.ultimo = signo;
+      while (sg.cambios.length && sg.cambios[0] < s - 60) sg.cambios.shift();
+      const reciente = s - (cambio.get(sq.id) ?? -999) < 90;
+      if (sg.cambios.length > 1 && !reciente) peor.zigzag++;
+    }
+    for (const sq of w.squads) {
+      if (cuenta.get(sq.id) !== sq.members.length) {
+        cuenta.set(sq.id, sq.members.length);
+        cambio.set(sq.id, s);
+      }
+      if (sq.members.length < 2) continue;
+      const vA = sq.stats.speed * w.cfg.squads.anchorSpeedFactor;
+      const marcha = sq.state === 'advance' && !sq.locked && sq.sideStep === 0;
+      // nadie quieto mientras otro del grupo va a > 20 %
+      if (marcha && Math.abs(sq.anchor.vx) > 0.2 * vA) {
+        let rapido = false;
+        let quieto = false;
+        for (const u of sq.members) {
+          const v = Math.hypot(u.vx, u.vy);
+          if (v > 0.2 * vA) rapido = true;
+          if (v === 0) quieto = true;
+        }
+        if (rapido && quieto) peor.tartamudeo++;
+      }
+      // grupo trabado: quieto y a ≤ 2 px de su lugar tras 0,5 s (salvo el que va a un lugar reasignado)
+      const n = sq.locked ? (bloqueado.get(sq.id) ?? 0) + 1 : 0;
+      bloqueado.set(sq.id, n);
+      const reasignado = s - (cambio.get(sq.id) ?? -999) < 60;
+      if (n >= 20 && !reasignado && sq.state !== 'converting' && sq.sideStep === 0) {
+        for (const u of sq.members) {
+          if (caminantes.has(u.id)) continue;
+          if (Math.hypot(u.vx, u.vy) > 1.5 || distLugar(u) > 2) peor.enLinea++;
+        }
+      }
+    }
+    // superposición amiga ≤ 10 % de la huella menor (fuera de los que arman y de quien camina a un lugar reasignado)
+    if (s % 3 === 0) {
+      for (const side of [0, 1]) {
+        const us = w.units.filter((u) => u.side === side && u.squad.state !== 'forming' && !caminantes.has(u.id));
+        for (let i = 0; i < us.length; i++) {
+          for (let j = i + 1; j < us.length; j++) {
+            const a = us[i];
+            const b = us[j];
+            if (Math.abs(a.x - b.x) > 40 || Math.abs(a.y - b.y) > 20) continue;
+            const [wa, ha] = FOOT[a.kind];
+            const [wb, hb] = FOOT[b.kind];
+            const ox = Math.min(a.x + wa / 2, b.x + wb / 2) - Math.max(a.x - wa / 2, b.x - wb / 2);
+            const oy = Math.min(a.y + ha / 2, b.y + hb / 2) - Math.max(a.y - ha / 2, b.y - hb / 2);
+            if (ox > 0 && oy > 0) peor.solape = Math.max(peor.solape, (ox * oy) / Math.min(wa * ha, wb * hb));
+          }
+        }
+      }
+    }
+  }
+  assert.ok(maxUnidades >= 300, `la corrida llegó a ${maxUnidades} unidades`);
+  assert.equal(peor.giro, 0, 'más de un giro de orientación en 0,3 s');
+  assert.ok(peor.solape <= 0.1, `superposición amiga ${peor.solape}`);
+  assert.ok(peor.lateral <= 1e-9, `lateral supera el avance en ${peor.lateral} px/s`);
+  assert.ok(peor.dv <= 1 + 1e-9, `|Δv| supera aMax·DT (razón ${peor.dv})`);
+  assert.ok(peor.desp <= 1 + 1e-9, `desplazamiento supera vMax·DT (razón ${peor.desp})`);
+  assert.equal(peor.tartamudeo, 0, 'alguien quieto mientras otro del grupo va a > 20 %');
+  assert.equal(peor.zigzag, 0, 'más de un cambio de signo lateral en 2 s');
+  assert.equal(peor.enLinea, 0, 'un grupo trabado no quedó quieto en ≤ 0,5 s a ≤ 2 px');
+});
+
+test('40 unidades que llegan al punto de reunión toman lugares distintos sin superposición', () => {
+  const w = createWorld({ hq: { hp: 1e12 } }, { phase: 'sandbox' });
+  submitOrder(w, { kind: 'soldado', team: 1, owner: null, count: 40, unitValue: 0, source: 'gift' });
+  let muestras = 0;
+  let peor = 0;
+  for (let s = 0; s < 260; s++) {
+    stepWorld(w);
+    const enPuerta = w.units.filter((u) => u.squad.state === 'forming' && u.arrived);
+    muestras += enPuerta.length;
+    // lugares distintos: ni dos unidades en el mismo punto ni dos con huellas que se solapen más de 10 %
+    for (let i = 0; i < enPuerta.length; i++) {
+      for (let j = i + 1; j < enPuerta.length; j++) {
+        const a = enPuerta[i];
+        const b = enPuerta[j];
+        const ox = Math.min(a.x + 3, b.x + 3) - Math.max(a.x - 3, b.x - 3);
+        const oy = Math.min(a.y + 2, b.y + 2) - Math.max(a.y - 2, b.y - 2);
+        peor = Math.max(peor, ox > 0 && oy > 0 ? (ox * oy) / (6 * 4) : 0);
+      }
+    }
+  }
+  assert.ok(muestras > 100, `solo ${muestras} muestras de unidades en su lugar de espera`);
+  assert.ok(peor <= 0.1, `superposición en la puerta ${peor}`);
+  assert.equal(w.units.length, 40);
+});

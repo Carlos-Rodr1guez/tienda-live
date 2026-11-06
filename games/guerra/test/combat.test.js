@@ -368,6 +368,7 @@ test('una bomba daña a la torreta enemiga a ≤ 24 px y a la base si |x - frent
   propio.cd = 99;
   enemigo.cd = 99;
   w.bombs.push({ id: 99, side: 0, owner: null, x0: 1332, y0: 448, tx: 1332, ty: 448, dropStep: 0, impactStep: w.step });
+  w.bases[1].bucket = 1e9; // este test no mide el cubo (CB-12 está en whale.test.js)
   const hp0 = w.bases[1].hp;
   const t0 = w.bases[1].turrets[1].hp;
   run(w, 1);
@@ -415,4 +416,92 @@ test('posición y altura de una bomba son funciones puras del estado y llegan al
   assert.ok(bombZ(w.cfg, b, 107) < 44 && bombZ(w.cfg, b, 107) > 0);
   assert.ok(bombZ(w.cfg, b, 100 + FALL_STEPS) <= 3, 'cae 0,481 s: a los 14 pasos (0,467 s) está a ras del suelo');
   assert.ok(bombZ(w.cfg, b, 100 + FALL_STEPS - 1) > 0);
+});
+
+// ---------------------------------------------------------------------------------------------------- energía (4c.11)
+// CB-14, KIT-19 `strike`, CB-11 (energía sin atribuir).
+
+test('barra llena con grupos de distinta fuerza: 3 golpes de 160, radio 20, sobre el más fuerte, en los pasos +0, +8 y +16', async () => {
+  const { createRegistry } = await import('@tienda/kit/sim/registry.js');
+  const PE = { id: 'pe', name: 'Perú', iso: 'PE', aliases: ['peru'] };
+  const MX = { id: 'mx', name: 'México', iso: 'MX', aliases: ['mexico'] };
+  const registry = createRegistry({ teams: [PE, MX] });
+  const w = createWorld({ hq: { hp: 1e12 } }, { registry, phase: 'battle' });
+  const debil = hold(w, 1, 'soldado', 900, 300, 5);
+  const fuerte = hold(w, 1, 'tanque', 900, 600, 2);
+  for (const u of [...debil.members, ...fuerte.members]) u.cd = 1e9;
+  // 15 usuarios del equipo 1 comentan: la carga 15 llena la barra (una carga por usuario cada 3 s)
+  const res = [];
+  for (let i = 0; i < 15; i++) {
+    const evt = { type: 'chat', userId: `u${i}`, nickname: `u${i}`, text: '1' };
+    res.push(applyEvent(w, { type: 'chat', evt }));
+  }
+  assert.equal(res.filter((r) => r.strike).length, 1, 'solo la carga 15 dispara');
+  const golpes = w.hits.filter((h) => h.splash === 20);
+  assert.equal(golpes.length, 3);
+  assert.deepEqual(
+    golpes.map((h) => h.due - w.step),
+    [0, 8, 16],
+  );
+  for (const h of golpes) {
+    assert.equal(h.dmg, 160);
+    assert.equal(h.owner, null, 'sin dueño');
+    assert.equal(h.side, 0);
+    assert.ok(
+      Math.abs(h.tx - fuerte.anchor.x) <= 12 + 1e-9 && Math.abs(h.ty - fuerte.anchor.y) <= 10 + 1e-9,
+      'sobre el grupo más fuerte',
+    );
+  }
+  const hp0 = w.bases[1].hp;
+  const xp0 = registry.users().map((u) => u.xp.live);
+  run(w, 20);
+  assert.equal(w.bases[1].hp, hp0, 'la base no recibe daño');
+  assert.deepEqual(
+    registry.users().map((u) => u.xp.live),
+    xp0,
+    'nadie gana XP',
+  );
+  assert.ok(
+    fuerte.members.some((u) => u.hp < u.maxHp),
+    'el grupo más fuerte sí',
+  );
+  assert.ok(debil.members.every((u) => u.hp === u.maxHp));
+});
+
+test('sin grupos enemigos la base recibe 600 por el cubo', () => {
+  const w = createWorld();
+  w.bases[1].bucket = 800;
+  const r = applyEvent(w, { type: 'strike', side: 0 });
+  assert.equal(r.target, 'base');
+  assert.equal(w.bases[1].hp, 60000 - 600);
+  // con el cubo en 200 solo pasan 200
+  const w2 = createWorld();
+  w2.bases[1].bucket = 200;
+  applyEvent(w2, { type: 'strike', side: 0 });
+  assert.equal(w2.bases[1].hp, 60000 - 200);
+});
+
+test('10 cargas en 60 s (6000 pedidos) restan como máximo 3600 a la base y queda viva', () => {
+  const w = createWorld({ hq: { minSeconds: 60 } });
+  for (let i = 0; i < 10; i++) {
+    w.bases[1].bucket = w.bases[1].cap;
+    applyEvent(w, { type: 'strike', side: 0 });
+    run(w, 180);
+  }
+  const perdido = 60000 - w.bases[1].hp;
+  assert.ok(perdido <= 3600 + 1e-9, `perdió ${perdido}`);
+  assert.ok(perdido > 0 && w.bases[1].hp > 0);
+});
+
+test('los impactos que caen sobre una torreta la dañan', () => {
+  const w = createWorld();
+  const t = w.bases[1].turrets[1];
+  const g = hold(w, 0, 'soldado', t.x - 4, t.y, 3);
+  g.members.forEach((u) => (u.cd = 1e9));
+  seedSquad(w, { side: 1, kind: 'soldado', x: t.x - 6, y: t.y, state: 'holding', count: 1 }); // blanco: tiene que ser un grupo del lado 1
+  w.squads[w.squads.length - 1].members.forEach((u) => (u.cd = 1e9));
+  const hp0 = t.hp;
+  applyEvent(w, { type: 'strike', side: 0 });
+  run(w, 20);
+  assert.ok(t.hp < hp0, 'la torreta recibió daño de la energía');
 });

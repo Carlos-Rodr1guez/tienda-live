@@ -133,3 +133,24 @@ test('en el mundo, un paso con 400 unidades repartidas mide ≤ 40·n distancias
     assert.ok(calls <= 40 * w.units.length, `${calls} distancias con ${w.units.length} unidades`);
   }
 });
+
+test('en el mundo, 400 unidades agrupadas en un solo corredor siguen midiendo ≤ 40·n distancias por paso (4c.13)', async () => {
+  const { createWorld, seedSquad, stepWorld } = await import('../public/js/sim/world.js');
+  const w = createWorld({ limits: { maxAlivePerSide: 300 }, hq: { hp: 1e12 } });
+  // 20 grupos por lado, todos en el corredor medio y apretados en x: la peor densidad que arma el comandante
+  for (let i = 0; i < 20; i++) {
+    const lane = i % 3;
+    const x = 520 + Math.floor(i / 3) * 24;
+    seedSquad(w, { side: 0, kind: 'soldado', corridor: 1, lane, x });
+    seedSquad(w, { side: 1, kind: 'soldado', corridor: 1, lane, x: 1440 - x });
+  }
+  assert.equal(w.units.length, 400);
+  let peor = 0;
+  for (let i = 0; i < 300; i++) {
+    w.grids[0].distCalls = 0;
+    w.grids[1].distCalls = 0;
+    stepWorld(w);
+    peor = Math.max(peor, (w.grids[0].distCalls + w.grids[1].distCalls) / w.units.length);
+  }
+  assert.ok(peor <= 40, `${peor} distancias por unidad`);
+});

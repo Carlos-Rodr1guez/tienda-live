@@ -1,15 +1,28 @@
 // Mundo del sim de Batalla: estado de reglas y orden del paso (diseño §7.2). Paso fijo de 30 Hz, reloj de juego
 // `step / 30`, ids monótonos por partido. NO hay RNG: ni se importa `rng.js` ni se recibe semilla. El orden del
-// paso numera los pasos del diseño; los de los lotes 4c y 4d (comandante, colas, cubo, reunión, partido) se
-// enchufan en los huecos marcados.
+// paso numera los pasos del diseño; el partido (lote 4d) fija `phase`, `round`, `roundStart` y `paused`.
 
 import { GROUND_KINDS, resolveConfig } from './defaults.js';
 import { ATTACK_LANES, corridorOf, createField, laneY } from './field.js';
 import { createGrid } from './grid.js';
 import { unitStats } from './units.js';
-import { createBases, decideTurrets, settleBases } from './base.js';
+import { createTeamCounters } from '@tienda/kit/sim/counters.js';
+import { createBases, decideTurrets, refillBuckets, resetBase, settleBases } from './base.js';
+import { commanderTick, createCommanderState, stepAssembly } from './commander.js';
 import { decideUnits, fireAll, processHits, reapUnits } from './combat.js';
+import { createCredit, retireRound } from './credit.js';
+import { fireEnergy } from './energy.js';
 import { launchPlane, stepPlanes } from './plane.js';
+import {
+  createQueues,
+  deployStep,
+  stepBaseline,
+  submitChat,
+  submitGift,
+  submitLikes,
+  submitOrder,
+  submitSocial,
+} from './queue.js';
 import {
   addUnit,
   createSquad,
@@ -27,8 +40,10 @@ const COMMANDER_TICK = 15; // 2 Hz
 /**
  * Crea un mundo vacío.
  * @param {object} [game] sección `game` de `config.json` (se mezcla con los valores por defecto)
+ * @param {{registry?: any, phase?: string}} [opts] `registry` (el del kit, para XP y bajas) y la fase: `'matchup'`
+ *   (los regalos no crean unidades), `'battle'` (refuerzos base y energía) o `'sandbox'` (por defecto: solo andamiaje)
  */
-export function createWorld(game = {}) {
+export function createWorld(game = {}, opts = {}) {
   const cfg = resolveConfig(game);
   const field = createField(cfg);
   const stats = {};
@@ -59,7 +74,20 @@ export function createWorld(game = {}) {
       createGrid({ w: field.w, h: field.h, capacity: 512 }),
       createGrid({ w: field.w, h: field.h, capacity: 512 }),
     ],
-    teams: [{ structDamage: 0 }, { structDamage: 0 }],
+    teams: [
+      { structDamage: 0, energyAsked: 0 },
+      { structDamage: 0, energyAsked: 0 },
+    ],
+    registry: opts.registry ?? null,
+    phase: opts.phase ?? 'sandbox',
+    paused: false,
+    round: 1,
+    roundStart: 0,
+    queues: createQueues(),
+    queueStats: { overflow: 0 },
+    credit: createCredit(),
+    cmd: [createCommanderState(), createCommanderState()],
+    counters: createTeamCounters(2, cfg.social),
     lastLaunch: [-1e9, -1e9],
     over: null,
     events: [],
@@ -100,15 +128,21 @@ function snapshotAndGrid(world) {
 
 /** Un paso de batalla, sin pausa (§7.2). Después del fin de ronda las reglas quedan congeladas. */
 export function stepWorld(world) {
-  if (world.over !== null) return;
-  // 1. tick del comandante: aquí solo el cambio de calle (el resto llega en 4c)
-  if (world.step % COMMANDER_TICK === 0) laneChangeTick(world);
-  // 2. calendario de refuerzos y 3. despliegue desde las colas: lote 4c
+  if (world.over !== null || world.paused) return;
+  // 1. tick del comandante (2 Hz): H, Z, cuota, rebalanceo, puestos, intercepciones y cambios de calle
+  if (world.step % COMMANDER_TICK === 0) {
+    commanderTick(world);
+    laneChangeTick(world);
+  }
+  // 2. calendario de refuerzos base y 3. despliegue desde las colas
+  stepBaseline(world);
+  deployStep(world);
   // 4. posiciones previas y grilla
   snapshotAndGrid(world);
   // 5. golpes que vencen
   processHits(world);
-  // 6. cubo de la base: lote 4c
+  // 6. cubo de la base
+  refillBuckets(world);
   // 7. bajas, bases y torretas
   reapUnits(world);
   settleBases(world);
@@ -122,7 +156,8 @@ export function stepWorld(world) {
   // 11. grupos y 12. unidades
   stepSquadAnchors(world);
   stepUnits(world);
-  // 13. reunión: lote 4c
+  // 13. reunión: llegadas, cierres y salidas
+  stepAssembly(world);
   // 14. fin de ronda
   const a = world.bases[0].hp <= 0;
   const b = world.bases[1].hp <= 0;
@@ -131,16 +166,60 @@ export function stepWorld(world) {
 }
 
 /**
- * Comandos del mundo, para el log de repetición (`payload` de una entrada `{step, kind, payload}`). En 4b son los
- * de andamiaje: `seedSquad` (un grupo ya formado en su calle) y `launchPlane`. Las entradas reales (regalos,
- * uniones) llegan por las colas en 4c y 4d.
+ * Empieza una ronda: el valor de lo que sigue en el campo pasa a retirado, y campo, grupos, golpes, bombas, aviones,
+ * contadores, cubo y torretas quedan como nuevos. Las colas siguen (sobreviven entre rondas).
+ */
+export function resetRound(world) {
+  retireRound(world);
+  world.units.length = 0;
+  world.squads.length = 0;
+  world.hits.length = 0;
+  world.bombs.length = 0;
+  world.planes.length = 0;
+  for (const b of world.bases) resetBase(b);
+  for (const t of world.teams) {
+    t.structDamage = 0;
+    t.energyAsked = 0;
+  }
+  world.credit.teamValue = [0, 0];
+  world.credit.teamCoins = [0, 0];
+  world.cmd = [createCommanderState(), createCommanderState()];
+  world.counters.resetRound();
+  world.lastLaunch = [-1e9, -1e9];
+  world.over = null;
+  world.roundStart = world.step;
+}
+
+/**
+ * Comandos del mundo, para el log de repetición (`payload` de una entrada `{step, kind, payload}`): `gift` (regalo
+ * ya enrutado), `order`, `chat`, `likes`, `follow`, `share`, `strike`, y el andamiaje `seedSquad` y `launchPlane`.
+ * Cualquier otro devuelve `{ok:false}` sin cambiar el estado.
  * @param {any} world
  * @param {{type:string, [k:string]: any}} p
  */
 export function applyEvent(world, p) {
-  if (p.type === 'seedSquad') return seedSquad(world, p);
-  if (p.type === 'launchPlane') return launchPlane(world, p.side, p.owner ?? null);
-  return { ok: false, reason: 'unknown' };
+  switch (p.type) {
+    case 'seedSquad':
+      return seedSquad(world, p);
+    case 'launchPlane':
+      return launchPlane(world, p.side, p.owner ?? null, p.value ?? 0);
+    case 'order':
+      return { ok: true, queued: submitOrder(world, p.order) };
+    case 'gift':
+      return { ok: true, queued: submitGift(world, p) };
+    case 'chat':
+      return { ok: true, ...submitChat(world, p.evt) };
+    case 'likes':
+      return { ok: true, orders: submitLikes(world, p.team, p.count) };
+    case 'follow':
+    case 'share':
+      return { ok: true, queued: submitSocial(world, p.type, p.team, p.owner ?? null) };
+    case 'strike':
+      return { ok: true, ...fireEnergy(world, p.side) };
+    default:
+      // `spawn`, `damage`, `setScore`, `setRole`, `assignSquad`, `vote`...: el sim no los acepta (NM-2, CB-21)
+      return { ok: false, reason: 'unknown' };
+  }
 }
 
 /**
@@ -163,6 +242,7 @@ export function seedSquad(world, p) {
     lane,
     x,
     y,
+    pinned: p.pinned ?? true,
   });
   const n = p.count ?? world.cfg.squads.size[p.kind];
   for (let i = 0; i < n; i++) {

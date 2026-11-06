@@ -70,7 +70,9 @@ export function squadStrength(sq) {
 /**
  * Crea un grupo vacío. Las unidades se agregan con `addUnit`.
  * @param {any} world
- * @param {{side:0|1, kind:string, role?:string, state?:string, corridor?:number, lane?:number, x:number, y:number, owner?:any}} o
+ * @param {{side:0|1, kind:string, role?:string, state?:string, corridor?:number, lane?:number, x:number, y:number,
+ *   owner?:any, sector?:number, post?:number, postLane?:string|null, assembly?:object|null, postPos?:object|null,
+ *   pinned?:boolean}} o
  */
 export function createSquad(world, o) {
   const sq = {
@@ -84,16 +86,20 @@ export function createSquad(world, o) {
     anchor: { x: o.x, y: o.y, vx: 0, vy: 0 },
     corridor: o.corridor ?? 1,
     lane: o.lane ?? ATTACK_LANES.centro,
-    sector: -1,
-    post: -1,
-    postLane: null,
+    sector: o.sector ?? -1,
+    post: o.post ?? -1,
+    postLane: o.postLane ?? null,
     firstArrivalStep: -1,
+    departStep: -1,
+    interceptSeen: 0,
+    afterConvert: null,
+    pinned: o.pinned ?? false,
     engagedSteps: 0,
     idleSteps: 0,
     locked: false,
     // destinos que fija el comandante (lote 4c)
-    assembly: null,
-    postPos: null,
+    assembly: o.assembly ?? null,
+    postPos: o.postPos ?? null,
     interceptGoal: null,
     // bloqueo y deslizamientos
     blockedBy: 0,
@@ -116,10 +122,11 @@ export function createSquad(world, o) {
 }
 
 /**
- * Agrega una unidad al grupo en el índice siguiente (su lugar) y la pone en (x, y).
+ * Agrega una unidad al grupo en el índice siguiente (su lugar) y la pone en (x, y). `o.owner` es la clave del
+ * usuario (o null) y `o.value` su valor al nacer (`unitValue`; 0 para las gratis).
  * @returns {any} la unidad
  */
-export function addUnit(world, sq, x, y) {
+export function addUnit(world, sq, x, y, o = {}) {
   const stats = world.stats[sq.kind];
   const id = ++world.nextId;
   const dir = world.field.sides[sq.side].dir;
@@ -143,8 +150,11 @@ export function addUnit(world, sq, x, y) {
     tgt: null,
     tgtKind: '',
     alive: true,
-    owner: null,
-    valueAlive: 0,
+    owner: o.owner ?? null,
+    unitValue: o.value ?? 0,
+    valueAlive: o.value ?? 0,
+    dmgBy: null,
+    arrived: false,
   };
   sq.members.push(u);
   world.units.push(u);
@@ -178,9 +188,17 @@ function updateBox(world, sq) {
   sq.hw = b.hw;
 }
 
-/** ¿La caja de `sq`, extendida `pLo` hacia atrás y `pHi` hacia adelante en x, toca la de `o`? */
+/**
+ * ¿La caja de `sq`, extendida `pLo` hacia atrás y `pHi` hacia adelante en x, toca la de `o`? Un grupo que se desliza
+ * de calle (`converting`) también ocupa su calle de destino: así quien viene detrás frena antes de que el deslizado
+ * le caiga encima.
+ */
 function touches(sq, o, pLo, pHi) {
-  return sq.bhi + pHi > o.blo && sq.blo - pLo < o.bhi && Math.abs(sq.anchor.y - o.anchor.y) < sq.hw + o.hw + BOX_MARGIN;
+  if (!(sq.bhi + pHi > o.blo && sq.blo - pLo < o.bhi)) return false;
+  const sep = sq.hw + o.hw + BOX_MARGIN;
+  return (
+    Math.abs(sq.anchor.y - o.anchor.y) < sep || (o.state === 'converting' && Math.abs(sq.anchor.y - o.slideY) < sep)
+  );
 }
 
 /** Objetivo del ancla de un grupo de ataque: posición de tiro a la torreta o al frente, o al enemigo que viene. */
@@ -264,7 +282,8 @@ export function stepSquadAnchors(world) {
         a.y = sq.slideY;
         a.vy = 0;
         sq.lane = sq.nextLane;
-        sq.state = 'advance';
+        sq.state = sq.afterConvert ?? 'advance';
+        sq.afterConvert = null;
       } else {
         wy = Math.sign(dy) * Math.min(sc.slideSpeedFactor * sp, sc.anchorArrive * Math.abs(dy));
       }
@@ -291,7 +310,15 @@ export function stepSquadAnchors(world) {
         wx = w.x;
         wy = w.y;
       }
-      if (sq.state === 'toPost' && Math.abs(gx - a.x) < 1 && Math.abs(gy - a.y) < 1) sq.state = 'holding';
+      if (sq.state === 'toPost') {
+        const ex = gx - a.x;
+        const ey = gy - a.y;
+        const quieto = a.vx * a.vx + a.vy * a.vy < 0.01;
+        // llegó, o quedó frenado detrás del grupo del puesto de adelante (los puestos de jeeps están a 46 px)
+        if ((Math.abs(ex) < 1 && Math.abs(ey) < 1) || (sq.blockedBy !== 0 && quieto && ex * ex + ey * ey <= 144)) {
+          sq.state = 'holding';
+        }
+      }
     }
     sq.wvx = wx;
     sq.wvy = wy;
@@ -400,7 +427,9 @@ export function stepUnits(world) {
       // el ancla ya se movió en este paso: el error que corrige la unidad es el de antes de ese movimiento
       const cx = ex - a.vx * DT;
       const cy = ey - a.vy * DT;
-      if (still && Math.abs(ex) <= sc.snapPx && Math.abs(ey) <= sc.snapPx) {
+      // el ajuste final a 0 solo vale si el salto de velocidad cabe en el límite de aceleración (|Δv| ≤ aMax·DT)
+      const vel = Math.abs(u.vx) + Math.abs(u.vy);
+      if (still && Math.abs(ex) <= sc.snapPx && Math.abs(ey) <= sc.snapPx && vel <= sc.unitAccel * vmax * DT) {
         u.x = sx;
         u.y = sy;
         u.vx = 0;
@@ -458,19 +487,7 @@ export function laneChangeTick(world) {
     for (const lane of [ATTACK_LANES.centro, ATTACK_LANES.jeep, ATTACK_LANES.bajo]) {
       if (lane === sq.lane) continue;
       const y = laneY(world.field, sq.corridor, lane);
-      let libre = true;
-      for (const q of squads) {
-        if (q === sq || q.side !== sq.side || q.members.length === 0) continue;
-        const dx = q.bhi > sq.blo - 64 && q.blo < sq.bhi + 64;
-        const sep = q.hw + sq.hw + BOX_MARGIN;
-        // el que ya se desliza ocupa también su calle de destino
-        const dest = q.state === 'converting' ? q.slideY : q.anchor.y;
-        if (dx && (Math.abs(q.anchor.y - y) < sep || Math.abs(dest - y) < sep)) {
-          libre = false;
-          break;
-        }
-      }
-      if (libre) {
+      if (laneIsFree(world, sq, y)) {
         sq.state = 'converting';
         sq.slideY = y;
         sq.nextLane = lane;
@@ -478,4 +495,27 @@ export function laneChangeTick(world) {
       }
     }
   }
+}
+
+/**
+ * ¿Está libre la calle de altura `y` para `sq`? Ningún grupo amigo (ni su destino, si se desliza) ocupa, a lo largo
+ * de ±64 px de la caja de `sq`, la calle ni las alturas que cruza al deslizarse (prueba de caja libre de D15 y D28).
+ */
+export function laneIsFree(world, sq, y) {
+  const y0 = sq.anchor.y;
+  const sgn = y >= y0 ? 1 : -1;
+  for (const q of world.squads) {
+    if (q === sq || q.side !== sq.side || q.members.length === 0) continue;
+    const dx = q.bhi > sq.blo - 64 && q.blo < sq.bhi + 64;
+    if (!dx) continue;
+    const sep = q.hw + sq.hw + BOX_MARGIN;
+    // el deslizamiento barre las alturas entre la salida de su propia banda y el destino: ninguna caja amiga en medio
+    const a = sgn > 0 ? Math.min(y0 + sep, y) : Math.max(y0 - sep, y);
+    const lo = Math.min(a, y) - sep;
+    const hi = Math.max(a, y) + sep;
+    // el que ya se desliza ocupa también su calle de destino
+    const dest = q.state === 'converting' ? q.slideY : q.anchor.y;
+    if ((q.anchor.y > lo && q.anchor.y < hi) || (dest > lo && dest < hi)) return false;
+  }
+  return true;
 }

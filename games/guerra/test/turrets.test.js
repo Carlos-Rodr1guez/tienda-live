@@ -177,6 +177,7 @@ test('el daño efectivo es min(dmg, hp) y se suma por equipo; una torreta destru
   const w = createWorld();
   const t = w.bases[1].turrets[2];
   t.hp = 300;
+  w.bases[1].bucket = 1e9; // el cubo se prueba en whale.test.js
   w.drain();
   scheduleHit(w, {
     due: w.step,
@@ -198,6 +199,7 @@ test('el daño efectivo es min(dmg, hp) y se suma por equipo; una torreta destru
   assert.equal(t.on, false);
   assert.ok(w.drain().some((e) => e.type === 'turretDown' && e.side === 1 && e.k === 2));
   // una torreta ya destruida no suma más
+  w.bases[1].bucket = 1e9;
   scheduleHit(w, {
     due: w.step,
     kind: 'bomb',
@@ -218,6 +220,7 @@ test('daño a la base: efectivo, sin XP; al caer la base las torretas se apagan 
   const w = createWorld();
   const b = w.bases[1];
   b.hp = 500;
+  b.bucket = 1e9;
   run(w, 3);
   assert.equal(w.over, null);
   const paso = w.step;
@@ -248,6 +251,7 @@ test('las dos bases caen en el mismo paso: la ronda termina sin ganador (4d lo d
   const w = createWorld();
   w.bases[0].hp = 10;
   w.bases[1].hp = 10;
+  w.bases[0].bucket = w.bases[1].bucket = 1e9;
   scheduleHit(w, {
     due: w.step,
     kind: 'bomb',

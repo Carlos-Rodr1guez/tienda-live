@@ -90,6 +90,16 @@ export const DEFAULTS = deepFreeze({
     maxQueuedPlanes: 20,
   },
   baseline: { start: 3, interval: 12, unit: 'soldado', count: 4 },
+  // Energía (CB-14, D19): 3 golpes de 160 y radio 20 sobre el grupo enemigo más fuerte, con 8 pasos entre golpes;
+  // sin grupos, `baseDmg` a la base por el cubo, con un tope de `capPerRound` por ronda.
+  energy: { hits: 3, dmg: 160, radius: 20, spacingSteps: 8, baseDmg: 600, capPerRound: 3600 },
+  // Contadores sociales (KIT-19, CB-14): lo que dan likes, follow y share (valor 0) y la barra de energía.
+  social: {
+    likes: { perReinforcement: 300, unit: 'soldado', count: 4 },
+    follow: { unit: 'jeep', count: 1 },
+    share: { unit: 'soldado', count: 3 },
+    energy: { enabled: true, perCharge: 15, userCooldown: 3 },
+  },
 });
 
 const SEMIALTO_MAX = 18;

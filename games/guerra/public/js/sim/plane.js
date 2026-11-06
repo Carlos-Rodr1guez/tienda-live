@@ -3,6 +3,7 @@
 // caída son funciones puras del estado; sin azar (el blanco sale de la fuerza y del id).
 
 import { DT } from './defaults.js';
+import { retire } from './credit.js';
 import { squadStrength } from './squads.js';
 
 /** Pasos que tarda una bomba en caer desde z 44 con gravedad 380: sqrt(2·44/380)/DT ≈ 14,4, redondeado a 14. */
@@ -21,10 +22,10 @@ export function canLaunchPlane(world, side) {
 }
 
 /**
- * Lanza un avión del lado `side`: entra por su borde a z 48 con `vx = ±120`.
+ * Lanza un avión del lado `side`: entra por su borde a z 48 con `vx = ±120`. `value` es lo que pagó su dueño.
  * @returns {{ok:true, plane:any} | {ok:false, reason:string}}
  */
-export function launchPlane(world, side, owner = null) {
+export function launchPlane(world, side, owner = null, value = 0) {
   const can = canLaunchPlane(world, side);
   if (!can.ok) return can;
   const { cfg, field } = world;
@@ -35,6 +36,7 @@ export function launchPlane(world, side, owner = null) {
     id: ++world.nextId,
     side,
     owner,
+    value,
     x,
     y,
     px: x,
@@ -151,6 +153,8 @@ export function stepPlanes(world) {
     }
     const out = dir > 0 ? field.w + cfg.plane.margin : -cfg.plane.margin;
     if ((p.x - out) * dir >= 0) {
+      retire(world, p.value); // el avión salió ileso: su valor pasa a retirado y no da XP
+      p.value = 0;
       world.emit({ type: 'planeOut', id: p.id, side: p.side });
       continue; // sale del mapa y se quita
     }

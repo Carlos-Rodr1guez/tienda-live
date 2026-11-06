@@ -59,7 +59,7 @@ test('un log repetido da estados y hashes iguales (deepEqual)', () => {
   assert.equal(hashWorld(a), hashWorld(b));
 });
 
-const VACIO = '883057bb';
+const VACIO = 'b374913c';
 
 test('el hash FNV-1a es estable y sensible a un solo bit de un float', () => {
   const w = createWorld();

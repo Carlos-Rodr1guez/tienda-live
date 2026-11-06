@@ -50,7 +50,7 @@ const golden = { version: 1, steps: STEPS, hash: hashWorld(w), log: LOG };
 const salida = [
   '// GENERADO por `npm run golden -w batalla-paises` (tools/golden.mjs). No se edita a mano.',
   '// Log fijo del hash dorado (CB-13): el test `determinism` lo repite en Node y compara el hash. Solo datos.',
-  '// PROVISORIO (lote 4b): el log definitivo de ~500 eventos se regenera en 4d.7.',
+  '// PROVISORIO (lote 4b, hash regenerado en 4c): el log definitivo de ~500 eventos se regenera en 4d.7.',
   '',
   'export const GOLDEN = {',
   `  version: ${golden.version},`,
