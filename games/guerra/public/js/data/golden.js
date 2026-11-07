@@ -6,7 +6,7 @@ export const GOLDEN = {
   version: 2,
   steps: 10400,
   game: {"round":{"seconds":150,"introSeconds":2,"resultsSeconds":2},"hq":{"hp":8000},"turret":{"hp":600}},
-  hash: 'b25ddd41',
+  hash: 'f64c4ff7',
   log: [
     {"step":0,"kind":"cmd","payload":{"type":"pickPair","a":"PE","b":"MX"}},
     {"step":1,"kind":"evt","payload":{"type":"chat","evt":{"type":"chat","userId":"u0","nickname":"Hincha 0","text":"peru"}}},

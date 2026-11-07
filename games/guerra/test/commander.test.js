@@ -400,9 +400,22 @@ test('intercepción: la DEFENSA sale hacia el enemigo dentro de la zona, nadie s
 /** 8 grupos de ataque quietos y `d` de DEFENSA en sectores y puestos distintos. */
 function diez(w, d, extra = {}) {
   const n = extra.total ?? 10;
+  // DV25-8: solo convierte el grupo cuyo deslizamiento está libre (±64 px). Cada grupo de ataque espera, quieto, ya en
+  // la altura del puesto del sector al que le toca convertir (arriba, abajo, medio, ...: el orden por costo con un
+  // grupo propio en el medio) y los del mismo sector van a más de 82 px unos de otros (84), así ningún barrido pisa a otro.
+  const s0 = w.field.sides[0];
+  const altura = (c) => s0.sectors[c].y + s0.postLanes.A;
+  const turno = [0, 2, 1];
   for (let i = 0; i < n - d; i++) {
-    const [c, l, x] = lugar(i);
-    ataque(w, 0, 'soldado', x, c, l);
+    const x = 108 + 84 * Math.floor(i / 3) + 6 * (i % 3);
+    seedSquad(w, {
+      side: 0,
+      kind: 'soldado',
+      count: w.cfg.squads.size.soldado,
+      x,
+      y: altura(turno[i % 3]),
+      pinned: false,
+    });
   }
   const lugares = [
     [1, 0],
@@ -459,7 +472,7 @@ test('sin candidato no convierte y SIGUE activo; convierte cuando se libera un p
     const [c, , x] = lugar(i);
     ataque(w, 0, i % 2 ? 'pesado' : 'tanque', x + 40, c, 2, 1);
   }
-  const solo = ataque(w, 0, 'soldado', 288, 1, 0); // avanza 0,9 px/s: a los 40 s sigue entre el puesto 2 (x 282) y el 1 (x 328)
+  const solo = ataque(w, 0, 'soldado', 253, 1, 0); // avanza 0,9 px/s: a los 40 s sigue entre el puesto 2 (x 282) y el 1 (x 328)
   void solo;
   assert.deepEqual(conversiones(w, 1200), [], '40 s sin candidato');
   assert.equal(w.cmd[0].rebal, -1, 'sigue activo');
@@ -619,4 +632,90 @@ test('en una corrida larga todas las conversiones de un lado distan ≥ 4 s', ()
   }
   for (const lista of por) for (let i = 1; i < lista.length; i++) assert.ok(lista[i] - lista[i - 1] >= 120);
   assert.ok(por[0].length + por[1].length > 0, 'hubo conversiones');
+});
+
+// ---------------------------------------------------------------------------------------------------- DV25-8
+// CB-22 (los grupos que se deslizan no se solapan) y CB-21 (a ATAQUE va a una calle de ataque LIBRE): solo es
+// candidato a convertir el grupo cuyo deslizamiento pasa la prueba de caja libre (`laneIsFree`, ±64 px).
+
+/**
+ * A (cerca de la base) y B (lejos) de ATAQUE con cuota alta. `tapas` (C1 y C2, en las calles de arriba y de abajo de A)
+ * le cierran el deslizamiento hacia cualquier sector; B está a más de 64 px y queda libre.
+ */
+function paraDefensaLibre(conB = true) {
+  const w = mundo({ ...QUIETOS, commander: { bias: 100 } });
+  const a = ataque(w, 0, 'soldado', 130, 1, 0);
+  const b = conB ? ataque(w, 0, 'soldado', 300, 1, 0) : null;
+  const tapas = [ataque(w, 0, 'soldado', 130, 1, 1), ataque(w, 0, 'soldado', 130, 1, 2)];
+  for (const t of tapas) t.pinned = true; // las tapas no se convierten
+  return { w, a, b, tapas };
+}
+
+const muere = (...sqs) => {
+  for (const sq of sqs) for (const u of sq.members) u.alive = false;
+};
+
+test('DV25-8 hacia DEFENSA: el más cercano a la base tiene el deslizamiento ocupado, se salta y convierte el siguiente', () => {
+  const { w, a, b } = paraDefensaLibre();
+  assert.deepEqual(conversiones(w, 1), [0]);
+  assert.equal(a.role, 'ataque', 'A está tapado: no es candidato');
+  assert.equal(b.role, 'defensa');
+  assert.equal(b.state, 'converting');
+});
+
+test('DV25-8 hacia DEFENSA: ya convertido B, A espera a que se despeje y convierte en el primer tick que respeta los 4 s', () => {
+  const { w, a, tapas } = paraDefensaLibre();
+  const pasos = [];
+  for (let i = 0; i < 300; i++) {
+    if (i === 10) muere(...tapas);
+    const paso = w.step;
+    stepWorld(w);
+    for (const e of w.drain()) if (e.type === 'convert') pasos.push([paso, e.id]);
+  }
+  assert.equal(pasos[0][0], 0);
+  assert.deepEqual(pasos[1], [120, a.id], 'A convierte a los 4 s justos, no antes');
+});
+
+test('DV25-8 hacia DEFENSA: sin ningún candidato libre no convierte y el rebalanceo SIGUE activo; convierte al despejarse', () => {
+  const { w, a, tapas } = paraDefensaLibre(false);
+  assert.deepEqual(conversiones(w, 200), [], 'nadie convierte');
+  assert.equal(w.cmd[0].rebal, -1, 'sigue activo');
+  assert.equal(a.role, 'ataque');
+  muere(...tapas);
+  const paso = w.step;
+  const cs = conversiones(w, 40);
+  assert.equal(cs.length, 1, 'convierte en cuanto aparece uno');
+  assert.ok(cs[0] - paso <= 15, `en el primer tick tras despejar (${cs[0] - paso} pasos)`);
+  assert.equal(a.role, 'defensa');
+});
+
+/** D1 (10 vivos, sector del medio) y, si se pide, D2 (8 vivos, arriba); tres grupos tapan las calles de ataque de D1. */
+function paraAtaque(conD2 = true) {
+  const w = mundo({ ...QUIETOS, commander: { bias: -100 } });
+  const d1 = defensa(w, 0, 'soldado', 1, 0, 10, 'holding', false);
+  const d2 = conD2 ? defensa(w, 0, 'soldado', 0, 0, 8, 'holding', false) : null;
+  const tapas = [0, 1, 2].map((lane) => ataque(w, 0, 'soldado', 374, 1, lane));
+  for (const t of tapas) t.pinned = true;
+  return { w, d1, d2, tapas };
+}
+
+test('DV25-8 hacia ATAQUE: el de más vivos no tiene ninguna calle libre, se salta y convierte el siguiente', () => {
+  const { w, d1, d2 } = paraAtaque();
+  assert.deepEqual(conversiones(w, 1), [0]);
+  assert.equal(d1.role, 'defensa', 'D1 no tiene calle libre');
+  assert.equal(d2.role, 'ataque');
+});
+
+test('DV25-8 hacia ATAQUE: sin ninguno elegible no convierte (ni a una calle ocupada) y el rebalanceo sigue activo', () => {
+  const { w, d1, tapas } = paraAtaque(false);
+  assert.deepEqual(conversiones(w, 200), [], 'sin calle libre no hay fallback a una ocupada');
+  assert.equal(w.cmd[0].rebal, 1, 'sigue activo');
+  assert.equal(d1.role, 'defensa');
+  muere(tapas[1]); // se libera la calle de en medio
+  const paso = w.step;
+  const cs = conversiones(w, 40);
+  assert.equal(cs.length, 1);
+  assert.ok(cs[0] - paso <= 15);
+  assert.equal(d1.role, 'ataque');
+  assert.equal(d1.nextLane, 1, 'toma la primera calle libre');
 });

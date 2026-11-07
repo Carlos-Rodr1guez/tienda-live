@@ -430,7 +430,10 @@ function startConvert(world, sq, y, afterState, nextLane, side) {
   world.emit({ type: 'convert', id: sq.id, side, role: sq.role });
 }
 
-/** Hacia DEFENSA: el grupo de ataque (soldados o jeeps) salido más cercano a la base propia que tenga un puesto delante. */
+/**
+ * Hacia DEFENSA: el grupo de ataque (soldados o jeeps) salido más cercano a la base propia que tenga un puesto delante
+ * y cuyo deslizamiento hasta la calle del puesto esté libre (empate: id menor). Sin ninguno elegible no convierte.
+ */
 function convertToDefense(world, side) {
   const s = world.field.sides[side];
   let best = null;
@@ -439,9 +442,11 @@ function convertToDefense(world, side) {
     if (sq.side !== side || !live(sq) || sq.role !== 'ataque' || sq.state !== 'advance' || sq.pinned) continue;
     const lane = postLaneOf(sq.kind);
     if (lane === null) continue;
+    // elegible: con un puesto delante y con el deslizamiento hasta la calle del puesto libre (DV25-8, CB-22)
     const sectors = sectorOrder(world, side, sq.kind, sq).filter((c) => {
       const p = reachablePost(world, side, c, lane, sq);
-      return (postPosition(world, side, c, lane, p).x - sq.anchor.x) * s.dir >= 0;
+      const pos = postPosition(world, side, c, lane, p);
+      return (pos.x - sq.anchor.x) * s.dir >= 0 && laneIsFree(world, sq, pos.y);
     });
     if (sectors.length === 0) continue;
     const d = Math.abs(sq.anchor.x - s.frontX);
@@ -463,24 +468,32 @@ function convertToDefense(world, side) {
   return true;
 }
 
-/** Hacia ATAQUE: el grupo de DEFENSA salido con más miembros vivos; conserva el corredor y toma la primera calle libre. */
+/** Primera calle de ataque libre de `laneOrder` para el grupo de DEFENSA `sq` (o -1 si no hay ninguna). */
+function freeAttackLane(world, sq) {
+  for (const l of laneOrder(sq.kind)) if (laneIsFree(world, sq, laneY(world.field, sq.sector, l))) return l;
+  return -1;
+}
+
+/**
+ * Hacia ATAQUE: el grupo de DEFENSA salido con más miembros vivos (empate: id menor) entre los que tienen alguna calle
+ * de ataque libre; conserva el corredor y toma la primera calle libre. Sin ninguno elegible no convierte: no hay
+ * respaldo a una calle ocupada (DV25-8, CB-22).
+ */
 function convertToAttack(world, side) {
   let best = null;
+  let bestLane = -1;
   for (const sq of world.squads) {
     if (sq.side !== side || !live(sq) || sq.role !== 'defensa' || sq.pinned) continue;
     if (sq.state !== 'toPost' && sq.state !== 'holding' && sq.state !== 'intercept') continue;
-    if (best === null || sq.members.length > best.members.length) best = sq;
+    if (best !== null && sq.members.length <= best.members.length) continue;
+    const l = freeAttackLane(world, sq);
+    if (l < 0) continue;
+    best = sq;
+    bestLane = l;
   }
   if (best === null) return false;
   const sq = best;
-  const order = laneOrder(sq.kind);
-  let lane = order[0];
-  for (const l of order) {
-    if (laneIsFree(world, sq, laneY(world.field, sq.sector, l))) {
-      lane = l;
-      break;
-    }
-  }
+  const lane = bestLane;
   sq.role = 'ataque';
   sq.corridor = sq.sector;
   sq.sector = -1;

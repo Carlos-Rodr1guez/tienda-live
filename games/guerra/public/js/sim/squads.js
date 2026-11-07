@@ -229,6 +229,7 @@ export function addUnit(world, sq, x, y, o = {}) {
   };
   sq.members.push(u);
   world.units.push(u);
+  updateBox(world, sq); // la caja vale desde el primer miembro (la prueba de calle libre la lee)
   return u;
 }
 

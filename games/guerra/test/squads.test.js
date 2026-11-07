@@ -738,11 +738,7 @@ test('métricas de movimiento: 60 s con ~340 unidades marchando, combatiendo y v
     // superposición amiga ≤ 10 % de la huella menor, en cada paso y en cualquier par de unidades amigas (solo quedan
     // fuera los grupos que arman); en marcha y trabados por separado
     for (const side of [0, 1]) {
-      // TEMPORAL: se exime a los grupos que se deslizan de calle (`converting`), como en el commit anterior; el commit
-      // siguiente (conversiones solo por calles libres, DV25-8) quita esta exención y la métrica queda según DV25-6.
-      const us = w.units.filter(
-        (u) => u.side === side && u.squad.state !== 'forming' && u.squad.state !== 'converting',
-      );
+      const us = w.units.filter((u) => u.side === side && u.squad.state !== 'forming');
       for (let i = 0; i < us.length; i++) {
         for (let j = i + 1; j < us.length; j++) {
           const a = us[i];
