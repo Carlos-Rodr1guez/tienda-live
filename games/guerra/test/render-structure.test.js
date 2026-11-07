@@ -832,9 +832,12 @@ test('escena: un disparo crea un proyectil con el mismo tiempo de vuelo que el s
   w.step = 103; // un segundo golpe dentro de los 0,22 s no reenciende el destello
   sc.consume([{ type: 'hit', id: 7, x: 0, y: 0, dmg: 1, side: 0 }], w);
   assert.equal(sc.flashUntil(7), 102);
-  w.step = 108;
+  w.step = 108; // aún dentro del enfriamiento de 11 pasos (CB-20: a lo sumo 3 parpadeos por segundo)
   sc.consume([{ type: 'hit', id: 7, x: 0, y: 0, dmg: 1, side: 0 }], w);
-  assert.equal(sc.flashUntil(7), 110, 'pasado el enfriamiento vuelve a brillar');
+  assert.equal(sc.flashUntil(7), 102);
+  w.step = 111;
+  sc.consume([{ type: 'hit', id: 7, x: 0, y: 0, dmg: 1, side: 0 }], w);
+  assert.equal(sc.flashUntil(7), 113, 'pasado el enfriamiento vuelve a brillar');
   assert.equal(sc.flashUntil(8), 0);
   sc.reset();
   assert.equal(sc.projectiles.length, 0);

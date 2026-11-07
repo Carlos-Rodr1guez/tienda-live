@@ -2,34 +2,33 @@
 // (`world.drain()`, nunca `registry.drain()`; coordinador, nota 3) y arma pools de capacidad fija: restos, proyectiles
 // en vuelo, cráteres y destellos de golpe. Todo es cosmético: ninguna regla lo lee y nada aquí escribe en el sim.
 
-import { ell } from './pixel.js';
-import { PALETA } from '../data/paleta.js';
 import { ALTURA } from './units.js';
+import { createFx, FX_CAPS, LIFE } from './fx.js';
 
-const INK = PALETA.ink;
+/** Topes de la escena. Restos y cráteres son de `fx.js` (un solo dueño por pool); aquí quedan los proyectiles. */
+export const SCENE_CAPS = Object.freeze({
+  wrecks: FX_CAPS.wrecks,
+  projectiles: 256,
+  craters: FX_CAPS.craters,
+  flashes: 512,
+});
 
-export const SCENE_CAPS = Object.freeze({ wrecks: 24, projectiles: 256, craters: 60, flashes: 512 });
-
-/** Vida de cada resto y cráter, en segundos de juego (CB-20): el soldado se va a los 3,1 s, el vehículo a los 7,5 s. */
-export const LIFE = Object.freeze({ soldado: 3.1, vehiculo: 7.5, crater: 20 });
+export { LIFE };
 
 const BALA = new Set(['soldado', 'jeep']);
-/** Pasos que dura el destello blanco de un golpe y pasos hasta el siguiente (0,22 s del v3). */
+/**
+ * Pasos que dura el destello blanco de un golpe y pasos hasta el siguiente. CB-20: a lo sumo 3 destellos grandes por
+ * segundo, así que entre inicios hay 11 pasos (0,37 s): en una ventana cerrada de 31 pasos caben 3 inicios (con 10
+ * cabrían 4). El v3 dejaba 0,22 s.
+ */
 const FLASH_STEPS = 2;
-const FLASH_COOLDOWN = 7;
+const FLASH_COOLDOWN = 11;
 
 /**
- * @param {{teamHex: [string, string], sprites: any}} o
+ * @param {{teamHex: [string, string], sprites: any, fx?: ReturnType<typeof createFx>}} o `fx` es el dueño de los pools
+ *   de partículas, explosiones, cráteres y restos; sin él la escena crea el suyo.
  */
-export function createScene({ teamHex, sprites }) {
-  const freeWrecks = Array.from({ length: SCENE_CAPS.wrecks }, () => ({
-    x: 0,
-    y: 0,
-    kind: '',
-    side: 0,
-    dir: 1,
-    born: 0,
-  }));
+export function createScene({ teamHex, sprites, fx = createFx({ seed: 'efectos:escena' }) }) {
   const freeProj = Array.from({ length: SCENE_CAPS.projectiles }, () => ({
     kind: 0,
     x0: 0,
@@ -42,13 +41,15 @@ export function createScene({ teamHex, sprites }) {
     dur: 0,
     arc: 0,
     big: false,
+    splash: 0,
+    landed: false,
   }));
-  const freeCraters = Array.from({ length: SCENE_CAPS.craters }, () => ({ x: 0, y: 0, r: 0, born: 0 }));
   /** @type {Map<number, number>} id de unidad -> paso del último destello */
   const flashes = new Map();
 
   const scene = {
     teamHex,
+    fx,
     step: 0,
     cfg: null,
     units: [],
@@ -56,12 +57,18 @@ export function createScene({ teamHex, sprites }) {
     bombs: [],
     bases: null,
     field: null,
-    wrecks: /** @type {any[]} */ ([]),
+    /** Restos y cráteres son los arreglos de `fx` (mismo objeto, un solo dueño). */
+    wrecks: fx.wrecks,
     projectiles: /** @type {any[]} */ ([]),
-    craters: /** @type {any[]} */ ([]),
-    drawEffects: /** @type {((P: any) => void) | null} */ (null),
+    craters: fx.craters,
+    drawEffects: /** @type {((P: any) => void) | null} */ ((P) => fx.draw(P)),
+    /** ¿Se dibuja la torreta en pie? (la ruina y la secuencia de la base las decide `fx`). */
+    turretShown: (side, k, simAlive) => fx.turretShown(side, k, simAlive),
+    /** ¿Se dibuja la base en ruinas? (tras la explosión final de su secuencia). */
+    baseFell: (side, b) => fx.baseFell(side, b),
     drawIcons: /** @type {((P: any) => void) | null} */ (null),
     flashUntil: (id) => {
+      if (!fx.motion.politica.flicker) return 0; // movimiento reducido: el golpe no parpadea en blanco
       const start = flashes.get(id);
       return start === undefined ? 0 : start + FLASH_STEPS;
     },
@@ -77,12 +84,9 @@ export function createScene({ teamHex, sprites }) {
     },
     /** Una ronda nueva: se vacía todo lo cosmético. */
     reset() {
-      for (const w of scene.wrecks) freeWrecks.push(w);
+      fx.reset();
       for (const p of scene.projectiles) freeProj.push(p);
-      for (const c of scene.craters) freeCraters.push(c);
-      scene.wrecks.length = 0;
       scene.projectiles.length = 0;
-      scene.craters.length = 0;
       flashes.clear();
     },
     /**
@@ -93,14 +97,17 @@ export function createScene({ teamHex, sprites }) {
      */
     consume(events, world) {
       scene.sync(world);
+      fx.teamHex = scene.teamHex;
+      fx.sprites ??= sprites;
       const cfg = world.cfg;
       for (let i = 0; i < events.length; i++) {
         const e = events[i];
         switch (e.type) {
           case 'death':
-            agregarResto(e, world.step);
+            fx.consume(e, world);
             break;
           case 'hit': {
+            fx.consume(e, world);
             // como en el v3: un golpe pinta la unidad de blanco un instante (2 pasos) y no vuelve a hacerlo hasta 0,22 s después
             const antes = flashes.get(e.id);
             if (antes === undefined || world.step - antes >= FLASH_COOLDOWN) flashes.set(e.id, world.step);
@@ -112,60 +119,29 @@ export function createScene({ teamHex, sprites }) {
           case 'turretShot': {
             const t = world.bases[e.side].turrets[e.k];
             proyectil(0, t.x, t.y, 7, e.tx, e.ty, 6, cfg.projectiles.bullet, world.step, 0, false);
+            fx.consume(e, world);
             break;
           }
           case 'bombImpact':
-            agregarCrater(e.x, e.y, 14, world.step);
+          case 'turretDown':
+          case 'baseHit':
+            fx.consume(e, world);
             break;
           default:
             break;
         }
       }
+      llegadas(world);
+      fx.checkBases(world);
       podar(world.step);
     },
     drawCraters(P) {
-      const ctx = P.ctx;
-      const ahora = scene.step + (P.frame.alpha ?? 0);
-      for (let i = 0; i < scene.craters.length; i++) {
-        const c = scene.craters[i];
-        if (!P.visible(c.x, c.y, 30)) continue;
-        const edad = (ahora - c.born) / 30;
-        const a = edad > 16 ? 1 - (edad - 16) / 4 : 1;
-        const ry = Math.max(2, Math.ceil(c.r * 0.5));
-        ctx.globalAlpha = Math.max(0, a) * 0.85;
-        ctx.fillStyle = '#3E3A44';
-        ell(ctx, P.x(c.x), P.y(c.y + 1), c.r, ry, P.mul);
-        ctx.fillStyle = '#1A1E22';
-        ell(ctx, P.x(c.x), P.y(c.y), c.r - 1 > 0 ? c.r - 1 : c.r, Math.max(1, ry - 1), P.mul);
-        P.stats.drawCalls += 2 * (ry * 2 + 1);
-      }
-      ctx.globalAlpha = 1;
-      void INK;
+      fx.drawCraters(P, scene.step + (P.frame.alpha ?? 0));
     },
     caps: SCENE_CAPS,
   };
 
-  function agregarResto(e, step) {
-    const w = scene.wrecks.length >= SCENE_CAPS.wrecks ? scene.wrecks.shift() : freeWrecks.pop();
-    w.x = e.x;
-    w.y = e.y;
-    w.kind = e.kind;
-    w.side = e.side;
-    w.dir = e.side === 0 ? 1 : -1;
-    w.born = step;
-    scene.wrecks.push(w);
-  }
-
-  function agregarCrater(x, y, r, step) {
-    const c = scene.craters.length >= SCENE_CAPS.craters ? scene.craters.shift() : freeCraters.pop();
-    c.x = Math.round(x);
-    c.y = Math.round(y);
-    c.r = r;
-    c.born = step;
-    scene.craters.push(c);
-  }
-
-  function proyectil(kind, x0, y0, z0, tx, ty, tz, speed, step, arc, big) {
+  function proyectil(kind, x0, y0, z0, tx, ty, tz, speed, step, arc, big, splash = 0) {
     const p = scene.projectiles.length >= SCENE_CAPS.projectiles ? scene.projectiles.shift() : freeProj.pop();
     const dist = Math.sqrt((tx - x0) * (tx - x0) + (ty - y0) * (ty - y0));
     p.kind = kind;
@@ -180,6 +156,8 @@ export function createScene({ teamHex, sprites }) {
     p.step0 = step;
     p.arc = arc;
     p.big = big;
+    p.splash = splash;
+    p.landed = false;
     scene.projectiles.push(p);
   }
 
@@ -194,36 +172,47 @@ export function createScene({ teamHex, sprites }) {
       const grande = e.kind === 'pesado';
       const v = grande ? cfg.projectiles.shellPesado : cfg.projectiles.shellTanque;
       const dist = Math.sqrt((e.tx - e.x) * (e.tx - e.x) + (e.ty - e.y) * (e.ty - e.y));
-      proyectil(1, mx, e.y, z0, e.tx, e.ty, ALTURA.tanque, v, step, Math.min(18, dist * 0.25), grande);
+      proyectil(
+        1,
+        mx,
+        e.y,
+        z0,
+        e.tx,
+        e.ty,
+        ALTURA.tanque,
+        v,
+        step,
+        Math.min(18, dist * 0.25),
+        grande,
+        cfg.units[e.kind].splash,
+      );
+    }
+    fx.muzzle(e.kind, mx, e.y - z0, dir);
+  }
+
+  /** Un obús que cumplió su tiempo de vuelo estalla (una sola vez) y cava su cráter si no iba a la base. */
+  function llegadas(world) {
+    const step = world.step;
+    for (let i = 0; i < scene.projectiles.length; i++) {
+      const p = scene.projectiles[i];
+      if (p.kind !== 1 || p.landed || step < p.step0 + Math.round(p.dur * 30)) continue;
+      p.landed = true;
+      const base = world.bases[0].frontX === p.tx || world.bases[1].frontX === p.tx;
+      fx.shellImpact(p.tx, p.ty, p.tz, p.big, p.splash, base, step);
     }
   }
 
-  /** Quita lo que ya cumplió su vida (se recicla el objeto, no se descarta). */
+  /** Quita lo que ya cumplió su vida (el objeto se recicla, no se descarta). */
   function podar(step) {
-    const w = scene.wrecks;
-    let k = 0;
-    for (let i = 0; i < w.length; i++) {
-      const r = w[i];
-      const edad = (step - r.born) / 30;
-      if (edad > (r.kind === 'soldado' ? LIFE.soldado : LIFE.vehiculo)) freeWrecks.push(r);
-      else w[k++] = r;
-    }
-    w.length = k;
+    fx.prune(step);
     const p = scene.projectiles;
-    k = 0;
+    let k = 0;
     for (let i = 0; i < p.length; i++) {
       const r = p[i];
       if (step - r.step0 > r.dur * 30 + 2) freeProj.push(r);
       else p[k++] = r;
     }
     p.length = k;
-    const c = scene.craters;
-    k = 0;
-    for (let i = 0; i < c.length; i++) {
-      if ((step - c[i].born) / 30 > LIFE.crater) freeCraters.push(c[i]);
-      else c[k++] = c[i];
-    }
-    c.length = k;
     if (flashes.size > SCENE_CAPS.flashes)
       for (const [id, start] of flashes) if (start + FLASH_COOLDOWN <= step) flashes.delete(id);
   }

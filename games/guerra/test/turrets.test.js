@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorld, seedSquad, stepWorld } from '../public/js/sim/world.js';
+import { createWorld, resetRound, seedSquad, stepWorld } from '../public/js/sim/world.js';
+import { createScene } from '../public/js/render/scene.js';
+import { SPRITES } from '../public/js/data/sprites.js';
 import { scheduleHit } from '../public/js/sim/combat.js';
 import { launchPlane } from '../public/js/sim/plane.js';
 
@@ -278,4 +280,85 @@ test('las dos bases caen en el mismo paso: la ronda termina sin ganador (4d lo d
   });
   stepWorld(w);
   assert.deepEqual(w.over, { step: 0, winner: null, both: true });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// 5b.4 (vista): la ruina de una torreta. La vista solo LEE el estado y la bandeja del mundo.
+
+test('vista: una torreta que cae explota con radio 18, deja el disco de ruina con humo 3 s y vuelve entera en la ronda siguiente', () => {
+  const w = createWorld();
+  const sc = createScene({ teamHex: ['#E5484D', '#5BC8F5'], sprites: SPRITES });
+  const t = w.bases[1].turrets[2];
+  t.hp = 300;
+  w.bases[1].bucket = 1e9;
+  w.drain();
+  scheduleHit(w, {
+    due: w.step,
+    kind: 'bomb',
+    side: 0,
+    owner: null,
+    dmg: 900,
+    splash: 24,
+    tx: t.x,
+    ty: t.y,
+    tgt: null,
+    tgtKind: '',
+  });
+  run(w, 1);
+  assert.equal(t.on, false);
+  sc.consume(w.drain(), w);
+  const grandes = sc.fx.booms.filter((b) => b.a && b.R === 18);
+  assert.equal(grandes.length, 1, 'una explosión de radio 18');
+  assert.ok(Math.abs(grandes[0].x - Math.round(t.x)) <= 1 && Math.abs(grandes[0].gy - Math.round(t.y)) <= 1);
+  assert.equal(sc.turretShown(1, 2, t.on && t.hp > 0), false, 'ruina: sin cañón, solo el disco');
+  assert.equal(sc.turretShown(1, 0, true), true, 'las otras siguen enteras');
+  // humo durante 3 s y después nada
+  const bocanadas = () => sc.fx.stats.ruinPuffs;
+  for (let i = 0; i < 90; i++) sc.fx.update(1 / 30, w); // 3 s de vista
+  const en3s = bocanadas();
+  assert.ok(en3s >= 14 && en3s <= 18, `unas 16 bocanadas en 3 s (hubo ${en3s})`);
+  for (let i = 0; i < 60; i++) sc.fx.update(1 / 30, w);
+  assert.equal(bocanadas(), en3s, 'pasados los 3 s ya no echa humo');
+  // vuelve entera en la ronda siguiente
+  resetRound(w);
+  sc.reset();
+  assert.equal(w.bases[1].turrets[2].on, true);
+  assert.equal(sc.turretShown(1, 2, w.bases[1].turrets[2].on && w.bases[1].turrets[2].hp > 0), true);
+  assert.equal(sc.fx.usage().booms, 0);
+});
+
+test('vista: la ronda ya terminó en el paso en que la base llegó a 0; la secuencia se ve DESPUÉS, con el mundo congelado', () => {
+  const w = createWorld();
+  const sc = createScene({ teamHex: ['#E5484D', '#5BC8F5'], sprites: SPRITES });
+  const b = w.bases[1];
+  b.hp = 500;
+  b.bucket = 1e9;
+  run(w, 3);
+  w.drain();
+  const paso = w.step;
+  scheduleHit(w, {
+    due: paso,
+    kind: 'bomb',
+    side: 0,
+    owner: null,
+    dmg: 900,
+    splash: 24,
+    tx: b.frontX - 24,
+    ty: 600,
+    tgt: null,
+    tgtKind: '',
+  });
+  stepWorld(w);
+  assert.deepEqual(w.over, { step: paso, winner: 0, both: false }, 'la ronda terminó en ese paso');
+  sc.consume(w.drain(), w);
+  assert.equal(sc.fx.sequence(1) !== null, true, 'arranca la secuencia de la base caída');
+  assert.equal(sc.fx.sequence(0), null, 'la otra base no');
+  const congelado = w.step;
+  for (let i = 0; i < 120; i++) {
+    stepWorld(w); // no avanza: la ronda ya terminó
+    sc.consume(w.drain(), w);
+    sc.fx.update(1 / 30, w);
+  }
+  assert.equal(w.step, congelado, 'el sim no avanzó');
+  assert.ok(sc.fx.sequence(1).booms >= 8, 'la secuencia siguió con el reloj de vista');
 });

@@ -15,11 +15,11 @@ const INK = PALETA.ink;
 export const BASE_W = 110;
 export const BASE_Y0 = 112; // `SKY_H`
 export const BASE_H = 669; // de 112 a 781
-const NEAR_Y = 775;
-const WALL_Y0 = BASE_Y0 + 12;
+export const NEAR_Y = 775;
+export const WALL_Y0 = BASE_Y0 + 12;
 const WB = NEAR_Y + 1;
-const MIDY = 448;
-const HQY = MIDY - 26;
+export const MIDY = 448;
+export const HQY = MIDY - 26;
 const TURY = [242, MIDY, 655];
 const DEPY = [205, 325, 545, 665];
 

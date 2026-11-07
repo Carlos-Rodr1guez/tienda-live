@@ -33,11 +33,11 @@ export function createBaseLayer({ createCanvas, worldW, thresholds = BASE_STATE_
     }
   }
 
-  function torreta(ctx, t, side, hexTeam, time, cd) {
+  function torreta(ctx, t, side, hexTeam, time, cd, viva) {
     const dir = side === 0 ? 1 : -1;
     const px = Math.round(t.x);
     const py = Math.round(t.y) - 3;
-    if (!(t.on && t.hp > 0)) {
+    if (!viva) {
       ctx.fillStyle = RUINA;
       disc(ctx, px, py + 3, 6);
       return;
@@ -87,11 +87,18 @@ export function createBaseLayer({ createCanvas, worldW, thresholds = BASE_STATE_
         const b = scene.bases[s];
         const x0 = s === 1 ? worldW - BASE_W : 0;
         if (x0 > P.vx1 + 60 || x0 + BASE_W < P.vx0 - 60) continue;
-        const st = baseState(b.hp / b.maxHp, b.fell, thresholds);
+        // la escena puede retrasar las ruinas hasta la explosión final de la secuencia (solo vista)
+        const caida = scene.baseFell ? scene.baseFell(s, b) : b.fell;
+        const pct = scene.baseFell && !caida ? Math.max(0.01, b.hp / b.maxHp) : b.hp / b.maxHp;
+        const st = baseState(pct, caida, thresholds);
         P.img(art[s][st], P.x(x0), P.y(BASE_Y0));
         // en coordenadas de mundo para las torretas y el banderín
         ctx.setTransform(1, 0, 0, 1, P.offX, P.offY);
-        for (const t of b.turrets) torreta(ctx, t, s, hex[s], time, cooldown);
+        for (let k = 0; k < b.turrets.length; k++) {
+          const t = b.turrets[k];
+          const simViva = t.on && t.hp > 0;
+          torreta(ctx, t, s, hex[s], time, cooldown, scene.turretShown ? scene.turretShown(s, k, simViva) : simViva);
+        }
         pennant(
           (part, c, x, y, w, h) => {
             ctx.fillStyle = c;

@@ -8,6 +8,7 @@
 import { bombPosition, bombZ } from '../sim/plane.js';
 import { disc, ell } from './pixel.js';
 import { PALETA } from '../data/paleta.js';
+import { wreckAlpha } from './fx.js';
 
 const INK = PALETA.ink;
 const SOMBRA = Object.freeze({ soldado: [4, 1], jeep: [10, 3], tanque: [12, 3], pesado: [17, 4] });
@@ -206,15 +207,13 @@ export function createEntityLayer({ bank, team }) {
     const mul = P.mul;
     let anim;
     let idx = 0;
-    let alfa = 1;
     if (w.kind === 'soldado') {
       anim = 'death';
       idx = edad < 0.12 ? 0 : edad < 0.3 ? 1 : 2;
-      if (edad > 2.5) alfa = Math.max(0, 1 - (edad - 2.5) / 0.6);
-    } else {
-      anim = 'wreck';
-      if (edad > 6.3 && Math.floor(edad * 12) % 2 === 1) return; // parpadea antes de irse
-    }
+    } else anim = 'wreck';
+    // el soldado se desvanece desde 2,5 s y el vehículo parpadea al final (con movimiento reducido se desvanece)
+    const alfa = wreckAlpha(w.kind, edad, Boolean(P.frame.reduced));
+    if (alfa <= 0) return;
     const img = bank.frame(team[w.side], w.kind, anim, idx, espejo);
     const ax = espejo ? sp.w - 1 - sp.ax : sp.ax;
     P.ctx.globalAlpha = alfa;

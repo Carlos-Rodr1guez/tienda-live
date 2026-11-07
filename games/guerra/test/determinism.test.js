@@ -284,3 +284,42 @@ test('cambiar el log o las reglas sin regenerar hace fallar el hash dorado', () 
   const otraConfig = jugar(GOLDEN.log, { game: { ...GOLDEN.game, units: { soldado: { range: 29 } } } });
   assert.notEqual(hashMatch(otraConfig), GOLDEN.hash);
 });
+
+test('la presentación no altera el sim: un log con temblor, cámara lenta y destellos y otro sin ellos dan el mismo estado (CB-20)', async () => {
+  const { createScene } = await import('../public/js/render/scene.js');
+  const { createFx } = await import('../public/js/render/fx.js');
+  const { createMotion } = await import('../public/js/render/motion.js');
+  const { SPRITES } = await import('../public/js/data/sprites.js');
+  const vista = { temblores: 0, lentas: 0, grandes: 0, estados: new Set() };
+  const conEfectos = (systemReduced) => {
+    const fx = createFx({ seed: 'efectos:determinismo', motion: createMotion({ graphics: {}, systemReduced }) });
+    fx.setView({ W: 1920, H: 1080, s: 8 }); // k = 6: los destellos grandes entran en juego
+    const sc = createScene({ teamHex: ['#E5484D', '#5BC8F5'], sprites: SPRITES, fx });
+    const out = { x: 0, y: 0 };
+    return jugar(GOLDEN.log, {
+      onStep: (m) => {
+        sc.consume(m.world.drain(), m.world);
+        sc.fx.update(1 / 30, m.world);
+        sc.fx.shakeOffset(out);
+        if (out.x !== 0 || out.y !== 0) vista.temblores++;
+        if (m.state === 'roundEnd' && !vista.estados.has(m.round)) {
+          vista.estados.add(m.round);
+          sc.fx.beginSlowMotion();
+        }
+        if (sc.fx.timeScale() < 1) vista.lentas++;
+        vista.grandes = sc.fx.stats.largeGranted;
+      },
+    });
+  };
+  const base = dorado();
+  const a = conEfectos(false);
+  assert.ok(
+    vista.temblores > 0 && vista.lentas > 0 && vista.grandes > 0,
+    'la vista sí hizo temblor, cámara lenta y destellos',
+  );
+  assert.equal(hashMatch(a), GOLDEN.hash);
+  assert.deepEqual(foto(a), foto(base));
+  const b = conEfectos(true); // con movimiento reducido también
+  assert.equal(hashMatch(b), GOLDEN.hash);
+  assert.deepEqual(foto(b), foto(base));
+});

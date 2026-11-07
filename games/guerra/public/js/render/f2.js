@@ -5,7 +5,7 @@
 /** Presupuesto de CB-18: trabajo por cuadro y cuadros por segundo con 400 unidades. */
 export const BUDGET = Object.freeze({ workMs: 8, minFps: 50 });
 
-const ETAPAS = ['sim', 'world', 'ui'];
+const ETAPAS = ['sim', 'world', 'ui', 'fx'];
 
 /**
  * Temporizador con ventana deslizante y reloj inyectable. No reserva memoria por cuadro.
@@ -14,8 +14,8 @@ const ETAPAS = ['sim', 'world', 'ui'];
 export function createTimer({ now = () => performance.now(), window: size = 60 } = {}) {
   const ring = new Float64Array(size);
   const stages = Object.fromEntries(ETAPAS.map((e) => [e, new Float64Array(size)]));
-  const cur = { sim: 0, world: 0, ui: 0 };
-  const start = { sim: 0, world: 0, ui: 0 };
+  const cur = { sim: 0, world: 0, ui: 0, fx: 0 };
+  const start = { sim: 0, world: 0, ui: 0, fx: 0 };
   let n = 0;
   let last = -1;
   return {
@@ -40,14 +40,15 @@ export function createTimer({ now = () => performance.now(), window: size = 60 }
     endFrame() {},
     snapshot() {
       const m = Math.min(n, size);
-      if (m === 0) return { fps: 0, ms: { sim: 0, world: 0, ui: 0, work: 0 } };
+      if (m === 0) return { fps: 0, ms: { sim: 0, world: 0, ui: 0, fx: 0, work: 0 } };
       let total = 0;
-      const ms = { sim: 0, world: 0, ui: 0, work: 0 };
+      const ms = { sim: 0, world: 0, ui: 0, fx: 0, work: 0 };
       for (let i = 0; i < m; i++) {
         total += ring[i];
         for (const e of ETAPAS) ms[e] += stages[e][i];
       }
       for (const e of ETAPAS) ms[e] /= m;
+      // los efectos se miden DENTRO de la etapa del mundo: se muestran aparte pero no suman al trabajo
       ms.work = ms.sim + ms.world + ms.ui;
       return { fps: total > 0 ? (1000 * m) / total : 0, ms };
     },
@@ -61,16 +62,19 @@ const f = (n, d) => Number(n).toFixed(d);
  * @param {{
  *   timer: {snapshot: () => {fps: number, ms: {sim: number, world: number, ui: number, work: number}}},
  *   stats: any, counts: {units: number, squads: number, planes: number, hits: number}, bakeCount: number,
- *   hash: string, golden?: {expected: string, done: boolean, hash: string, step?: number, steps?: number}
+ *   hash: string, golden?: {expected: string, done: boolean, hash: string, step?: number, steps?: number},
+ *   fx?: {usage: {particles: number, booms: number, craters: number, wrecks: number},
+ *     caps: {particles: number, booms: number, craters: number, wrecks: number}, recentLarge: number}
  * }} i
  */
-export function f2Model({ timer, stats, counts, bakeCount, hash, golden }) {
+export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx }) {
   const t = timer.snapshot();
   const lines = [
     { key: 'fps', label: 'cuadros por segundo', value: f(t.fps, 1) },
     { key: 'ms.sim', label: 'ms sim', value: f(t.ms.sim, 2) },
     { key: 'ms.world', label: 'ms mundo', value: f(t.ms.world, 2) },
     { key: 'ms.ui', label: 'ms interfaz', value: f(t.ms.ui, 2) },
+    { key: 'ms.fx', label: 'ms efectos (dentro de mundo)', value: f(t.ms.fx, 2) },
     { key: 'ms.work', label: 'ms trabajo por cuadro', value: f(t.ms.work, 2) },
     { key: 'units', label: 'unidades', value: String(counts.units) },
     { key: 'squads', label: 'grupos', value: String(counts.squads) },
@@ -87,6 +91,14 @@ export function f2Model({ timer, stats, counts, bakeCount, hash, golden }) {
     { key: 'canvases', label: 'lienzos reservados', value: String(stats.canvasesAllocated) },
     { key: 'hash', label: 'hash del paso', value: hash },
   ];
+  if (fx) {
+    const n = (k) => `${fx.usage[k]}/${fx.caps[k]}`;
+    lines.push({ key: 'fx.particles', label: 'efectos: partículas', value: n('particles') });
+    lines.push({ key: 'fx.booms', label: 'efectos: explosiones', value: n('booms') });
+    lines.push({ key: 'fx.craters', label: 'efectos: cráteres', value: n('craters') });
+    lines.push({ key: 'fx.wrecks', label: 'efectos: restos', value: n('wrecks') });
+    lines.push({ key: 'fx.large', label: 'destellos grandes (último segundo)', value: String(fx.recentLarge) });
+  }
   if (golden) {
     lines.push({ key: 'goldenHash', label: 'hash dorado', value: golden.expected });
     lines.push({
