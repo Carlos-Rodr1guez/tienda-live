@@ -53,6 +53,8 @@ export function createScene({ teamHex, sprites, fx = createFx({ seed: 'efectos:e
     step: 0,
     cfg: null,
     units: [],
+    /** Grupos del mundo (por referencia): los íconos de rol se arman con ellos. */
+    squads: [],
     planes: [],
     bombs: [],
     bases: null,
@@ -77,6 +79,7 @@ export function createScene({ teamHex, sprites, fx = createFx({ seed: 'efectos:e
       scene.step = world.step;
       scene.cfg = world.cfg;
       scene.units = world.units;
+      scene.squads = world.squads;
       scene.planes = world.planes;
       scene.bombs = world.bombs;
       scene.bases = world.bases;

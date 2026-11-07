@@ -30,7 +30,13 @@ function walk(dir) {
   });
 }
 const rel = (f) => path.relative(GJ, f).replaceAll('\\', '/');
-const puros = ['sim', 'data', 'camera'].flatMap((d) => walk(path.join(GJ, d))).filter((f) => f.endsWith('.js'));
+// Del render solo son puros la selección y colocación de etiquetas, la geometría de los íconos y la proyección (lote 5d):
+// el horneado de íconos recibe la fábrica de lienzos inyectada. El resto de `render/` sí toca el lienzo y la hora.
+const RENDER_PUROS = ['render/labels.js', 'render/icons.js', 'render/project.js'].map((f) => path.join(GJ, f));
+const puros = ['sim', 'data', 'camera']
+  .flatMap((d) => walk(path.join(GJ, d)))
+  .concat(RENDER_PUROS)
+  .filter((f) => f.endsWith('.js'));
 const reglas = puros.filter((f) => rel(f).startsWith('sim/'));
 
 test('hay módulos que revisar en sim y en data', () => {
@@ -56,6 +62,13 @@ for (const file of reglas) {
     if (!EXENTO_DE_TRASCENDENTES.has(nombre)) assert.doesNotMatch(src, NO_DETERMINISTA);
   });
 }
+
+test('lote 5d: labels.js, icons.js y project.js están en el escáner de pureza y existen', () => {
+  for (const f of RENDER_PUROS) {
+    assert.ok(fs.existsSync(f), f);
+    assert.ok(puros.includes(f), `${rel(f)} se revisa`);
+  }
+});
 
 test('la exención de trascendentes es solo colors.js y tiene su comentario explicando por qué', () => {
   assert.deepEqual([...EXENTO_DE_TRASCENDENTES], ['sim/colors.js']);

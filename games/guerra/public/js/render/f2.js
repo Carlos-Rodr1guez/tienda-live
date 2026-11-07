@@ -68,7 +68,7 @@ const f = (n, d) => Number(n).toFixed(d);
  *     caps: {particles: number, booms: number, craters: number, wrecks: number}, recentLarge: number}
  * }} i
  */
-export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx, camera }) {
+export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx, camera, labels, icons }) {
   const t = timer.snapshot();
   const lines = [
     { key: 'fps', label: 'cuadros por segundo', value: f(t.fps, 1) },
@@ -100,6 +100,16 @@ export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx, cam
     lines.push({ key: 'fx.wrecks', label: 'efectos: restos', value: n('wrecks') });
     lines.push({ key: 'fx.large', label: 'destellos grandes (último segundo)', value: String(fx.recentLarge) });
   }
+  if (labels) {
+    lines.push({
+      key: 'labels.drawn',
+      label: 'etiquetas dibujadas',
+      value: String(labels.drawn),
+    });
+    lines.push({ key: 'labels.selected', label: 'etiquetas elegidas', value: String(labels.selected ?? 0) });
+    lines.push({ key: 'labels.dropped', label: 'etiquetas descartadas por el layout', value: String(labels.dropped) });
+  }
+  if (icons) lines.push({ key: 'icons.drawn', label: 'íconos de rol dibujados', value: String(icons.drawn) });
   if (camera) {
     lines.push({
       key: 'cam.k',

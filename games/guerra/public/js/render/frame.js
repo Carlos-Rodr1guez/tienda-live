@@ -53,6 +53,9 @@ export function createRenderer({
     mode: 'nearest',
     marks: false,
     devicePass: false,
+    /** Origen de la cámara en px de dispositivo: lo usan las etiquetas, que viven en pantalla (`render/project.js`). */
+    ox: 0,
+    oy: 0,
     fd: 1,
     frames: 0,
   };
@@ -107,6 +110,8 @@ export function createRenderer({
       // un solo origen en px de dispositivo
       const ox = Math.round(x0 * s);
       const oy = Math.round(y0 * s);
+      stats.ox = ox;
+      stats.oy = oy;
       // rectángulo visible de LOD con esquina entera y 1 px de margen
       const xL = Math.max(0, Math.floor(x0) - 1);
       const yL = Math.max(0, Math.floor(y0) - 1);

@@ -11,6 +11,9 @@
 // vez de 1: no cambia ninguna regla, solo acorta la espera. Con `?golden&rapido=4` el partido dorado se ve a 4 pasos
 // por cuadro en vez de los 500 de la comprobación del hash (cae una base a los ~18 s).
 //
+// Etiquetas e íconos de rol (lote 5d): los íconos van en la capa 10 del mundo y las etiquetas de donantes en pantalla.
+// `?donantes` crea donantes sintéticos por los dos equipos (ayuda de desarrollo; con `?golden` no hay registro).
+//
 // Cámara (lote 5c): rueda, arrastre, pellizco, doble toque, flechas, + y −, V (ver todo), 1 y 2 (las bases), Espacio (la
 // pelea más caliente), A (cámara automática), los botones y el minimapa. Todo eso es presentación (NM-2): también vale
 // con `?golden`, donde siguen bloqueados los comandos del partido. R alterna el movimiento reducido.
@@ -30,13 +33,16 @@ import { createBaseLayer } from './render/bases.js';
 import { drawF2, createTimer, f2Model } from './render/f2.js';
 import { createFx, FX_CAPS } from './render/fx.js';
 import { createRenderer } from './render/frame.js';
+import { createIconBank, createIconLayer, resolveIcons } from './render/icons.js';
+import { createLabelLayer } from './render/labels-layer.js';
 import { resolveLod } from './render/lod.js';
+import { viewOf } from './render/project.js';
 import { drawMinimap } from './render/minimap.js';
 import { createMotion, MOTION_MEDIA, MOTION_NOTICE } from './render/motion.js';
 import { createScene } from './render/scene.js';
 import { createSpriteBank } from './render/sprites.js';
 import { createTerrain } from './render/terrain.js';
-import { createEntityLayer } from './render/units.js';
+import { createEntityLayer, MARCAS } from './render/units.js';
 import { hashMatch } from './sim/hash.js';
 import { createMatch } from './sim/match.js';
 
@@ -128,6 +134,31 @@ const renderer = createRenderer({
     entities: createEntityLayer({ bank, team }),
   },
 });
+// Íconos de rol (lote 5d): la capa 10 del mundo, que la escena llama tras los efectos. Se dibujan también con marcas.
+const spriteAy = Object.fromEntries(['soldado', 'jeep', 'tanque', 'pesado'].map((k) => [k, SPRITES[k].ay]));
+const iconBank = createIconBank({ createCanvas });
+const iconTeam = [0, 0];
+const iconLayer = createIconLayer({
+  bank: iconBank,
+  team: iconTeam,
+  spriteAy,
+  marksSize: MARCAS,
+  formingAlpha: resolveIcons(render.icons).formingAlpha,
+});
+scene.drawIcons = (P) => iconLayer(P, scene.squads, scene.cfg, scene.field);
+// Etiquetas de donantes (lote 5d): en pantalla, tras las capas del mundo. Sin registro (`?golden`) no hay donantes.
+// Provisional hasta el lote 6: nombres visibles y sin foco (`spotlight: null`); el foco, `N`, Alt+clic y el clic llegan
+// con ui/keys.js y ui/moderation.js (`hitLabel(labelLayer.rects, x, y)` ya está listo).
+const labelHex = ['#E5484D', '#5BC8F5'];
+const labelLayer = createLabelLayer({
+  registry,
+  teamHex: labelHex,
+  spriteAy,
+  marksSize: MARCAS,
+  cfg: game.labels,
+});
+// cuando carga una fuente (lote 6.9) los anchos medidos cambian: se vacía la caché de texto de las etiquetas
+document.fonts?.addEventListener?.('loadingdone', () => labelLayer.invalidate());
 const timer = createTimer();
 // los efectos se miden aparte (dentro de la etapa del mundo) para poder nombrar la causa si algo pasa del presupuesto
 scene.drawEffects = (P) => {
@@ -148,6 +179,10 @@ function prepararPartido() {
   team[0] = bank.bake(teams[0].color);
   team[1] = bank.bake(teams[1].color);
   scene.teamHex = [teams[0].color, teams[1].color];
+  iconTeam[0] = iconBank.bake(teams[0].color);
+  iconTeam[1] = iconBank.bake(teams[1].color);
+  labelHex[0] = teams[0].color;
+  labelHex[1] = teams[1].color;
   bases.bake([teams[0].color, teams[1].color], [teams[0].art, teams[1].art]);
   const n = partidos++;
   renderer.startMatch(seedFrom(`terreno:${clave}:${n}`));
@@ -203,6 +238,32 @@ function cargar() {
     ]) {
       match.command({ type: 'order', order: { kind, team, owner: null, count, unitValue: 0, source: 'baseline' } });
     }
+  }
+}
+
+// `?donantes` (ayuda de desarrollo, no vale con `?golden`): 12 donantes sintéticos por equipo, con los nombres del peor
+// caso (largo, 24 emoji, escritura CJK) y XP distintas, para ver las etiquetas sin el adaptador del público. Entran por
+// el mismo camino público que usará ese adaptador: un comentario que pide equipo y un regalo (comandos del partido); el
+// registro del kit y el sim hacen el resto, y nada se escribe en objetos del sim.
+const donantes = params.has('donantes') && registry !== null;
+let rondaDonantes = -1;
+const EMOJI = String.fromCodePoint(0x1f600).repeat(24);
+const CJK = '田中太郎さんの動画チャンネル';
+const LARGO = 'xX_el_mas_capo_del_live_Xx';
+const NOMBRES_SINTETICOS = [
+  ['ana_23', LARGO, EMOJI, CJK, 'Luis', 'María', 'Pepe_2000', 'k', 'Vale', 'Nico', 'Sol', 'Tomás'],
+  [CJK, 'bea_77', EMOJI, LARGO, 'Juan', 'Lupe', 'Rodri', 'z', 'Mica', 'Beto', 'Ceci', 'Fede'],
+];
+function inyectarDonantes() {
+  for (const team of [1, 2]) {
+    NOMBRES_SINTETICOS[team - 1].forEach((nickname, i) => {
+      const userId = `sint-${team}-${i}`;
+      match.command({ type: 'chat', evt: { userId, nickname, text: String(team) } });
+      const orders = [{ kind: 'soldado', team, owner: userId, count: 3, unitValue: 40 + (i % 3) * 20, source: 'gift' }];
+      if (i % 4 === 0) orders.push({ kind: 'jeep', team, owner: userId, count: 1, unitValue: 160, source: 'gift' });
+      // la XP baja con el índice: el top 3 de k = 1 es distinto de lo que se ve a k >= 3
+      match.command({ type: 'gift', owner: userId, coins: (12 - i) * 80 + team * 7, orders });
+    });
   }
 }
 
@@ -499,6 +560,10 @@ function cuadro(ts) {
       carga = false;
       cargar();
     }
+    if (donantes && match.state === 'battle' && rondaDonantes !== match.round) {
+      rondaDonantes = match.round; // una vez por ronda: los donantes vuelven a regalar al empezar cada una
+      inyectarDonantes();
+    }
     anima = match.state === 'battle' && match.pause === null && match.world.over === null;
   }
   timer.end('sim');
@@ -526,6 +591,20 @@ function cuadro(ts) {
   timer.begin('ui');
   const k = dpr();
   const ctx = renderer.ctx;
+  // etiquetas de donantes: en pantalla, tras el mundo y antes del HUD, el minimapa y los avisos (D21 punto 6)
+  labelLayer.draw(ctx, {
+    W: canvas.width,
+    H: canvas.height,
+    u: uiScale(canvas.width, canvas.height),
+    units: match.world.units,
+    k: camera.state.k, // el nivel del controlador y no `kShown`: la densidad no parpadea durante las transiciones
+    screen: { ...viewOf(renderer.stats), marks: renderer.stats.marks, x0: vista.x0, y0: vista.y0 },
+    alpha: anima ? loop.alpha : 1,
+    now: ts / 1000,
+    spotlight: null,
+    onlyRank: false,
+    icons: { descs: iconLayer.descs, count: iconLayer.count },
+  });
   if (!golden) estado(ctx, k);
   if (minimapVisible(camera.state.kShown)) {
     const W = canvas.width;
@@ -555,6 +634,8 @@ function cuadro(ts) {
       hash,
       golden: golden ? goldenEstado : undefined,
       fx: { usage: fx.usage(), caps: FX_CAPS, recentLarge: fx.recentLarge() },
+      labels: labelLayer.stats,
+      icons: iconLayer.stats,
       camera: {
         k: st.k,
         kShown: st.kShown,
