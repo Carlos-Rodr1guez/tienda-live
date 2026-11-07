@@ -13,7 +13,7 @@ const ADR = {
   '0012': { archivo: '0012-nombres-de-espectadores.md', estado: 'Propuesta' },
   '0013': { archivo: '0013-modo-narrador.md', estado: 'Aceptada' },
   '0014': { archivo: '0014-orden-publico-batalla-antes-que-carrera.md', estado: 'Aceptada' },
-  '0015': { archivo: '0015-vista-batalla-canvas-2d.md', estado: 'Propuesta' },
+  '0015': { archivo: '0015-vista-batalla-canvas-2d.md', estado: 'Aceptada' },
 };
 
 const estadoDe = (texto) => /^- \*\*Estado:\*\* (.+)$/m.exec(texto)?.[1].trim();

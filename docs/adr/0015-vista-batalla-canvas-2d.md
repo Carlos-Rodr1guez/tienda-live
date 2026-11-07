@@ -1,10 +1,10 @@
 # ADR-015: Vista de Batalla: 16:9, pixel art oblicua y Canvas 2D
 
-- **Estado:** Propuesta
+- **Estado:** Aceptada
 - **Fecha:** 2026-11-06
 - **Se decide en:** Gate 0 de Batalla de países
 
-Pasa a Aceptada cuando el Gate 0 (la prueba de la vista en el teléfono) dé PASA.
+Aceptada el 2026-11-06: el Gate 0 (la prueba de la vista en el teléfono) dio PASA.
 
 ## Contexto
 
@@ -16,7 +16,7 @@ El dueño aprobó el prototipo v2 (pixel art oblicuo, mapa grande, cámara propi
 - **B. Canvas 2D con sprites horneados.** Control total del pixel art, sin dependencias.
 - **C. Una biblioteca WebGL 2D.** Rinde bien con muchas unidades, pero suma una dependencia y su licencia.
 
-## Decisión propuesta
+## Decisión
 
 **B**, más precisamente Canvas 2D con sprites dibujados en código (Q5 (a)):
 
@@ -31,6 +31,6 @@ Batalla no depende de `three`.
 ## Consecuencias
 
 - El render 3D de ASEDIO no se reusa y ASEDIO conserva `three`.
-- El Gate 0 revisa la vista en el teléfono antes del slice de render. Si falla, se cambia el layout (letterbox con el HUD en las bandas) y esta ADR sigue Propuesta.
+- El Gate 0 revisó la vista en el teléfono antes del slice de render y dio PASA, así que no hace falta el layout de respaldo (letterbox con el HUD en las bandas).
 - La grilla, los pools y el LOD estable sostienen el tope de 200 unidades por lado.
 - El rendimiento se mide con F2 en la PC del dueño.

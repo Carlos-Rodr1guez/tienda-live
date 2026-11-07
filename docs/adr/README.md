@@ -29,7 +29,7 @@ Una ADR aceptada no se reescribe: si la decisión cambia, se escribe una nueva q
 | [012](0012-nombres-de-espectadores.md)                 | Nombres de espectadores en pantalla                    | Propuesta | Batalla de países                      |
 | [013](0013-modo-narrador.md)                           | Modo narrador                                          | Aceptada  | Batalla de países                      |
 | [014](0014-orden-publico-batalla-antes-que-carrera.md) | Orden del Público: Batalla de países antes que Carrera | Aceptada  | Batalla de países                      |
-| [015](0015-vista-batalla-canvas-2d.md)                 | Vista de Batalla: 16:9, pixel art oblicua y Canvas 2D  | Propuesta | Gate 0 de Batalla de países            |
+| [015](0015-vista-batalla-canvas-2d.md)                 | Vista de Batalla: 16:9, pixel art oblicua y Canvas 2D  | Aceptada  | Gate 0 de Batalla de países            |
 
 ## Plantilla
 
