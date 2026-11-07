@@ -8,7 +8,7 @@
 
 import { DT } from './defaults.js';
 import { ATTACK_LANES, corridorOf, laneY } from './field.js';
-import { boxOf, laneIsFree, placeOffset } from './squads.js';
+import { boxOf, laneIsFree, placeOffset, squadBox } from './squads.js';
 
 /** Banda de la histéresis (15 puntos = 60 cuartos por grupo) y separación entre conversiones (4 s). */
 export const BAND_QUARTERS = 60;
@@ -161,9 +161,8 @@ function sectorCosts(world, side) {
   return costs;
 }
 
-/** Caja de un grupo con `n` miembros y el ancla en `x`: rango en x y semialto. */
-function boxAt(world, kind, n, x, dir) {
-  const b = boxOf(world.cfg, kind, n);
+/** Rango en x y semialto de una caja `b` con el ancla en `x`. */
+function boxAt(b, x, dir) {
   return dir > 0 ? { lo: x - b.rear, hi: x + b.front, hw: b.hw } : { lo: x - b.front, hi: x + b.rear, hw: b.hw };
 }
 
@@ -173,10 +172,10 @@ function boxAt(world, kind, n, x, dir) {
  */
 export function spotFree(world, side, kind, x, y) {
   const dir = world.field.sides[side].dir;
-  const c = boxAt(world, kind, world.cfg.squads.size[kind], x, dir);
+  const c = boxAt(boxOf(world.cfg, kind, world.cfg.squads.size[kind]), x, dir);
   for (const o of world.squads) {
     if (o.side !== side || !live(o)) continue;
-    const b = boxAt(world, o.kind, o.members.length, o.anchor.x, dir);
+    const b = boxAt(squadBox(world.cfg, o), o.anchor.x, dir);
     const enX = b.hi + SPOT_MARGIN_X > c.lo && b.lo - SPOT_MARGIN_X < c.hi;
     if (enX && Math.abs(o.anchor.y - y) < c.hw + b.hw + SPOT_MARGIN_Y) return false;
   }
@@ -347,7 +346,7 @@ export function stepAssembly(world) {
     for (let i = 0; i < n; i++) {
       const u = sq.members[i];
       if (!u.arrived) {
-        const off = placeOffset(world.cfg, sq.kind, i, n, dir);
+        const off = placeOffset(world.cfg, sq.kind, u.slot, dir);
         const dx = sq.anchor.x + off.x - u.x;
         const dy = sq.anchor.y + off.y - u.y;
         if (dx * dx + dy * dy <= 1) u.arrived = true;

@@ -252,7 +252,7 @@ export function seedSquad(world, p) {
   });
   const n = p.count ?? world.cfg.squads.size[p.kind];
   for (let i = 0; i < n; i++) {
-    const off = placeOffset(world.cfg, p.kind, i, n, side.dir);
+    const off = placeOffset(world.cfg, p.kind, i, side.dir);
     addUnit(world, sq, x + off.x, y + off.y);
   }
   return { ok: true, squad: sq };

@@ -10,7 +10,7 @@ import { acceptsMember, findOpen, planAlta } from './commander.js';
 import { addPaid } from './credit.js';
 import { requestStrike } from './energy.js';
 import { canLaunchPlane, launchPlane } from './plane.js';
-import { addUnit, createSquad, placeOffset } from './squads.js';
+import { addUnit, createSquad, freeSlot, placeOffset } from './squads.js';
 
 /** Segundos de reloj de juego entre dos avisos de cola llena. */
 const WARN_EVERY_STEPS = 10 * SIM_HZ;
@@ -183,9 +183,8 @@ function deployGround(world, side, q) {
     plan = planAlta(world, side, o.kind);
     if (plan === null) return; // saturación: la cabeza espera y nadie se adelanta
   }
-  const n = sq === null ? 1 : sq.members.length + 1;
   const baseY = sq === null ? plan.y : sq.anchor.y;
-  const off = placeOffset(cfg, o.kind, n - 1, n, s.dir);
+  const off = placeOffset(cfg, o.kind, sq === null ? 0 : freeSlot(sq), s.dir);
   const x = s.exitX;
   const y = baseY + off.y;
   if (!spawnFree(world, side, o.kind, x, y, sq)) return;

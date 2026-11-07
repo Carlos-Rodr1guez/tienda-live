@@ -58,7 +58,7 @@ function defensa(w, side, kind, sector, post, n = 10, state = 'holding', pinned 
     pinned,
   });
   for (let i = 0; i < n; i++) {
-    const o = placeOffset(w.cfg, kind, i, n, s.dir);
+    const o = placeOffset(w.cfg, kind, i, s.dir);
     addUnit(w, sq, p.x + o.x, p.y + o.y, {});
   }
   return sq;
@@ -195,7 +195,7 @@ function altaAtaque(w, side, kind) {
   const sq = createFromPlan(w, side, kind, plan);
   const n = w.cfg.squads.size[kind];
   for (let i = 0; i < n; i++) {
-    const o = placeOffset(w.cfg, kind, i, n, w.field.sides[side].dir);
+    const o = placeOffset(w.cfg, kind, i, w.field.sides[side].dir);
     addUnit(w, sq, plan.x + o.x, plan.y + o.y, {});
   }
   return { sq, plan };
@@ -352,7 +352,7 @@ test('nadie cruza un puesto ocupado: dos grupos de DEFENSA a los puestos 0 y 1 l
       pinned: true,
     });
     for (let i = 0; i < 10; i++) {
-      const o = placeOffset(w.cfg, 'soldado', i, 10, 1);
+      const o = placeOffset(w.cfg, 'soldado', i, 1);
       addUnit(w, sq, x + o.x, p.y + o.y, {});
     }
     return sq;

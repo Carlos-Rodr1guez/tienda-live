@@ -51,7 +51,7 @@ function defensa(w, side, kind, sector, post, n) {
     pinned: true,
   });
   for (let i = 0; i < n; i++) {
-    const o = placeOffset(w.cfg, kind, i, n, s.dir);
+    const o = placeOffset(w.cfg, kind, i, s.dir);
     addUnit(w, sq, p.x + o.x, p.y + o.y, {});
   }
   return sq;

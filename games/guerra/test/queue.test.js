@@ -315,7 +315,7 @@ function formando(w, side, kind, n, plan) {
   const sq = createFromPlan(w, side, kind, plan);
   const dir = w.field.sides[side].dir;
   for (let i = 0; i < n; i++) {
-    const off = placeOffset(w.cfg, kind, i, n, dir);
+    const off = placeOffset(w.cfg, kind, i, dir);
     addUnit(w, sq, plan.x + off.x, plan.y + off.y, {});
   }
   return sq;
@@ -386,7 +386,7 @@ test('alta en 0 con llegadas en 2, 3 y 4 s: el grupo de 3 sale en 8 s, no antes'
   const llega = (paso) => {
     while (w.step < paso) stepWorld(w);
     const n = sq.members.length + 1;
-    const off = placeOffset(w.cfg, 'soldado', n - 1, n, dir);
+    const off = placeOffset(w.cfg, 'soldado', n - 1, dir);
     addUnit(w, sq, plan.x + off.x, plan.y + off.y, {});
   };
   llega(60); // 2 s

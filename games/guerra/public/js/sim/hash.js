@@ -89,6 +89,8 @@ function foldWorld(h, w) {
     h = num(h, u.hp);
     h = num(h, u.valueAlive);
     h = flag(h, u.arrived);
+    h = int(h, u.slot);
+    h = int(h, u.fromSlot);
     h = str(h, u.owner ?? '');
     h = num(h, u.x);
     h = num(h, u.y);

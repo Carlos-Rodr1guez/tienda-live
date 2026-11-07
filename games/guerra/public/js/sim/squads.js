@@ -11,48 +11,116 @@ const PLACE = { x: 0, y: 0 };
 const BOX_MARGIN = 3; // separación mínima en y entre cajas (footMargin)
 const MUTUAL_STEPS = 30; // 1 s frenándose uno al otro
 
+/** Distancia (al cuadrado) a la que el que cierra filas llega a su lugar: la misma tolerancia que la reunión (1 px). */
+export const ARRIVE_D2 = 1;
+
+const ORDENES = new Map();
+
 /**
- * Desplazamiento del lugar `i` de un grupo de `n` miembros respecto del ancla (centro del frente):
- * `(−dir·(r·dx + z), (p − (m − 1)/2)·dy)` con fila `r`, posición `p` y `m` miembros en esa fila.
- * Devuelve un objeto reutilizado: leerlo enseguida.
- * @returns {{x:number,y:number}}
+ * Orden lateral de las columnas de una fila de `F` lugares, del centro hacia afuera: `c = ⌊(F − 1)/2⌋`, luego
+ * `c − 1`, `c + 1`, `c − 2`, `c + 2`... dentro de `[0, F)`. F=5: 2, 1, 3, 0, 4; F=2: 0, 1; F=1: 0.
+ * @returns {number[]}
  */
-export function placeOffset(cfg, kind, i, n, dir) {
-  const f = cfg.squads.formation[kind];
-  const F = f.width;
-  const r = Math.floor(i / F);
-  const p = i - r * F;
-  const m = Math.min(F, n - r * F);
-  const z = f.zigzag && p % 2 === 1 ? f.zigzag : 0;
-  PLACE.x = -dir * (r * (f.dx || 0) + z) + 0; // + 0 evita el -0
-  PLACE.y = (p - (m - 1) / 2) * f.dy;
-  return PLACE;
+export function ordenF(F) {
+  let o = ORDENES.get(F);
+  if (o === undefined) {
+    const c = Math.floor((F - 1) / 2);
+    o = [c];
+    for (let k = 1; o.length < F; k++) {
+      if (c - k >= 0) o.push(c - k);
+      if (c + k < F) o.push(c + k);
+    }
+    ORDENES.set(F, o);
+  }
+  return o;
 }
 
 /**
- * Fondo (hasta dónde llega la última fila detrás del ancla) y semialto de una formación de `n` miembros.
- * El semialto incluye la mitad de la huella en y.
+ * Desplazamiento del lugar `slot` respecto del ancla (centro del frente): fila `r = ⌊slot / F⌋`, posición lateral
+ * `p = ORDEN_F[slot mod F]`, `(−dir·(r·dx + z), (p − (F − 1)/2)·dy)` con `z` el zigzag de las `p` impares. No depende
+ * de cuántos miembros hay: las columnas quedan alineadas y nada se re-centra (enmienda v2.5, CB-21).
+ * Devuelve un objeto reutilizado: leerlo enseguida.
+ * @returns {{x:number,y:number}}
  */
-export function formationExtent(cfg, kind, n) {
+export function placeOffset(cfg, kind, slot, dir) {
   const f = cfg.squads.formation[kind];
+  const F = f.width;
+  const r = Math.floor(slot / F);
+  const p = ordenF(F)[slot - r * F];
+  const z = f.zigzag && p % 2 === 1 ? f.zigzag : 0;
+  PLACE.x = -dir * (r * (f.dx || 0) + z) + 0; // + 0 evita el -0
+  PLACE.y = (p - (F - 1) / 2) * f.dy;
+  return PLACE;
+}
+
+/** Fondo (hasta dónde llega el último lugar detrás del ancla) y semialto de un conjunto de lugares. */
+function slotsExtent(cfg, kind, slots) {
+  const f = cfg.squads.formation[kind];
+  const F = f.width;
+  const orden = ordenF(F);
   let fondo = 0;
   let hw = 0;
-  for (let i = 0; i < n; i++) {
-    const r = Math.floor(i / f.width);
-    const p = i - r * f.width;
-    const m = Math.min(f.width, n - r * f.width);
+  for (const slot of slots) {
+    if (slot < 0) continue;
+    const r = Math.floor(slot / F);
+    const p = orden[slot - r * F];
     const z = f.zigzag && p % 2 === 1 ? f.zigzag : 0;
     fondo = Math.max(fondo, r * (f.dx || 0) + z);
-    hw = Math.max(hw, Math.abs((p - (m - 1) / 2) * f.dy));
+    hw = Math.max(hw, Math.abs((p - (F - 1) / 2) * f.dy));
   }
   return { fondo, hw: hw + cfg.units[kind].foot[1] / 2 };
 }
 
-/** Caja del grupo: cuánto sobresale delante y detrás del ancla, y su semialto. */
-export function boxOf(cfg, kind, n) {
-  const { fondo, hw } = formationExtent(cfg, kind, n);
+/** Los lugares `0..n−1`. */
+function firstSlots(n) {
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(i);
+  return out;
+}
+
+/**
+ * Fondo y semialto de la formación NOMINAL de `n` miembros (los lugares `0..n−1`): el grupo candidato y `haltDistance`.
+ * El semialto incluye la mitad de la huella en y.
+ */
+export function formationExtent(cfg, kind, n) {
+  return slotsExtent(cfg, kind, firstSlots(n));
+}
+
+function boxFrom(cfg, kind, { fondo, hw }) {
   const half = cfg.units[kind].foot[0] / 2;
   return { front: half, rear: fondo + half, hw, fondo };
+}
+
+/** Caja nominal de un grupo de `n` miembros (lugares `0..n−1`): cuánto sobresale delante y detrás del ancla, y su semialto. */
+export function boxOf(cfg, kind, n) {
+  return boxFrom(cfg, kind, formationExtent(cfg, kind, n));
+}
+
+/**
+ * Caja de un grupo existente: sale de los lugares OCUPADOS y, para los que cierran filas, también de su lugar de
+ * partida (`fromSlot`), así siempre contiene al que todavía camina desde atrás. Se achica si una columna se acorta.
+ */
+export function squadBox(cfg, sq) {
+  const slots = [];
+  for (const u of sq.members) {
+    slots.push(u.slot);
+    if (u.fromSlot >= 0) slots.push(u.fromSlot);
+  }
+  return boxFrom(cfg, sq.kind, slotsExtent(cfg, sq.kind, slots));
+}
+
+/** El lugar libre de índice más bajo del grupo (sin contar el `fromSlot` de quien cierra filas). */
+export function freeSlot(sq) {
+  for (let slot = 0; ; slot++) {
+    let usado = false;
+    for (const u of sq.members) {
+      if (u.slot === slot) {
+        usado = true;
+        break;
+      }
+    }
+    if (!usado) return slot;
+  }
 }
 
 /** Distancia de la posición de tiro: la fila de atrás queda a `alcance − 3` del blanco (soldado 13, jeep 7, ...). */
@@ -116,14 +184,15 @@ export function createSquad(world, o) {
     wvy: 0,
     dFreno: 0,
     owner: o.owner ?? null,
+    formationWidth: world.cfg.squads.formation[o.kind].width,
   };
   world.squads.push(sq);
   return sq;
 }
 
 /**
- * Agrega una unidad al grupo en el índice siguiente (su lugar) y la pone en (x, y). `o.owner` es la clave del
- * usuario (o null) y `o.value` su valor al nacer (`unitValue`; 0 para las gratis).
+ * Agrega una unidad al grupo en el lugar libre de índice más bajo (`u.slot`) y la pone en (x, y). `o.owner` es la
+ * clave del usuario (o null) y `o.value` su valor al nacer (`unitValue`; 0 para las gratis).
  * @returns {any} la unidad
  */
 export function addUnit(world, sq, x, y, o = {}) {
@@ -155,6 +224,8 @@ export function addUnit(world, sq, x, y, o = {}) {
     valueAlive: o.value ?? 0,
     dmgBy: null,
     arrived: false,
+    slot: freeSlot(sq),
+    fromSlot: -1,
   };
   sq.members.push(u);
   world.units.push(u);
@@ -162,21 +233,31 @@ export function addUnit(world, sq, x, y, o = {}) {
 }
 
 /**
- * Quita del grupo a una unidad muerta con el cambio por el último (C5): el de mayor índice toma su lugar.
- * Nadie más cambia de lugar, salvo la re-centrada de la última fila que sale sola de `placeOffset`.
+ * Quita del grupo a una unidad muerta y cierra filas (enmienda v2.5, CB-21): sale de `members` con `splice` (los demás
+ * conservan su orden) y cada miembro de SU MISMA COLUMNA que estaba detrás avanza un lugar (`slot -= F`). El lugar
+ * vacío queda al fondo de esa columna; nadie de otra columna cambia ni se re-centra. Quien avanza anota de dónde sale
+ * en `fromSlot` (si ya caminaba, conserva el original) hasta que llega.
  */
 export function removeMember(sq, u) {
   const i = sq.members.indexOf(u);
   if (i < 0) return;
-  const last = sq.members.pop();
-  if (last !== u) sq.members[i] = last;
+  sq.members.splice(i, 1);
+  const F = sq.formationWidth;
+  const s = u.slot;
+  for (const v of sq.members) {
+    if (v.slot > s && v.slot % F === s % F) {
+      if (v.fromSlot < 0) v.fromSlot = v.slot;
+      v.slot -= F;
+      if (sq.state === 'forming') v.arrived = false; // la reunión espera a que llegue a su lugar nuevo
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Paso de los grupos (pasos 11 y 12 del orden de §7.2)
 
 function updateBox(world, sq) {
-  const b = boxOf(world.cfg, sq.kind, sq.members.length);
+  const b = squadBox(world.cfg, sq);
   const a = sq.anchor;
   if (world.field.sides[sq.side].dir > 0) {
     sq.blo = a.x - b.rear;
@@ -419,7 +500,7 @@ export function stepUnits(world) {
     for (let i = 0; i < n; i++) {
       const u = sq.members[i];
       const vmax = u.stats.speed;
-      const off = placeOffset(cfg, sq.kind, i, n, dir);
+      const off = placeOffset(cfg, sq.kind, u.slot, dir);
       const sx = a.x + off.x;
       const sy = a.y + off.y;
       const ex = sx - u.x;
@@ -453,6 +534,12 @@ export function stepUnits(world) {
           u.y = g[1];
           u.vy = 0;
         }
+      }
+      if (u.fromSlot >= 0) {
+        // cierra filas: llegó cuando está a ≤ 1 px de su lugar nuevo
+        const rx = sx - u.x;
+        const ry = sy - u.y;
+        if (rx * rx + ry * ry <= ARRIVE_D2) u.fromSlot = -1;
       }
       updateFacing(u, u.tgt === null ? null : targetX(u) - u.x, vmax, hold);
     }
