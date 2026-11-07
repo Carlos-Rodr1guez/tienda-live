@@ -63,11 +63,12 @@ const f = (n, d) => Number(n).toFixed(d);
  *   timer: {snapshot: () => {fps: number, ms: {sim: number, world: number, ui: number, work: number}}},
  *   stats: any, counts: {units: number, squads: number, planes: number, hits: number}, bakeCount: number,
  *   hash: string, golden?: {expected: string, done: boolean, hash: string, step?: number, steps?: number},
+ *   camera?: {k: number, kShown: number, text: string, mode: string, idle: number, auto: boolean, tx: number, ty: number},
  *   fx?: {usage: {particles: number, booms: number, craters: number, wrecks: number},
  *     caps: {particles: number, booms: number, craters: number, wrecks: number}, recentLarge: number}
  * }} i
  */
-export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx }) {
+export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx, camera }) {
   const t = timer.snapshot();
   const lines = [
     { key: 'fps', label: 'cuadros por segundo', value: f(t.fps, 1) },
@@ -98,6 +99,21 @@ export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx }) {
     lines.push({ key: 'fx.craters', label: 'efectos: cráteres', value: n('craters') });
     lines.push({ key: 'fx.wrecks', label: 'efectos: restos', value: n('wrecks') });
     lines.push({ key: 'fx.large', label: 'destellos grandes (último segundo)', value: String(fx.recentLarge) });
+  }
+  if (camera) {
+    lines.push({
+      key: 'cam.k',
+      label: 'cámara k (objetivo / mostrado)',
+      value: `${f(camera.k, 3)} / ${f(camera.kShown, 3)}`,
+    });
+    lines.push({ key: 'cam.mode', label: 'cámara', value: `${camera.text} · ${camera.mode}` });
+    lines.push({ key: 'cam.idle', label: 'segundos sin entrada del narrador', value: f(camera.idle, 1) });
+    lines.push({ key: 'cam.auto', label: 'cámara automática', value: camera.auto ? 'encendida' : 'apagada' });
+    lines.push({
+      key: 'cam.focus',
+      label: 'foco de la cámara (px de mundo)',
+      value: camera.k === 1 ? 'mapa entero' : `${Math.round(camera.tx)}, ${Math.round(camera.ty)}`,
+    });
   }
   if (golden) {
     lines.push({ key: 'goldenHash', label: 'hash dorado', value: golden.expected });

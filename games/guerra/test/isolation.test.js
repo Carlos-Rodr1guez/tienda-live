@@ -12,7 +12,7 @@ const GJ = fileURLToPath(new URL('../public/js/', import.meta.url));
 /** Quita los comentarios de bloque y de línea: los JSDoc empiezan con "/**" y no son el operador "**". */
 const sinComentarios = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-const PUREZA = /Math\.random|Date\.now|\bdocument\b|\bwindow\b/;
+const PUREZA = /Math\.random|Date\.now|performance\.now|\bdocument\b|\bwindow\b/;
 // Lo que puede dar resultados distintos entre Node y Chrome: trascendentes, potencias y el reloj de alta precisión
 const NO_DETERMINISTA =
   /Math\.(hypot|exp|expm1|log\w*|pow|sin|cos|tan|asin|acos|atan2?|sinh|cosh|tanh|cbrt)\b|\*\*|\bperformance\b/;
@@ -67,7 +67,13 @@ test('la exención de trascendentes es solo colors.js y tiene su comentario expl
 });
 
 test('el escáner detecta cada violación y deja pasar los comentarios', () => {
-  for (const s of ['x = Math.random()', 'const t = Date.now()', 'document.body', 'window.innerWidth']) {
+  for (const s of [
+    'x = Math.random()',
+    'const t = Date.now()',
+    'document.body',
+    'window.innerWidth',
+    'const t = performance.now()',
+  ]) {
     assert.match(sinComentarios(s), PUREZA, s);
   }
   for (const s of [

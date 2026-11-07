@@ -323,3 +323,147 @@ test('la presentación no altera el sim: un log con temblor, cámara lenta y des
   assert.equal(hashMatch(b), GOLDEN.hash);
   assert.deepEqual(foto(b), foto(base));
 });
+
+test('la presentación de la cámara no altera el sim: cámara al azar, automática, R y momentos dan los mismos ganadores, bases, XP, rangos, grupos y roles (NM-2, 5c.6)', async () => {
+  const { createCameraRig } = await import('../public/js/camera/rig.js');
+  const { createGestures } = await import('../public/js/camera/gestures.js');
+  const { minimapRect, minimapVisible } = await import('../public/js/camera/minimap.js');
+  const { createMotion } = await import('../public/js/render/motion.js');
+
+  // la cámara recibe el mundo en solo lectura: cualquier escritura del lado de la vista lanza
+  const cache = new WeakMap();
+  const soloLectura = (o) => {
+    if (o === null || typeof o !== 'object') return o;
+    if (cache.has(o)) return cache.get(o);
+    const prohibido = () => {
+      throw new Error('la vista escribió en un objeto del sim');
+    };
+    const p = new Proxy(o, {
+      get: (t, k, r) => {
+        const v = Reflect.get(t, k, r);
+        // lo congelado no se puede escribir de todos modos (y el proxy no puede devolver otro objeto por él)
+        const d = Reflect.getOwnPropertyDescriptor(t, k);
+        return d && d.configurable === false && d.writable === false ? v : soloLectura(v);
+      },
+      set: prohibido,
+      deleteProperty: prohibido,
+      defineProperty: prohibido,
+      setPrototypeOf: prohibido,
+    });
+    cache.set(o, p);
+    return p;
+  };
+
+  // PUNTO DE EXTENSIÓN (lote 6): los comandos de presentación que aún no existen se suman a la tabla de `switch` de más
+  // abajo, junto a los de cámara: marcador (G), top 3 parcial (T), foco en un donante (S y Shift+S; ya existe
+  // `controller.follow(getPoint)`), ocultar donante (Alt+clic) y todos los nombres (N), marco (C), ayuda (H) y Shift+N.
+  // Todos son estado de vista: el log debe seguir dando el mismo hash y las mismas fotos.
+  const vista = { auto: 0, comandos: 0, reducido: 0, momentos: 0, rondas: 0, cambiosDeK: 0 };
+  const conCamara = (seed) => {
+    const motion = createMotion({ graphics: {}, systemReduced: false });
+    const rig = createCameraRig({ canvas: { w: 1920, h: 1080 }, view: { idleSeconds: 2 }, graphics: {}, motion });
+    const c = rig.controller;
+    const g = createGestures({
+      controller: c,
+      minimap: () => (minimapVisible(c.state.k) ? minimapRect(1920, 1080) : null),
+    });
+    const rnd = mulberry32(seedFrom(seed));
+    let estado = '';
+    let puntero = 0;
+    let kAntes = 1;
+    return jugar(GOLDEN.log, {
+      onStep: (m) => {
+        const w = soloLectura(m.world);
+        rig.consume(m.world.drain(), w);
+        if (m.state !== estado) {
+          estado = m.state;
+          if (estado === 'intro') {
+            rig.newRound();
+            vista.rondas++;
+          }
+        }
+        if (rnd() < 0.02) {
+          vista.comandos++;
+          const x = rnd() * 1920;
+          const y = rnd() * 1080;
+          const t = m.tick * 33;
+          switch (Math.floor(rnd() * 15)) {
+            case 0:
+              c.zoomToLevel(Math.floor(rnd() * 8), rnd(), rnd());
+              break;
+            case 1:
+              c.panBy((rnd() - 0.5) * 600, (rnd() - 0.5) * 400);
+              break;
+            case 2:
+              c.centerOn(rnd() * 1440, rnd() * 810);
+              break;
+            case 3:
+              c.viewAll();
+              break;
+            case 4:
+              c.focusBase(rnd() < 0.5 ? 0 : 1);
+              break;
+            case 5:
+              c.follow(() => ({ x: rnd() * 1440, y: rnd() * 810 }));
+              break;
+            case 6:
+              c.stopFollow();
+              break;
+            case 7:
+              c.input('wheel', { dy: (rnd() - 0.5) * 400, deltaMode: 0, ctrl: rnd() < 0.2, x, y });
+              break;
+            case 8:
+              c.input('factor', { f: 0.6 + rnd() * 1.2, x, y });
+              break;
+            case 9:
+              c.input('keys', { x: Math.floor(rnd() * 3) - 1, y: Math.floor(rnd() * 3) - 1 });
+              break;
+            case 10:
+              c.toggleAuto();
+              break;
+            case 11:
+              motion.toggle(); // R
+              vista.reducido++;
+              break;
+            case 12:
+              vista.momentos++;
+              rig.bigGift({ coins: 500 + Math.floor(rnd() * 500), x: rnd() * 1440, y: rnd() * 810 }, m.world.step);
+              break;
+            case 13: {
+              const id = ++puntero;
+              g.down({ id, x, y, t });
+              g.move({ id, x: x + 80, y: y + 40, t: t + 10 });
+              g.up({ id, x: x + 80, y: y + 40, t: t + 20 });
+              break;
+            }
+            default: {
+              const id = ++puntero;
+              g.down({ id, x, y, t });
+              g.up({ id, x, y, t: t + 30 });
+              g.down({ id, x, y, t: t + 120 });
+              g.up({ id, x, y, t: t + 150 });
+              break;
+            }
+          }
+        }
+        rig.update(1 / 30, w, m.state === 'battle');
+        if (c.state.mode === 'auto') vista.auto++;
+        if (c.state.k !== kAntes) vista.cambiosDeK++;
+        kAntes = c.state.k;
+      },
+    });
+  };
+  const base = dorado();
+  for (const seed of ['camara-uno', 'camara-dos']) {
+    const a = conCamara(seed);
+    assert.equal(hashMatch(a), GOLDEN.hash);
+    assert.deepEqual(foto(a), foto(base));
+    assert.deepEqual(a.wins, base.wins);
+    assert.deepEqual(a.results, base.results);
+  }
+  // la vista sí hizo de todo: comandos, la automática manejando, zoom, R, momentos y cambios de ronda
+  assert.ok(vista.comandos > 100, `${vista.comandos} comandos`);
+  assert.ok(vista.auto > 0, 'la automática manejó');
+  assert.ok(vista.cambiosDeK > 10, 'hubo zoom');
+  assert.ok(vista.reducido > 0 && vista.momentos > 0 && vista.rondas >= 2);
+});
