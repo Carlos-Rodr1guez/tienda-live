@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node server/index.js",
     "test": "node --test \"test/**/*.test.js\"",
-    "golden": "node tools/golden.mjs"
+    "golden": "node tools/golden.mjs",
+    "sprites": "node tools/sprites.mjs"
   },
   "dependencies": {
     "@tienda/kit": "*"

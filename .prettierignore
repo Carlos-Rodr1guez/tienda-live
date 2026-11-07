@@ -9,3 +9,6 @@ package-lock.json
 
 # golden.js lo escribe `npm run golden -w batalla-paises`
 games/guerra/public/js/data/golden.js
+
+# sprites.js lo escribe `npm run sprites -w batalla-paises` (filas de arte, una por renglón)
+games/guerra/public/js/data/sprites.js
