@@ -64,11 +64,12 @@ const f = (n, d) => Number(n).toFixed(d);
  *   stats: any, counts: {units: number, squads: number, planes: number, hits: number}, bakeCount: number,
  *   hash: string, golden?: {expected: string, done: boolean, hash: string, step?: number, steps?: number},
  *   camera?: {k: number, kShown: number, text: string, mode: string, idle: number, auto: boolean, tx: number, ty: number},
+ *   session?: {key: string, label: string, value: string}[],
  *   fx?: {usage: {particles: number, booms: number, craters: number, wrecks: number},
  *     caps: {particles: number, booms: number, craters: number, wrecks: number}, recentLarge: number}
  * }} i
  */
-export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx, camera, labels, icons }) {
+export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx, camera, labels, icons, session }) {
   const t = timer.snapshot();
   const lines = [
     { key: 'fps', label: 'cuadros por segundo', value: f(t.fps, 1) },
@@ -110,6 +111,8 @@ export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx, cam
     lines.push({ key: 'labels.dropped', label: 'etiquetas descartadas por el layout', value: String(labels.dropped) });
   }
   if (icons) lines.push({ key: 'icons.drawn', label: 'íconos de rol dibujados', value: String(icons.drawn) });
+  // sesión de la transmisión (lote 5e): ya vienen armadas, con sus textos, desde `live-session.js`; sin sesión (?golden) no hay
+  if (session) lines.push(...session);
   if (camera) {
     lines.push({
       key: 'cam.k',

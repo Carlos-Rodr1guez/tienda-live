@@ -8,7 +8,7 @@ const FRAME_MS = 1000 / 60;
 let corridas = 0;
 
 /** Un `import` nuevo de main.js para la URL dada (`search`), con el DOM falso ya instalado. */
-export async function arrancar(search, { reducido = false } = {}) {
+export async function arrancar(search, { reducido = false, fetch = async () => ({ ok: false }) } = {}) {
   const { createCanvas } = createFakeCanvasFactory();
   const ctx = createFakeCtx({ record: true });
   const oyentes = { window: new Map(), canvas: new Map() };
@@ -87,7 +87,7 @@ export async function arrancar(search, { reducido = false } = {}) {
       return 1;
     },
     addEventListener: agregar(oyentes.window),
-    fetch: async () => ({ ok: false }),
+    fetch,
   });
   globalThis.devicePixelRatio = 1;
   await import(`../../public/js/main.js?caso=${search}&n=${corridas++}`);
@@ -108,6 +108,8 @@ export async function arrancar(search, { reducido = false } = {}) {
       }
     },
     tecla: (key, extra = {}) => lanzar(oyentes.window, 'keydown', { key, ...extra }),
+    /** Un evento de la ventana (por ejemplo `pagehide`). */
+    evento: (type, extra = {}) => lanzar(oyentes.window, type, extra),
     /** Lo que dibujó el último cuadro. */
     textos: () => ctx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1]),
     f2() {

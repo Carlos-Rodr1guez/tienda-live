@@ -29,7 +29,9 @@ test('arranque: ASEDIO se sirve a través del kit', async () => {
     const delKit = fs.readFileSync(fileURLToPath(import.meta.resolve('@tienda/kit/sim/registry.js')));
     assert.ok(Buffer.from(await reg.arrayBuffer()).equals(delKit));
 
-    // el código del servidor del kit no se sirve y ASEDIO no tiene ruta de sesión (todavía no existe)
+    // el código del servidor del kit no se sirve y ASEDIO no prende la sesión del kit (KIT-1, KIT-28): sin ruta, 404
+    // y /api/config sigue con su forma de siempre
+    assert.equal('session' in cfg, false);
     assert.equal((await fetch(`${base}/kit/server/app.js`)).status, 404);
     assert.equal((await fetch(`${base}/api/session`)).status, 404);
   } finally {

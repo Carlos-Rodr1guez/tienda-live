@@ -287,6 +287,87 @@ function finishRound(m, timeout) {
   }
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Progreso del partido para la copia de sesión (KIT-28, diseño D27). Solo `{pair, started, roundsDone, wins}`: la ronda
+// cortada nunca vuelve. No agrega ningún campo al partido ni al mundo, así que el hash de estado no cambia.
+
+/**
+ * Lo que hay que guardar del partido para sobrevivir a una recarga, o null si todavía no hay par. `roundsDone` cuenta
+ * solo las rondas terminadas (cada una da una victoria, así que siempre es la suma de `wins`). Es pura.
+ * @param {any} m
+ * @returns {{pair: [string, string], started: boolean, roundsDone: number, wins: [number, number]} | null}
+ */
+export function exportProgress(m) {
+  if (!m.pair) return null;
+  const [a, b] = m.pair.teams;
+  return {
+    pair: [a.id, b.id],
+    started: m.state !== 'lobby',
+    roundsDone: m.wins[0] + m.wins[1],
+    wins: [m.wins[0], m.wins[1]],
+  };
+}
+
+const own = (o, k) => (Object.hasOwn(o, k) ? o[k] : undefined);
+const isCount = (v, max) => Number.isInteger(v) && v >= 0 && v <= max;
+
+/**
+ * Valida y copia campo por campo, solo los conocidos. Devuelve null si algo no cierra.
+ * @param {unknown} p
+ * @param {number} winsToMatch
+ */
+function readProgress(p, winsToMatch) {
+  if (p === null || typeof p !== 'object' || Array.isArray(p)) return null;
+  const pair = own(p, 'pair');
+  const wins = own(p, 'wins');
+  const started = own(p, 'started');
+  const roundsDone = own(p, 'roundsDone');
+  if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== 'string' || typeof pair[1] !== 'string')
+    return null;
+  if (typeof started !== 'boolean') return null;
+  // el máximo posible es ganar `winsToMatch` rondas y perder `winsToMatch - 1`
+  const maxRounds = 2 * winsToMatch - 1;
+  if (!Array.isArray(wins) || wins.length !== 2 || !isCount(wins[0], winsToMatch) || !isCount(wins[1], winsToMatch))
+    return null;
+  if (!isCount(roundsDone, maxRounds) || roundsDone !== wins[0] + wins[1]) return null;
+  // los dos no pueden haber ganado el partido, y un partido sin empezar no tiene rondas
+  if (wins[0] >= winsToMatch && wins[1] >= winsToMatch) return null;
+  if (!started && roundsDone !== 0) return null;
+  return { pair: [pair[0], pair[1]], started, roundsDone, wins: [wins[0], wins[1]] };
+}
+
+/**
+ * Restaura el progreso al cargar la página, antes del primer evento: solo vale en `matchup`, sin par y sin pasos dados.
+ * - Partido empezado y sin decidir: `waitingNextRound`, con el par, las rondas terminadas y las victorias (el narrador
+ *   sigue con `startRound`). El mundo es nuevo: la ronda cortada no vuelve.
+ * - Par sin partido empezado: `lobby`.
+ * - Partido ya decidido (alguien llegó a `winsToMatch`): `lobby` con el par y las victorias en cero. El estado que el juego
+ *   toma después de la final es `matchEnd`, pero sin los resultados de cada ronda no hay qué mostrar en esa pantalla.
+ * - Progreso inválido o incoherente (país desconocido, victorias fuera de rango, `roundsDone` que no cierra...): se
+ *   descarta, no cambia nada y el juego queda en el selector.
+ * @param {any} m
+ * @param {unknown} progress
+ * @returns {{ok: true, state: string, decided?: true} | {ok: false, reason: string}}
+ */
+export function importProgress(m, progress) {
+  if (m.state !== 'matchup' || m.pair !== null || m.tick !== 0) return no('state');
+  if (progress === null || progress === undefined) return no('none');
+  const p = readProgress(progress, m.world.cfg.round.winsToMatch);
+  if (!p) return no('invalid');
+  const picked = pickPair(m, { a: p.pair[0], b: p.pair[1] });
+  if (!picked.ok) return no('invalid');
+  const decided = p.wins[0] >= m.world.cfg.round.winsToMatch || p.wins[1] >= m.world.cfg.round.winsToMatch;
+  if (decided) return { ok: true, state: 'lobby', decided: true };
+  if (!p.started) return { ok: true, state: 'lobby' };
+  // como si la última ronda terminada acabara de cerrarse: `startRound` suma 1 a `round` y pone el mundo en esa ronda
+  m.wins = [p.wins[0], p.wins[1]];
+  m.round = p.roundsDone;
+  m.world.round = p.roundsDone + 1;
+  m.state = 'waitingNextRound';
+  m.stateSteps = 0;
+  return { ok: true, state: 'waitingNextRound' };
+}
+
 function step(m) {
   m.tick++;
   if (m.pause === null) {

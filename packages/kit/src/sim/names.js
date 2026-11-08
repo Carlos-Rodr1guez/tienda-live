@@ -11,12 +11,18 @@ const SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 const INVISIBLE = /[\p{Cc}\p{Cf}\p{Co}\u{1F1E6}-\u{1F1FF}�]/gu;
 
 /**
- * Deja un nombre listo para mostrarlo como texto: nunca como HTML.
+ * Tope por defecto de unidades UTF-16 de un nombre ya saneado. 16 grafemas de emoji con color de piel (4 unidades cada
+ * uno) llegan justo a 64; lo que pase de eso es un grafema anormal. No fija el diseño: es el tope de este lote (C1).
+ */
+const DEFAULT_MAX_UNITS = 64;
+
+/**
+ * Deja un nombre listo para mostrarlo como texto: nunca como HTML. Topa por grafemas Y por unidades UTF-16.
  * @param {unknown} raw
- * @param {{maxGraphemes?: number, maxMarks?: number}} [o]
+ * @param {{maxGraphemes?: number, maxMarks?: number, maxUnits?: number}} [o]
  * @returns {string}
  */
-export function sanitizeName(raw, { maxGraphemes = 16, maxMarks = 3 } = {}) {
+export function sanitizeName(raw, { maxGraphemes = 16, maxMarks = 3, maxUnits = DEFAULT_MAX_UNITS } = {}) {
   let s = String(raw ?? '')
     .toWellFormed()
     .normalize('NFKC')
@@ -31,6 +37,17 @@ export function sanitizeName(raw, { maxGraphemes = 16, maxMarks = 3 } = {}) {
   let n = 0;
   for (const { segment } of SEGMENTER.segment(s)) {
     if (n++ >= maxGraphemes) break;
+    if (out.length + segment.length > maxUnits) {
+      // Un solo grafema puede medir miles de unidades (un pulgar con 2000 modificadores de piel). Si es el primero, se
+      // corta por dentro, punto de código a punto de código, para no partir un par sustituto; si no, se corta antes.
+      if (out === '') {
+        for (const cp of segment) {
+          if (out.length + cp.length > maxUnits) break;
+          out += cp;
+        }
+      }
+      break;
+    }
     out += segment;
   }
   return out.trim() || ANON;

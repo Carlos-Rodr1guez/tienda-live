@@ -28,6 +28,7 @@ import { GOLDEN } from './data/golden.js';
 import { PAISES } from './data/paises.js';
 import { SPRITES } from './data/sprites.js';
 import { createGoldenRun } from './golden-run.js';
+import { createLiveSession, sessionOffLines } from './live-session.js';
 import { createLoop } from './loop.js';
 import { createBaseLayer } from './render/bases.js';
 import { drawF2, createTimer, f2Model } from './render/f2.js';
@@ -56,19 +57,25 @@ const createCanvas = (w, h) => {
 };
 const dpr = () => Math.min(window.devicePixelRatio || 1, 3);
 
-/** Config del juego: la del servidor si está (`/api/config`), y si no, la de fábrica. */
+/**
+ * Config del juego: la del servidor si está (`/api/config`), y si no, la de fábrica. `session` solo viene si el servidor
+ * tiene prendida la sesión de la transmisión (lote 5e) e informa el mismo `maxBytes` que usa el servidor.
+ */
 async function cargarConfig() {
   try {
     const res = await fetch('/api/config');
-    if (!res.ok) return {};
+    if (!res.ok) return { game: {}, known: false };
     const cfg = await res.json();
-    return cfg.game ?? {};
+    return { game: cfg.game ?? {}, session: cfg.session, known: true };
   } catch {
-    return {};
+    return { game: {}, known: false };
   }
 }
 
-const game = await cargarConfig();
+const { game, session: sessionCfg, known: configKnown } = await cargarConfig();
+// Si el servidor respondió y no trae `session`, la sesión está apagada ahí: no se arma nada ni se hace el GET (C4). Si la
+// config no se pudo leer, no se sabe, y se intenta el GET como siempre.
+const sesionApagada = configKnown && sessionCfg === undefined;
 const render = game.render ?? {};
 // Movimiento reducido (CB-20): 'auto' sigue al sistema, true lo fuerza, false lo ignora; `R` lo alterna (provisional).
 const sistema = matchMedia(MOTION_MEDIA);
@@ -109,6 +116,24 @@ const golden = params.has('golden')
   : null;
 const registry = golden ? null : createRegistry({ teams: [PAISES[0], PAISES[1]] });
 const match = golden ? golden.match : createMatch({ paises: PAISES, game, registry });
+
+// Sesión de la transmisión en memoria (lote 5e, KIT-28): la copia vive en el servidor local, nunca en disco ni en el navegador.
+// Se pide ANTES del primer evento: si hay copia, vuelven los rangos, los ocultos y el partido (a la espera del narrador, a la
+// sala o al selector). Con `?golden` no hay registro ni sesión: cero tráfico de sesión. `fetch` y `addEventListener` se
+// resuelven al llamar, no al importar.
+const sesion =
+  golden || sesionApagada
+    ? null
+    : createLiveSession({
+        registry,
+        match,
+        fetch: (url, init) => fetch(url, init),
+        addEventListener: (type, fn) => addEventListener(type, fn),
+        maxBytes: sessionCfg?.maxBytes,
+        // mide lo que cuesta armar la copia para espaciar los envíos si fuera caro (el reloj es de la página, no del sim)
+        clockMs: () => performance.now(),
+      });
+const restaurada = sesion ? await sesion.restore() : null;
 
 // ---------------------------------------------------------------------------------------------------------------
 // Render
@@ -219,11 +244,16 @@ const loop = createLoop({ step: pasoDelPartido });
 // Arranque sin narrador (provisional): el par de la URL o Perú contra México, y empieza solo
 
 if (!golden) {
-  const [a, b] = (params.get('pair') ?? 'PE-MX').split('-');
-  const r = match.command({ type: 'pickPair', a, b });
-  if (r.ok) {
-    prepararPartido();
-    match.command({ type: 'startMatch' });
+  if (restaurada?.status === 'restored') {
+    // recarga en pleno LIVE: el partido vuelve a donde estaba (o al selector) y nadie arranca solo
+    if (match.pair) prepararPartido();
+  } else {
+    const [a, b] = (params.get('pair') ?? 'PE-MX').split('-');
+    const r = match.command({ type: 'pickPair', a, b });
+    if (r.ok) {
+      prepararPartido();
+      match.command({ type: 'startMatch' });
+    }
   }
 }
 let carga = params.has('carga');
@@ -344,7 +374,12 @@ addEventListener('keydown', (e) => {
   // Enter sobre un botón con foco lo activa el navegador (para quien llega con Tab): no es el Enter del narrador
   if (key === 'Enter' && e.target?.tagName === 'BUTTON') return;
   if (key === 'Enter') {
-    if (match.state === 'lobby') match.command({ type: 'startMatch' });
+    if (match.state === 'matchup') {
+      // sin selector todavía (lote 6): tras recargar sin par elegido, Enter elige el par de la URL y queda en la sala
+      const [a, b] = (params.get('pair') ?? 'PE-MX').split('-');
+      ultimoPar = '';
+      if (match.command({ type: 'pickPair', a, b }).ok) prepararPartido();
+    } else if (match.state === 'lobby') match.command({ type: 'startMatch' });
     else if (match.state === 'waitingNextRound') match.command({ type: 'startRound' });
     else if (match.state === 'matchEnd') {
       match.command({ type: 'endMatch' });
@@ -567,6 +602,8 @@ function cuadro(ts) {
     anima = match.state === 'battle' && match.pause === null && match.world.over === null;
   }
   timer.end('sim');
+  // sesión de la transmisión: detecta cambios del registro y del partido y envía como mucho una vez por segundo (reloj de vista)
+  sesion?.frame(ts / 1000);
 
   scene.sync(match.world);
   timer.begin('world');
@@ -636,6 +673,7 @@ function cuadro(ts) {
       fx: { usage: fx.usage(), caps: FX_CAPS, recentLarge: fx.recentLarge() },
       labels: labelLayer.stats,
       icons: iconLayer.stats,
+      session: sesion ? sesion.f2() : sesionApagada && !golden ? sessionOffLines() : undefined,
       camera: {
         k: st.k,
         kShown: st.kShown,

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createTikTokBridge } from './tiktok.js';
 import { packageDir } from './package-dir.js';
+import { createSessionStore } from './session.js';
 
 const KIT_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -56,14 +57,22 @@ function safeJoin(dir, rel) {
 
 /**
  * Arranca el servidor local de un juego.
+ * `session`: apagada por defecto (KIT-1). Con `true` o con `{maxBytes}` monta `/api/session`, la copia de la sesión del
+ * LIVE en la memoria del proceso (KIT-28). Sin ella la ruta no existe y el servidor es el de siempre.
  * @param {{ root: string, config?: object, port?: number, host?: string, tiktok?: boolean,
- *   log?: {info?:Function, warn?:Function, error?:Function}, mounts?: {prefix:string, dir:string}[] }} opts
+ *   log?: {info?:Function, warn?:Function, error?:Function}, mounts?: {prefix:string, dir:string}[],
+ *   session?: boolean | {maxBytes?: number} }} opts
  */
 export async function startServer(opts) {
   if (typeof opts?.root !== 'string' || !opts.root) {
     throw new TypeError('startServer: falta "root", la carpeta del juego');
   }
   const { root, config = {}, port = 3000, host = '127.0.0.1', tiktok = true, log = console } = opts;
+  const sessionOpt = opts.session;
+  const session =
+    sessionOpt === true || (sessionOpt !== null && typeof sessionOpt === 'object')
+      ? createSessionStore(sessionOpt === true ? {} : sessionOpt)
+      : null;
   // El orden importa: gana el primer prefijo que coincide. `src/server` no tiene montaje a propósito (KIT-2).
   const mounts = [
     { prefix: '/vendor/three/', dir: packageDir('three', root) },
@@ -138,8 +147,14 @@ export async function startServer(opts) {
             tiktokUsername: bridge?.status?.username || '',
             game: config.game || {},
             models,
+            // solo con la sesión prendida: el tope de bytes que la página usa para recortar su copia (KIT-28)
+            ...(session ? { session: { maxBytes: session.maxBytes } } : {}),
           }),
         );
+        return;
+      }
+      if (session && p === '/api/session') {
+        await session.handle(req, res);
         return;
       }
       if (p === '/api/status') {

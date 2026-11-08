@@ -4,3 +4,4 @@ export { startServer, loadConfigFile } from './app.js';
 export { packageDir } from './package-dir.js';
 export { createNormalizer, userOf } from './normalize.js';
 export { cleanUsername, createTikTokBridge } from './tiktok.js';
+export { createSessionStore } from './session.js';

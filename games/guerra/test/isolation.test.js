@@ -32,7 +32,10 @@ function walk(dir) {
 const rel = (f) => path.relative(GJ, f).replaceAll('\\', '/');
 // Del render solo son puros la selección y colocación de etiquetas, la geometría de los íconos y la proyección (lote 5d):
 // el horneado de íconos recibe la fábrica de lienzos inyectada. El resto de `render/` sí toca el lienzo y la hora.
-const RENDER_PUROS = ['render/labels.js', 'render/icons.js', 'render/project.js'].map((f) => path.join(GJ, f));
+// Lote 5e: `live-session.js` tampoco toca DOM, reloj ni azar: `fetch`, `addEventListener` y los temporizadores llegan inyectados.
+const RENDER_PUROS = ['render/labels.js', 'render/icons.js', 'render/project.js', 'live-session.js'].map((f) =>
+  path.join(GJ, f),
+);
 const puros = ['sim', 'data', 'camera']
   .flatMap((d) => walk(path.join(GJ, d)))
   .concat(RENDER_PUROS)
@@ -68,6 +71,13 @@ test('lote 5d: labels.js, icons.js y project.js están en el escáner de pureza 
     assert.ok(fs.existsSync(f), f);
     assert.ok(puros.includes(f), `${rel(f)} se revisa`);
   }
+});
+
+test('lote 5e: live-session.js está en el escáner de pureza y match.js (sim) sigue sin reloj ni azar con el progreso', () => {
+  const sesion = path.join(GJ, 'live-session.js');
+  assert.ok(puros.includes(sesion));
+  assert.ok(reglas.some((f) => rel(f) === 'sim/match.js'));
+  assert.match(fs.readFileSync(path.join(GJ, 'sim/match.js'), 'utf8'), /export function exportProgress/);
 });
 
 test('la exención de trascendentes es solo colors.js y tiene su comentario explicando por qué', () => {

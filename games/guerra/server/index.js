@@ -19,7 +19,9 @@ if (process.env.TIKTOK_USERNAME) config.tiktokUsername = process.env.TIKTOK_USER
 const port = Number(process.env.PORT || config.port || 3100);
 
 try {
-  const app = await startServer({ root: ROOT, config, port });
+  // la sesión de la transmisión en memoria (KIT-28) viene prendida; "session": false en config.json la apaga y
+  // "session": { "maxBytes": n } cambia el tope de la copia
+  const app = await startServer({ root: ROOT, config, port, session: config.session ?? true });
   const url = `http://localhost:${app.port}`;
   console.log('');
   console.log('  Batalla de países lista');
