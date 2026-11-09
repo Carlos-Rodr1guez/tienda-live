@@ -27,7 +27,7 @@ const MAX_PAIR_ID = 64;
 const MAX_ROUNDS = 99;
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
-const HOST_OK = /^(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/i;
+export const HOST_OK = /^(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/i;
 const JSON_TYPE = /^application\/json\s*(;.*)?$/i;
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);

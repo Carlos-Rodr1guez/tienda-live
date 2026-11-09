@@ -119,7 +119,7 @@ export class SimulatorPanel {
 
     const name = document.createElement('input');
     name.type = 'text';
-    name.placeholder = 'Nombre (vacío = al azar)';
+    name.placeholder = 'Nombre (opcional)';
     name.maxLength = 24;
     name.style.marginTop = '8px';
     this.nameInput = name;

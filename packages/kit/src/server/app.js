@@ -1,6 +1,7 @@
 // Servidor local: sirve el juego, expone la configuración y reenvía los eventos
 // del LIVE al navegador por WebSocket.
 
+import { sameOriginLoopback } from './origin.js';
 import http from 'node:http';
 import { createReadStream } from 'node:fs';
 import { readFile, readdir, stat } from 'node:fs/promises';
@@ -163,6 +164,11 @@ export async function startServer(opts) {
         return;
       }
       if (p === '/api/simulate' && req.method === 'POST') {
+        // solo el propio juego (mismo origen, Host de loopback) puede mandar eventos de prueba
+        if (!sameOriginLoopback(req)) {
+          res.writeHead(403).end();
+          return;
+        }
         let body = '';
         for await (const chunk of req) {
           body += chunk;
@@ -189,7 +195,7 @@ export async function startServer(opts) {
     }
   });
 
-  const wss = new WebSocketServer({ server, path: '/ws' });
+  const wss = new WebSocketServer({ server, path: '/ws', verifyClient: ({ req }) => sameOriginLoopback(req) });
   wss.on('connection', (ws) => {
     clients.add(ws);
     if (lastStatus) ws.send(JSON.stringify(lastStatus));
