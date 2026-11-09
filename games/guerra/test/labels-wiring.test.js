@@ -221,17 +221,30 @@ test('la vista nunca escribe en el sim: íconos de rol, conteos del HUD y etique
 
 test('main.js: ?donantes crea donantes sintéticos por los dos equipos por el camino público y se ven sus etiquetas', async () => {
   const e = await arrancar('?f2&donantes&rapido=20');
-  for (let i = 0; i < 60; i++) e.cuadros(1, 100);
   const RANGO = /^(RECLUTA|SOLDADO|CABO|SARGENTO|TENIENTE|CAPITÁN|MAYOR|CORONEL|GENERAL)( |$)/;
-  const etiquetas = e.textos().filter((t) => RANGO.test(t));
-  assert.ok(etiquetas.length >= 4 && etiquetas.length <= 6, `k = 1: top 3 por equipo (hay ${etiquetas.length})`);
-  assert.ok(
-    etiquetas.some((t) => t.includes('ana_23')),
-    'el donante con más XP del equipo izquierdo',
+  // B9: las etiquetas esquivan los rieles (los grupos nacen bajo ellos), así que el líder tarda unos cuadros en verse. La regla
+  // sigue siendo la de D22: a k = 1, las etiquetas que NO se están apagando son 6 como mucho (3 por equipo).
+  let primeraAna = -1;
+  let primeraCjk = -1;
+  let iconos = 0;
+  for (let i = 0; i < 160; i++) {
+    e.cuadros(1, 100);
+    assert.ok(
+      Number(e.f2()['etiquetas dibujadas']) <= 6,
+      `cuadro ${i}: hay ${e.f2()['etiquetas dibujadas']} etiquetas que no se apagan`,
+    );
+    iconos = Math.max(iconos, Number(e.f2()['íconos de rol dibujados']));
+    const t = e.textos().filter((x) => RANGO.test(x));
+    if (primeraAna < 0 && t.some((x) => x.includes('ana_23'))) primeraAna = i;
+    if (primeraCjk < 0 && t.some((x) => x.includes('田中'))) primeraCjk = i;
+  }
+  assert.ok(primeraAna >= 0, 'el líder del equipo izquierdo aparece en algún cuadro de la ventana');
+  assert.ok(primeraCjk >= 0, 'el líder del equipo derecho aparece en algún cuadro de la ventana');
+  console.log(
+    `líderes visibles: izquierdo en el cuadro ${primeraAna}, derecho en el ${primeraCjk} (de 160 cuadros de 100 ms desde que entran los donantes)`,
   );
   const f2 = e.f2();
-  assert.ok(Number(f2['etiquetas dibujadas']) >= 4);
-  assert.ok(Number(f2['íconos de rol dibujados']) >= 1, 'los grupos ya formados llevan ícono');
+  assert.ok(iconos >= 1, 'los grupos ya formados llevan ícono');
   assert.ok('etiquetas descartadas por el layout' in f2);
 });
 
@@ -264,8 +277,13 @@ test('C4: al cargar una fuente (loadingdone) main invalida la caché y la etique
   oyentes[0][1]();
   e.cuadros(1, 100);
   assert.ok(medidas() > 0, 'tras invalidar se vuelve a medir');
-  e.cuadros(1, 100);
-  assert.equal(medidas(), 0, 'y la caché se llena de nuevo');
+  // la caché se llena de nuevo: en pocos cuadros no se mide nada (un banner nuevo puede medir su texto en un cuadro suelto)
+  let quieto = false;
+  for (let i = 0; i < 6 && !quieto; i++) {
+    e.cuadros(1, 100);
+    quieto = medidas() === 0;
+  }
+  assert.equal(quieto, true, 'y la caché se llena de nuevo');
 });
 
 test('C8b: con R activo la rampa de opacidad de las etiquetas por cuadro es la misma que sin R (de punta a punta)', async () => {
@@ -299,11 +317,12 @@ test('C8b: con R activo la rampa de opacidad de las etiquetas por cuadro es la m
 
 test('C8d: ningún nombre de donante llega al DOM (textContent, innerHTML, innerText, value, atributos, nodos de texto)', async () => {
   const e = await arrancar('?f2&donantes&rapido=20');
-  for (let i = 0; i < 60; i++) e.cuadros(1, 100);
-  assert.ok(
-    e.textos().some((t) => RANGO_ETIQUETA.test(t) && t.includes('ana_23')),
-    'la etiqueta existe en el lienzo',
-  );
+  let vista = false;
+  for (let i = 0; i < 100; i++) {
+    e.cuadros(1, 100);
+    vista ||= e.textos().some((t) => RANGO_ETIQUETA.test(t) && t.includes('ana_23'));
+  }
+  assert.ok(vista, 'la etiqueta existe en el lienzo');
   e.tecla('+');
   e.cuadros(40, 100);
   assert.ok(e.escrituras.length > 0, 'el DOM falso sí registra las escrituras de los botones');
@@ -312,20 +331,19 @@ test('C8d: ningún nombre de donante llega al DOM (textContent, innerHTML, inner
     for (const n of nombres) assert.equal(valor.includes(n), false, `${prop} = ${valor}`);
 });
 
-test('main.js: ?donantes registra a los donantes con comandos del partido y la API del registro, sin tocar objetos del sim', () => {
+test('main.js: ya no hay ?donantes; el público entra por el adaptador (comandos del partido) y la vista no toca objetos del sim', () => {
   const src = fs
     .readFileSync(path.join(GJ, 'main.js'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
-  assert.match(src, /donantes/);
-  assert.match(src, /type: 'chat'/);
-  assert.match(src, /type: 'gift'/);
+  assert.doesNotMatch(src, /donantes/, 'el parámetro se fue: lo reemplaza F1, que usa el camino real');
+  assert.match(src, /createAudience/);
   assert.doesNotMatch(src, /registry\.drain|world\.units\.push|\.xp\.(match|live|round)\s*=/);
   assert.equal(src.match(/\.drain\(/g)?.length, 1, 'sigue un solo vaciado de la bandeja');
 });
 
 test('main.js con ?golden: sin registro no hay etiquetas, pero los íconos de rol se ven y no se rompe nada', async () => {
-  const e = await arrancar('?golden&rapido=60&donantes');
+  const e = await arrancar('?golden&rapido=60');
   e.cuadros(30);
   const f2 = e.f2();
   assert.equal(f2['etiquetas dibujadas'], '0');

@@ -327,7 +327,8 @@ test('la presentación no altera el sim: un log con temblor, cámara lenta y des
 test('la presentación de la cámara no altera el sim: cámara al azar, automática, R y momentos dan los mismos ganadores, bases, XP, rangos, grupos y roles (NM-2, 5c.6)', async () => {
   const { createCameraRig } = await import('../public/js/camera/rig.js');
   const { createGestures } = await import('../public/js/camera/gestures.js');
-  const { minimapRect, minimapVisible } = await import('../public/js/camera/minimap.js');
+  const { minimapVisible } = await import('../public/js/camera/minimap.js');
+  const { minimapRect } = await import('../public/js/ui/layout.js');
   const { createMotion } = await import('../public/js/render/motion.js');
 
   // la cámara recibe el mundo en solo lectura: cualquier escritura del lado de la vista lanza
@@ -466,4 +467,80 @@ test('la presentación de la cámara no altera el sim: cámara al azar, automát
   assert.ok(vista.auto > 0, 'la automática manejó');
   assert.ok(vista.cambiosDeK > 10, 'hubo zoom');
   assert.ok(vista.reducido > 0 && vista.momentos > 0 && vista.rondas >= 2);
+});
+
+test('la moderación y los paneles no alteran el sim: ocultar donantes, Alt+Z, N, seguir, marcador, top 3 y ayuda dan el mismo mundo en cada paso, el mismo hash y las mismas fotos (S7, NM-2, NM-11)', async () => {
+  const { createModeration } = await import('../public/js/ui/moderation.js');
+  const { createSpotlight } = await import('../public/js/ui/spotlight.js');
+  const { helpModel, scoreboardModel, top3Model } = await import('../public/js/ui/overlays.js');
+  const hecho = { ocultar: 0, deshacer: 0, nombres: 0, seguir: 0, paneles: 0 };
+  /** El mundo de cada paso (`hashWorld`: reglas, sin el registro) y lo que la presentación hizo por el camino. */
+  const correr = (seed, conPresentacion) => {
+    const rnd = mulberry32(seedFrom(seed));
+    const serie = [];
+    let elegido = [];
+    let mod = null;
+    let seg = null;
+    const m = jugar(GOLDEN.log, {
+      onStep: (p) => {
+        p.world.drain(); // el único vaciado de la bandeja, como en la página
+        serie.push(hashWorld(p.world));
+        if (!conPresentacion) return;
+        mod ??= createModeration({ registry: p.registry, rects: () => elegido });
+        seg ??= createSpotlight({
+          registry: p.registry,
+          units: () => p.world.units,
+          camera: { follow() {}, stopFollow() {} },
+        });
+        if (rnd() >= 0.03) return;
+        const users = p.registry.users();
+        elegido = users.length ? [{ key: users[Math.floor(rnd() * users.length)].key, x: 0, y: 0, w: 10, h: 10 }] : [];
+        switch (Math.floor(rnd() * 9)) {
+          case 0:
+          case 1:
+            hecho.ocultar += mod.hideAt({ x: 1, y: 1 }) === null ? 0 : 1;
+            break;
+          case 2:
+            hecho.deshacer += mod.undo() === 'undone' ? 1 : 0;
+            break;
+          case 3:
+            hecho.nombres++;
+            mod.toggleNames();
+            break;
+          case 4:
+            hecho.seguir += seg.next() === null ? 0 : 1;
+            break;
+          case 5:
+            seg.stop();
+            break;
+          case 6:
+            if (p.pair) scoreboardModel({ match: p, registry: p.registry });
+            hecho.paneles++;
+            break;
+          case 7:
+            top3Model({ match: p, registry: p.registry });
+            hecho.paneles++;
+            break;
+          default:
+            helpModel();
+        }
+      },
+    });
+    return { m, serie };
+  };
+  const base = correr('base', false);
+  assert.equal(hashMatch(base.m), GOLDEN.hash);
+  for (const seed of ['moderacion-uno', 'moderacion-dos']) {
+    const { m, serie } = correr(seed, true);
+    assert.deepEqual(serie, base.serie, `${seed}: el mundo es idéntico en cada uno de los ${serie.length} pasos`);
+    assert.deepEqual(foto(m), foto(base.m), seed);
+    assert.deepEqual(m.wins, base.m.wins);
+    assert.deepEqual(m.results, base.m.results);
+    // `hashMatch` también incluye la marca "oculto" de cada usuario (estado del registro, no una regla): con todos visibles
+    // otra vez vuelve el hash dorado, y los nombres ocultos con `N` nunca lo cambian
+    m.registry.setAllNamesHidden(true);
+    for (const u of m.registry.users()) m.registry.unhide(u.key);
+    assert.equal(hashMatch(m), GOLDEN.hash, seed);
+  }
+  assert.ok(hecho.ocultar > 3 && hecho.nombres > 3 && hecho.seguir > 0 && hecho.paneles > 3, JSON.stringify(hecho));
 });

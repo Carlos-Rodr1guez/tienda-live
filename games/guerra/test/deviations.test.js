@@ -28,13 +28,33 @@ function walk(dir) {
 
 const TEXT = /\.(html|css|js|mjs|json|svg|txt|md)$/i;
 
-/** Direcciones http(s) que no son de localhost. Devuelve una lista de `archivo: url`. */
-export function findThirdPartyUrls(dir) {
+/**
+ * Las dos licencias de las fuentes (OFL 1.1) traen las direcciones del proyecto de cada fuente y la de la licencia, y no se
+ * pueden editar. El escaneo las exime SOLO por ruta exacta y exige que sus únicas direcciones sean estas (DOC-2).
+ */
+export const OFL_EXENTOS = Object.freeze({
+  'fonts/OFL-pixelify-sans.txt': ['https://github.com/eifetx/Pixelify-Sans', 'https://scripts.sil.org/OFL'],
+  'fonts/OFL-silkscreen.txt': ['https://github.com/googlefonts/silkscreen', 'https://scripts.sil.org/OFL'],
+});
+
+/**
+ * Direcciones http(s) que no son de localhost. Devuelve una lista de `archivo: url`. `exentos` mapea una ruta relativa
+ * exacta a las únicas direcciones completas que ese archivo puede traer.
+ */
+export function findThirdPartyUrls(dir, exentos = {}) {
   const hits = [];
   for (const file of walk(dir).filter((f) => TEXT.test(f))) {
+    const rel = path.relative(dir, file).replaceAll('\\', '/');
+    if (Object.hasOwn(exentos, rel)) {
+      for (const m of fs.readFileSync(file, 'utf8').matchAll(/https?:\/\/[^\s)'"`<>\\]+/gi)) {
+        const url = m[0].replace(/[.,;:]+$/, '');
+        if (!exentos[rel].includes(url)) hits.push(`${rel}: ${url}`);
+      }
+      continue;
+    }
     for (const m of fs.readFileSync(file, 'utf8').matchAll(/https?:\/\/([^\s/'"`)<>\\]+)/gi)) {
       const host = m[1].replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
-      if (host !== 'localhost') hits.push(`${path.relative(dir, file)}: ${m[0]}`);
+      if (host !== 'localhost') hits.push(`${rel}: ${m[0]}`);
     }
   }
   return hits;
@@ -80,8 +100,30 @@ test('el detector de importar three reconoce las formas habituales', () => {
   assert.doesNotMatch("import { x } from './three-shake.js';", IMPORTS_THREE);
 });
 
-test('DOC-2: public/ no trae ninguna URL de terceros (solo localhost)', () => {
-  assert.deepEqual(findThirdPartyUrls(PUBLIC), []);
+test('DOC-2: public/ no trae ninguna URL de terceros (solo localhost) salvo las de las dos licencias OFL, por ruta exacta', () => {
+  assert.deepEqual(findThirdPartyUrls(PUBLIC, OFL_EXENTOS), []);
+  // sin la exención las licencias sí saltan: la exención existe y es la única razón por la que pasan
+  const sinExencion = findThirdPartyUrls(PUBLIC);
+  assert.ok(sinExencion.some((h) => h.startsWith('fonts/OFL-pixelify-sans.txt')));
+  assert.ok(
+    sinExencion.every((h) => h.startsWith('fonts/OFL-')),
+    'solo las licencias traen direcciones',
+  );
+  assert.deepEqual(Object.keys(OFL_EXENTOS), ['fonts/OFL-pixelify-sans.txt', 'fonts/OFL-silkscreen.txt']);
+});
+
+test('DOC-2: una URL de más dentro de un OFL-*.txt falla; un .txt cualquiera con URL falla; la misma licencia en otra ruta falla', () => {
+  const fx = (n) => path.join(GP, 'test', 'fixtures', n);
+  assert.deepEqual(findThirdPartyUrls(fx('ofl-ok'), OFL_EXENTOS), [], 'las direcciones exactas pasan');
+  const extra = findThirdPartyUrls(fx('ofl-extra'), OFL_EXENTOS);
+  assert.deepEqual(extra, ['fonts/OFL-pixelify-sans.txt: https://example.org/mas']);
+  const otro = findThirdPartyUrls(fx('ofl-otro-txt'), OFL_EXENTOS);
+  assert.equal(otro.length, 1);
+  assert.match(otro[0], /^fonts\/notas\.txt: https:\/\/scripts\.sil\.org/);
+  const otraRuta = findThirdPartyUrls(fx('ofl-otra-ruta'), OFL_EXENTOS);
+  assert.ok(otraRuta.length >= 1, 'la exención es por ruta exacta, no por nombre de archivo');
+  // y el escaneo sigue fallando con https://example.com/x.png aunque haya exenciones
+  assert.equal(findThirdPartyUrls(fx('third-party-url'), OFL_EXENTOS).length, 1);
 });
 
 test('DOC-2: el escáner de URL falla con un archivo que trae https://example.com/x.png y deja pasar localhost', () => {
@@ -117,10 +159,25 @@ test('CB-9: el arte del mundo está en código: ningún archivo ráster ni SVG b
   );
 });
 
-test('CB-2: public/js no contiene datos de banderas, escudos ni himnos en ningún archivo de render', () => {
+/**
+ * Archivos que recorre el escáner CB-2: todo `render/` y, desde el lote 6, todo `ui/`, porque los textos visibles
+ * se mudaron a `ui/strings.js` y los HUD y pantallas se dibujan desde `ui/` (ampliación de cobertura, decisión 4).
+ */
+const cb2Files = () => ['render', 'ui'].flatMap((dir) => walk(path.join(GJ, dir)).filter((x) => /\.js$/.test(x)));
+
+test('CB-2 (ampliación): el escáner recorre también GJ/ui/**, donde viven los textos visibles', () => {
+  const rel = cb2Files().map((f) => path.relative(GJ, f).replaceAll('\\', '/'));
+  assert.ok(rel.includes('ui/strings.js'), 'ui/strings.js está en el recorrido');
+  assert.ok(rel.includes('render/labels.js'), 'render/ sigue en el recorrido');
+  // y detecta un texto prohibido dentro de ui/ (la leyenda "Escudo" de la nota 40)
+  const prohibido = /\b(bandera|flag|escudo|himno|anthem|coat[-_ ]?of[-_ ]?arms)s?\b/i;
+  assert.match("legend: 'Escudo: grupo en defensa'", prohibido);
+});
+
+test('CB-2: public/js no contiene datos de banderas, escudos ni himnos en ningún archivo de render ni de ui', () => {
   const prohibido = /\b(bandera|flag|escudo|himno|anthem|coat[-_ ]?of[-_ ]?arms)s?\b/i;
   // los comentarios pueden decir "sin bandera"; el código no define datos con esos nombres
-  for (const f of walk(path.join(GJ, 'render')).filter((x) => /\.js$/.test(x))) {
+  for (const f of cb2Files()) {
     const src = fs
       .readFileSync(f, 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')

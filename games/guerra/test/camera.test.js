@@ -7,7 +7,8 @@ import { createGestures } from '../public/js/camera/gestures.js';
 import { createTimer, f2Model } from '../public/js/render/f2.js';
 import { drawMinimap } from '../public/js/render/minimap.js';
 import { createFakeCtx } from './support/fake-canvas.js';
-import { minimapHit, minimapRect, minimapVisible } from '../public/js/camera/minimap.js';
+import { minimapHit, minimapVisible } from '../public/js/camera/minimap.js';
+import { minimapRect } from '../public/js/ui/layout.js';
 
 // NM-4, NM-6 (lote 5c, tareas 5c.1 y 5c.2): el controlador de cámara es lógica pura, sin lienzo ni reloj de pared. El
 // reloj de vista lo pone `update(dt)`. Todo lo que se mide aquí es la vista (x0, y0, s), nunca el sim.

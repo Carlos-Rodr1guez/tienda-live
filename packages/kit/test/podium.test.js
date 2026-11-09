@@ -240,3 +240,77 @@ test('nombres de caso extremo: largos, emoji, otros alfabetos y sin XP', () => {
   assert.equal(names[2], 'Привет мир');
   assert.equal(names[3], ANON);
 });
+
+// C22: topUsers es una sola pasada con los N mejores y la MISMA cadena de desempate que rankUsers.
+test('topUsers: igual que rankUsers(...).slice(0, n) con empates, al azar y en el peor caso (todos iguales)', async () => {
+  const { createRegistry } = await import('@tienda/kit/sim/registry.js');
+  const { mulberry32 } = await import('@tienda/kit/sim/rng.js');
+  const { rankUsers, topUsers } = await import('@tienda/kit/sim/podium.js');
+  const A = { id: 'a', name: 'A', iso: 'AA', aliases: ['aa'] };
+  const B = { id: 'b', name: 'B', iso: 'BB', aliases: ['bb'] };
+  for (const [semilla, modo] of [
+    [1, 'azar'],
+    [2, 'azar'],
+    [3, 'iguales'],
+    [4, 'pocos-valores'],
+  ]) {
+    const rnd = mulberry32(semilla);
+    const r = createRegistry({ teams: [A, B] });
+    r.startMatch();
+    for (let i = 0; i < 400; i++) {
+      const key = `u${Math.floor(rnd() * 1e6)}`;
+      r.touch({ userId: key, nickname: key });
+      r.joinFromChat({ userId: key, nickname: key, text: String(1 + (i % 2)) }, 0, 0);
+      const coins =
+        modo === 'iguales' ? 5 : modo === 'pocos-valores' ? 1 + Math.floor(rnd() * 3) : 1 + Math.floor(rnd() * 500);
+      r.addCoins(key, coins, Math.floor(rnd() * 20));
+      if (rnd() < 0.3) r.addDestroyed(key, Math.floor(rnd() * 50), 1);
+    }
+    for (const scope of ['live', 'match', 'round']) {
+      for (const team of [undefined, 1, 2]) {
+        const todos = rankUsers(r, scope, { team });
+        for (const n of [1, 3, 10, 400, 1000]) {
+          assert.deepEqual(topUsers(r, scope, n, { team }), todos.slice(0, n), `${modo} ${scope} team ${team} n ${n}`);
+        }
+      }
+    }
+    const par = (u) => u.key.length % 2 === 0;
+    assert.deepEqual(
+      topUsers(r, 'match', 5, { filter: par }).map((e) => e.key),
+      rankUsers(r, 'match')
+        .filter((e) => e.key.length % 2 === 0)
+        .slice(0, 5)
+        .map((e) => e.key),
+    );
+  }
+  assert.deepEqual(topUsers(createRegistry({ teams: [A, B] }), 'match', 0), []);
+  assert.throws(() => topUsers(createRegistry({ teams: [A, B] }), 'otro', 3), TypeError);
+});
+
+test('topUsers con 20 000 usuarios: una sola pasada, bastante menos de lo que cuesta ordenar a todos', async () => {
+  const { createRegistry } = await import('@tienda/kit/sim/registry.js');
+  const { rankUsers, topUsers } = await import('@tienda/kit/sim/podium.js');
+  const r = createRegistry({
+    teams: [
+      { id: 'a', name: 'A', iso: 'AA', aliases: ['aa'] },
+      { id: 'b', name: 'B', iso: 'BB', aliases: ['bb'] },
+    ],
+  });
+  r.startMatch();
+  for (let i = 0; i < 20000; i++) {
+    r.touch({ userId: `u${i}`, nickname: `u${i}` });
+    r.addCoins(`u${i}`, 1 + (i % 97), i % 13);
+  }
+  topUsers(r, 'match', 3); // calienta
+  let rapido = Infinity;
+  for (let i = 0; i < 8; i++) {
+    const t0 = performance.now();
+    topUsers(r, 'match', 3);
+    rapido = Math.min(rapido, performance.now() - t0);
+  }
+  const t1 = performance.now();
+  rankUsers(r, 'match');
+  const lento = performance.now() - t1;
+  assert.ok(rapido < lento, `${rapido.toFixed(2)} ms contra ${lento.toFixed(2)} ms`);
+  assert.ok(rapido < 6, `${rapido.toFixed(2)} ms con 20 000 usuarios`);
+});

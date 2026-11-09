@@ -267,19 +267,22 @@ const MOMENT_WEIGHT = 6;
 export function createMoments({ heat, enabled = true, limit = 3, coins = 500 }) {
   /** @type {{slot: {x: number, y: number, w: number, step: number}, step: number, x: number, y: number}[]} */
   const queue = [];
-  /** @type {{kind: string, x: number, y: number, coins: number, owner: string | null, slide: boolean}[]} */
+  /** @type {{kind: string, x: number, y: number, coins: number, owner: string | null, slide: boolean, giftName?: string}[]} */
   let banners = [];
   const prune = (step) => {
     while (queue.length > 0 && step - queue[0].step > HEAT_LIFE * SIM_HZ) queue.shift();
   };
   const moments = {
     /**
-     * @param {{kind: string, x: number, y: number, coins?: number, owner?: string | null}} m
+     * @param {{kind: string, x: number, y: number, coins?: number, owner?: string | null, giftName?: string}} m
      * @param {{step: number, reduced: boolean}} ctx `reduced`: movimiento reducido (banner sin deslizar, sin cámara)
      * @returns {{banner: true, camera: boolean}}
      */
     push(m, { step, reduced }) {
-      banners.push({ kind: m.kind, x: m.x, y: m.y, coins: m.coins ?? 0, owner: m.owner ?? null, slide: !reduced });
+      const b = { kind: m.kind, x: m.x, y: m.y, coins: m.coins ?? 0, owner: m.owner ?? null, slide: !reduced };
+      // el nombre del regalo lo trae el adaptador del público (lote 6b) para "{nombre} envió {regalo}"
+      if (typeof m.giftName === 'string' && m.giftName !== '') /** @type {any} */ (b).giftName = m.giftName;
+      banners.push(b);
       if (!enabled || reduced) return { banner: true, camera: false };
       prune(step);
       queue.push({ slot: heat.add(m.x, m.y, MOMENT_WEIGHT, step), step, x: m.x, y: m.y });
@@ -290,9 +293,9 @@ export function createMoments({ heat, enabled = true, limit = 3, coins = 500 }) 
       }
       return { banner: true, camera: true };
     },
-    /** Un regalo del público: es momento si llega al umbral de monedas (`null` si no). */
+    /** Un regalo del público: es momento si llega al umbral de monedas o el adaptador dice que es grande (`null` si no). */
     gift(g, ctx) {
-      if (!(g.coins >= coins)) return null;
+      if (!(g.coins >= coins || g.big === true)) return null;
       return moments.push({ ...g, kind: 'gift' }, ctx);
     },
     /** Momentos con foco todavía vivo. */

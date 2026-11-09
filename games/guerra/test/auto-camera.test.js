@@ -4,7 +4,8 @@ import { autoTarget, createHeat, createMoments, HEAT_SLOTS, restScale, simViewOf
 import { autoRuns, createCameraRig } from '../public/js/camera/rig.js';
 import { createCameraController, fitScale } from '../public/js/camera/controller.js';
 import { resolveView } from '../public/js/camera/config.js';
-import { CAMERA_TEXT } from '../public/js/camera/text.js';
+import { S } from '../public/js/ui/strings.js';
+import { findForbidden } from './support/forbidden-words.js';
 import { scaleMode } from '../public/js/render/scale.js';
 
 // NM-4 y NM-6 (lote 5c, tareas 5c.3 a 5c.5): la cámara automática encuadra GRUPOS, no unidades. `autoTarget` es una
@@ -396,14 +397,14 @@ test('reposo de la automática con el techo (k ≤ 1,96): 1080p s = 2, 1440×810
 });
 
 test('estado visible: "CÁMARA AUTO" mientras maneja y "CÁMARA MANUAL" si no; apagada no se mueve sola en 60 s', () => {
-  assert.equal(CAMERA_TEXT.auto, 'CÁMARA AUTO');
-  assert.equal(CAMERA_TEXT.manual, 'CÁMARA MANUAL');
+  assert.equal(S.camera.auto, 'CÁMARA AUTO');
+  assert.equal(S.camera.manual, 'CÁMARA MANUAL');
   const c = mk();
-  assert.equal(c.status(), CAMERA_TEXT.manual, 'recién empezada ya está en manual');
+  assert.equal(c.status(), S.camera.manual, 'recién empezada ya está en manual');
   run(c, 7.5, peleaA());
-  assert.equal(c.status(), CAMERA_TEXT.auto);
+  assert.equal(c.status(), S.camera.auto);
   c.input('press', {});
-  assert.equal(c.status(), CAMERA_TEXT.manual, 'el narrador la pasa a manual en el mismo tick');
+  assert.equal(c.status(), S.camera.manual, 'el narrador la pasa a manual en el mismo tick');
   // la tecla A la apaga: no se mueve sola en 60 s
   const d = mk();
   assert.equal(d.state.autoEnabled, true);
@@ -411,16 +412,16 @@ test('estado visible: "CÁMARA AUTO" mientras maneja y "CÁMARA MANUAL" si no; a
   const antes = d.viewRect();
   run(d, 60, peleaA());
   assert.deepEqual(d.viewRect(), antes);
-  assert.equal(d.status(), CAMERA_TEXT.manual);
+  assert.equal(d.status(), S.camera.manual);
   // y al prenderla vuelve a manejar (alternarla no es mover la cámara: no reinicia el contador)
   assert.equal(d.toggleAuto().on, true);
   run(d, 0.1, peleaA());
-  assert.equal(d.status(), CAMERA_TEXT.auto);
+  assert.equal(d.status(), S.camera.auto);
   assert.ok(d.state.k > 1);
   // apagarla en pleno movimiento la deja donde está (en posición) y termina la transición en un nivel
   const cx = d.state.cx;
   assert.equal(d.toggleAuto().on, false);
-  assert.equal(d.status(), CAMERA_TEXT.manual, 'en el mismo tick, sin esperar al cuadro siguiente');
+  assert.equal(d.status(), S.camera.manual, 'en el mismo tick, sin esperar al cuadro siguiente');
   run(d, 4, peleaA());
   assert.ok(Math.abs(d.state.cx - cx) < 60, 'la posición no salta');
   assert.equal(d.state.kShown, d.state.k);
@@ -493,12 +494,12 @@ test('detener la automática con movimiento reducido no anima: el ajuste al nive
 
 test('los avisos de la tecla A salen de una constante de textos', () => {
   const c = mk();
-  assert.equal(c.toggleAuto().notice, CAMERA_TEXT.autoOff);
-  assert.equal(c.toggleAuto().notice, CAMERA_TEXT.autoOn);
-  assert.equal(CAMERA_TEXT.autoOff, 'Cámara automática: desactivada');
-  assert.equal(CAMERA_TEXT.autoOn, 'Cámara automática: activada');
-  for (const t of Object.values(CAMERA_TEXT)) assert.doesNotMatch(t, /guerra|trench|warfare|1917|\bdirecto\b/i);
-  assert.equal(Object.isFrozen(CAMERA_TEXT), true);
+  assert.equal(c.toggleAuto().notice, S.camera.autoOff);
+  assert.equal(c.toggleAuto().notice, S.camera.autoOn);
+  assert.equal(S.camera.autoOff, 'Cámara automática: desactivada');
+  assert.equal(S.camera.autoOn, 'Cámara automática: activada');
+  for (const t of Object.values(S.camera)) assert.deepEqual(findForbidden(t), []);
+  assert.equal(Object.isFrozen(S.camera), true);
 });
 
 test('movimiento reducido: la automática arranca apagada, y A la prende', () => {
@@ -507,10 +508,10 @@ test('movimiento reducido: la automática arranca apagada, y A la prende', () =>
   const antes = c.viewRect();
   run(c, 60, peleaA());
   assert.deepEqual(c.viewRect(), antes);
-  assert.equal(c.status(), CAMERA_TEXT.manual);
+  assert.equal(c.status(), S.camera.manual);
   assert.equal(c.toggleAuto().on, true);
   run(c, 0.1, peleaA());
-  assert.equal(c.status(), CAMERA_TEXT.auto);
+  assert.equal(c.status(), S.camera.auto);
   // la config también la apaga por defecto
   const d = mk(1920, 1080, { view: { auto: { enabled: false } } });
   assert.equal(d.state.autoEnabled, false);
@@ -519,16 +520,16 @@ test('movimiento reducido: la automática arranca apagada, y A la prende', () =>
 test('R en pleno LIVE apaga también la automática ("Cámara automática: desactivada"), A la prende y apagar R deja A como estaba', () => {
   const c = mk();
   run(c, 8, peleaA());
-  assert.equal(c.status(), CAMERA_TEXT.auto);
+  assert.equal(c.status(), S.camera.auto);
   assert.equal(c.syncReduced(false), null, 'sin cambio, sin aviso');
-  assert.equal(c.syncReduced(true), CAMERA_TEXT.autoOff, 'R encendió el movimiento reducido');
+  assert.equal(c.syncReduced(true), S.camera.autoOff, 'R encendió el movimiento reducido');
   // el estado se sigue cada cuadro: con el movimiento reducido todavía activo, A la prende y NO se vuelve a apagar sola
   assert.equal(c.toggleAuto().on, true);
   assert.equal(c.syncReduced(true), null);
   assert.equal(c.state.autoEnabled, true);
   assert.equal(c.toggleAuto().on, false);
   assert.equal(c.state.autoEnabled, false);
-  assert.equal(c.status(), CAMERA_TEXT.manual);
+  assert.equal(c.status(), S.camera.manual);
   const parada = c.viewRect();
   run(c, 10, peleaA());
   assert.deepEqual(c.viewRect(), parada, 'la automática quedó apagada y la vista, quieta');
@@ -536,7 +537,7 @@ test('R en pleno LIVE apaga también la automática ("Cámara automática: desac
   // A la vuelve a prender aun con movimiento reducido
   assert.equal(c.toggleAuto().on, true);
   run(c, 0.1, peleaA());
-  assert.equal(c.status(), CAMERA_TEXT.auto);
+  assert.equal(c.status(), S.camera.auto);
   // apagar el movimiento reducido deja A como estaba (prendida)
   assert.equal(c.syncReduced(false), null);
   assert.equal(c.state.autoEnabled, true);
@@ -635,7 +636,7 @@ test('con la automática encendida y 7 s inactiva, el foco de peso 6 que decae p
   const c = mk();
   run(c, 7.1, combateChico(heat.slots));
   assert.ok(c.state.tx > 700, 'con el momento, el objetivo pasa a B');
-  assert.equal(c.status(), CAMERA_TEXT.auto);
+  assert.equal(c.status(), S.camera.auto);
   // el foco decae: 5 s después ya no cuenta (la vista del sim avanzó 150 pasos) y vuelve al combate de A
   const viejo = (events) => ({ ...combateChico(events), step: 200 });
   run(c, 3, viejo(heat.slots));
@@ -825,7 +826,7 @@ test('cuando cae una base la automática sigue (no pasa a manual) y encuadra la 
     if (rig.controller.state.mode !== 'auto') manual++;
   }
   assert.equal(manual, 0, 'nada pasa a manual en la transición');
-  assert.equal(rig.controller.status(), CAMERA_TEXT.auto);
+  assert.equal(rig.controller.status(), S.camera.auto);
   assert.ok(rig.controller.state.tx <= 481, `el objetivo va a la base caída (tx ${rig.controller.state.tx})`);
   // y sigue durante la espera del narrador
   for (let i = 0; i < 60 * 3; i++) rig.update(1 / 60, alFinal, autoRuns('waitingNextRound'));
@@ -890,7 +891,7 @@ test('el conjunto cámara: el aterrizaje de un avión es un momento adelante en 
   assert.deepEqual(rig.drainNotices(), []);
   motion.reduced = true;
   rig.update(1 / 60, w, true);
-  assert.deepEqual(rig.drainNotices(), [CAMERA_TEXT.autoOff]);
+  assert.deepEqual(rig.drainNotices(), [S.camera.autoOff]);
   assert.deepEqual(rig.drainNotices(), []);
   assert.equal(rig.controller.state.autoEnabled, false);
   // cada ronda empieza con el mapa entero y sin calor viejo

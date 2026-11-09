@@ -13,6 +13,9 @@ const FRAME_MS = 1000 / 60;
 
 /** Un DOM falso y un `import` nuevo de main.js para la URL dada. */
 async function arrancar(search, { reducido = false } = {}) {
+  // sin parámetros la página abre el selector: aquí se elige el par (PE-MX) y se empieza con Enter, salvo con ?golden
+  const golden = /[?&]golden(&|$)/.test(search);
+  const url = golden || /[?&]pair=/.test(search) ? search : `${search}${search.includes('?') ? '&' : '?'}pair=PE-MX`;
   const { createCanvas } = createFakeCanvasFactory();
   const ctx = createFakeCtx({ record: true });
   const oyentes = { window: new Map(), canvas: new Map() };
@@ -64,7 +67,7 @@ async function arrancar(search, { reducido = false } = {}) {
   let raf = null;
   Object.assign(globalThis, {
     window: globalThis,
-    location: { search },
+    location: { search: url },
     document: {
       getElementById: (id) => (id === 'game' ? canvas : (botones[id] ?? null)),
       createElement: () => createCanvas(1, 1),
@@ -118,6 +121,12 @@ async function arrancar(search, { reducido = false } = {}) {
   });
   // los primeros cuadros dan el primer paso del sim: el `intro` empieza la ronda con el mapa entero
   entorno.cuadros(6);
+  if (!golden) {
+    entorno.tecla('Enter'); // elige el par
+    entorno.cuadros(2);
+    entorno.tecla('Enter'); // empieza el partido
+    entorno.cuadros(2);
+  }
   return entorno;
 }
 
@@ -288,7 +297,9 @@ test('botones de la cámara: Ver todo, Acercar, Alejar y el estado de la automá
   assert.equal(botones['cam-all'].textContent, 'Ver todo');
   assert.equal(botones['cam-in'].textContent, 'Acercar');
   assert.equal(botones['cam-out'].textContent, 'Alejar');
-  assert.equal(botones['cam-auto'].textContent, 'CÁMARA MANUAL');
+  // el botón dice lo que hace al pulsarlo (la automática está encendida: la APAGA) y el estado se lee aparte (S3)
+  assert.equal(botones['cam-auto'].textContent, 'CÁMARA AUTO', 'rótulo fijo del botón de alternar');
+  assert.ok(e.textos().includes('CÁMARA MANUAL'), 'el estado de la cámara se dibuja en el centro del HUD');
   assert.equal(botones['cam-out'].disabled, true, 'en el mapa entero no se puede alejar');
   assert.equal(botones['cam-all'].disabled, true);
   e.clic('cam-in'); // ×1,5 desde s = 1,333 llega a 2
@@ -494,19 +505,19 @@ test('C3: Enter sobre un botón con foco lo activa el navegador y NO avanza la r
   let espera = false;
   for (let i = 0; i < 800 && !espera; i++) {
     e.cuadros(1, 100);
-    espera = e.textos().some((t) => t.includes('esperando al narrador'));
+    espera = e.textos().some((t) => t.includes('El narrador inicia la siguiente ronda'));
   }
   assert.equal(espera, true, 'la ronda terminó y espera al narrador');
   e.tecla('Enter', { target: { tagName: 'BUTTON' } });
   e.cuadros(2, 100);
   assert.ok(
-    e.textos().some((t) => t.includes('esperando al narrador')),
+    e.textos().some((t) => t.includes('El narrador inicia la siguiente ronda')),
     'con el foco en un botón, Enter no avanza',
   );
   e.tecla('Enter');
   e.cuadros(2, 100);
   assert.ok(
-    e.textos().some((t) => t.includes('preparación')),
+    e.textos().some((t) => t.includes('Ronda 2/3')),
     'Enter sin foco en un botón sí empieza la ronda siguiente',
   );
 });
@@ -524,7 +535,7 @@ test('C1: la cámara automática sigue manejando cuando la ronda termina y el ju
     e.cuadros(1, 250); // el reloj de vista avanza rápido: pasan los 7 s de inactividad antes de que acabe la ronda
     const modo = e.f2()[MODO] ?? '';
     if (modo.startsWith('CÁMARA AUTO')) manejo = true;
-    if (e.textos().some((t) => t.includes('esperando al narrador'))) enEspera = modo;
+    if (e.textos().some((t) => t.includes('El narrador inicia la siguiente ronda'))) enEspera = modo;
   }
   assert.equal(manejo, true, 'manejó durante la batalla');
   assert.ok(enEspera.startsWith('CÁMARA AUTO'), `en la espera sigue en automática (${enEspera})`);

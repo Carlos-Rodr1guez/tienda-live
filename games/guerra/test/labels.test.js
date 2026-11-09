@@ -5,7 +5,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   LABEL_DEFAULTS,
-  LABEL_TEXT,
   createRanking,
   fitText,
   hitLabel,
@@ -14,6 +13,7 @@ import {
   resolveLabels,
   selectLabels,
 } from '../public/js/render/labels.js';
+import { S } from '../public/js/ui/strings.js';
 
 // Etiquetas de donantes en el mundo (CB-16, D22): selección por densidad según el zoom k, texto, recorte por ancho
 // medido y colocación sin pisar íconos. Todo puro y con un `measureText` falso: sin DOM ni lienzo.
@@ -232,7 +232,7 @@ test('contenido: "CABO ana_23"; oculto "CABO anónimo"; con N solo el rango', ()
   assert.equal(labelText({ rank: 'Cabo', name: 'ana_23', onlyRank: true }), 'CABO');
   assert.equal(labelText({ rank: 'Cabo', name: 'ana_23', hidden: true, onlyRank: true }), 'CABO');
   assert.equal(labelText({ rank: 'Capitán', name: 'x' }), 'CAPITÁN x', 'mayúsculas con tildes');
-  assert.equal(LABEL_TEXT.anon, 'anónimo');
+  assert.equal(S.anon, 'anónimo');
 });
 
 /** `measureText` falso: 5 px por letra latina, 10 por CJK y 12 por emoji, igual que una fuente real con respaldo. */

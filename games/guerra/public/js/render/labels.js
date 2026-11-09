@@ -11,11 +11,10 @@
 // Los nombres que llegan aquí ya vienen saneados y enmascarados por el registro del kit (`displayName`): este módulo
 // solo arma texto para dibujarlo con `fillText`, nunca HTML.
 
+import { S } from '../ui/strings.js';
+
 /** Una sola instancia: crear un segmentador por nombre sería caro con miles de eventos. */
 const SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-
-/** Texto visible que pone este módulo (el lote 6 lo mueve a `ui/strings.js`). */
-export const LABEL_TEXT = Object.freeze({ anon: 'anónimo' });
 
 /** Config de §8.0 (`labels`). `maxPerFrame` nunca pasa de las 24 etiquetas que reserva el render. */
 export const LABEL_DEFAULTS = Object.freeze({ topAtK1: 3, topMid: 6, maxPerFrame: 24, maxWidth: 110, refreshHz: 5 });
@@ -220,7 +219,7 @@ export function selectLabels({ units, k, view, alpha, spotlight = null, ranking,
 export function labelText({ rank, name, hidden = false, onlyRank = false }) {
   const r = String(rank ?? '').toLocaleUpperCase('es');
   if (onlyRank) return r;
-  return `${r} ${hidden || !name ? LABEL_TEXT.anon : name}`;
+  return `${r} ${hidden || !name ? S.anon : name}`;
 }
 
 /**

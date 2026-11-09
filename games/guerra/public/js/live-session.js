@@ -8,39 +8,16 @@
 //   - envía como mucho una vez por segundo con el reloj de vista (el que llega a `frame`) y un último intento en `pagehide`;
 //   - `newLive` aceptado por el sim vacía la copia del servidor (DELETE).
 // No usa reloj propio, ni temporizadores periódicos, ni almacenamiento del navegador: nada de nombres o rangos queda en
-// el disco del perfil (NM-11). Los textos de F2 viven en `SESSION_TEXT`; el lote 6 los mueve a `ui/strings.js`.
+// el disco del perfil (NM-11). Los textos de F2 viven en `ui/strings.js` (`S.session`).
 
 import { createSessionClient } from '@tienda/kit/client/session.js';
 import { exportProgress, importProgress } from './sim/match.js';
-
-const ESTADOS = Object.freeze({
-  waitingNextRound: 'esperando la ronda siguiente',
-  lobby: 'sala',
-  selector: 'selector de pares',
-});
-
-/** Textos de F2 para la sesión (español neutro). */
-export const SESSION_TEXT = Object.freeze({
-  statusLabel: 'sesión de la transmisión',
-  leftOutLabel: 'usuarios fuera de la copia',
-  none: 'sin cargar',
-  restored: (users, state, dropped = 0) =>
-    `restaurada con ${users} usuarios · ${ESTADOS[state] ?? state}${dropped > 0 ? ` · ${dropped} descartados` : ''}`,
-  empty: 'vacía: sesión nueva',
-  off: 'sin servidor de sesión: no se guarda',
-  failed: 'no se pudo cargar: el juego arranca vacío',
-  retrying: 'reintentando',
-  blocked: 'hay una copia guardada sin cargar: recarga la página para recuperarla',
-  every: (n) => `cada ${n} s`,
-  invalid: 'copia inválida: el juego arranca vacío',
-  saving: Object.freeze({ idle: '', pending: 'guardando', ok: 'guardada', error: 'error al guardar (se reintenta)' }),
-  hiddenLeftOut: (n) => ` (+${n} ocultos)`,
-});
+import { S } from './ui/strings.js';
 
 /** Las líneas de F2 cuando el servidor dice que no tiene sesión (no se arma nada ni se hace ningún pedido). */
 export const sessionOffLines = () => [
-  { key: 'session.status', label: SESSION_TEXT.statusLabel, value: SESSION_TEXT.off },
-  { key: 'session.leftOut', label: SESSION_TEXT.leftOutLabel, value: '0' },
+  { key: 'session.status', label: S.session.statusLabel, value: S.session.off },
+  { key: 'session.leftOut', label: S.session.leftOutLabel, value: '0' },
 ];
 
 const igualesProgreso = (a, b) =>
@@ -157,23 +134,23 @@ export function createLiveSession({
       const s = client.state;
       let cargada;
       if (s.blocked)
-        cargada = SESSION_TEXT.blocked; // la copia buena existe y la página ya arrancó de cero: no se pisa
-      else if (s.gate === 'pending') cargada = `${SESSION_TEXT.failed} · ${SESSION_TEXT.retrying}`;
-      else if (info.status === 'restored') cargada = SESSION_TEXT.restored(info.users, info.state, info.dropped);
+        cargada = S.session.blocked; // la copia buena existe y la página ya arrancó de cero: no se pisa
+      else if (s.gate === 'pending') cargada = `${S.session.failed} · ${S.session.retrying}`;
+      else if (info.status === 'restored') cargada = S.session.restored(info.users, info.state, info.dropped);
       else if (info.status === 'failed')
-        cargada = SESSION_TEXT.empty; // un reintento tardío dio 204 o un nuevo en vivo la vació
-      else cargada = SESSION_TEXT[info.status] ?? SESSION_TEXT.none;
+        cargada = S.session.empty; // un reintento tardío dio 204 o un nuevo en vivo la vació
+      else cargada = S.session[info.status] ?? S.session.none;
       const sinGuardar = s.stopped || s.gate !== 'open';
-      const base = sinGuardar ? '' : SESSION_TEXT.saving[s.dirty && s.saving !== 'error' ? 'pending' : s.saving];
-      const guardado = base && s.interval > 1 ? `${base} · ${SESSION_TEXT.every(s.interval)}` : base;
-      const fuera = `${s.dropped}${s.droppedHidden > 0 ? SESSION_TEXT.hiddenLeftOut(s.droppedHidden) : ''}`;
+      const base = sinGuardar ? '' : S.session.saving[s.dirty && s.saving !== 'error' ? 'pending' : s.saving];
+      const guardado = base && s.interval > 1 ? `${base} · ${S.session.every(s.interval)}` : base;
+      const fuera = `${s.dropped}${s.droppedHidden > 0 ? S.session.hiddenLeftOut(s.droppedHidden) : ''}`;
       return [
         {
           key: 'session.status',
-          label: SESSION_TEXT.statusLabel,
+          label: S.session.statusLabel,
           value: guardado ? `${cargada} · ${guardado}` : cargada,
         },
-        { key: 'session.leftOut', label: SESSION_TEXT.leftOutLabel, value: fuera },
+        { key: 'session.leftOut', label: S.session.leftOutLabel, value: fuera },
       ];
     },
   };

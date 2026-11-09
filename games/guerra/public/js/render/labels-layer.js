@@ -17,10 +17,12 @@ import {
   fitText,
   labelText,
   layoutLabels,
-  LABEL_TEXT,
   resolveLabels,
   selectLabels,
 } from './labels.js';
+import { BAND_TOP } from '../ui/layout.js';
+import { S } from '../ui/strings.js';
+import { FONTS } from '../ui/theme.js';
 import { projectAxis } from './project.js';
 
 const INK = PALETA.ink;
@@ -28,12 +30,8 @@ const INK = PALETA.ink;
 /** Duración del fundido de las etiquetas (§10.3). */
 export const LABEL_FADE_SECONDS = 0.12;
 
-/** Fuente de las etiquetas: la pixel primero (se vendoriza en el lote 6, tarea 6.9) y la del sistema de respaldo. */
-export const LABEL_FONT = Object.freeze({
-  size: 7,
-  weight: 600,
-  family: '"Pixelify Sans", "Silkscreen", system-ui, sans-serif',
-});
+/** Fuente de las etiquetas: la pila del diseño (`ui/theme.js`), 7 px virtuales. */
+export const LABEL_FONT = Object.freeze({ size: 7, weight: FONTS.body.weight, family: FONTS.body.family });
 
 // medidas de la pastilla, en px virtuales (se multiplican por la escala entera de la interfaz)
 const PAD_X = 2;
@@ -42,8 +40,6 @@ const GAP = 2;
 const HEIGHT = 10;
 /** Espacio entre la cabeza del sprite y el borde inferior de la pastilla. */
 const GAP_ABOVE = 2;
-/** La banda superior del HUD: ninguna etiqueta sube por encima de y = 40 virtuales (nota 3 del coordinador). */
-const BAND = 40;
 const CHROME = 2 * PAD_X + SHAPE + GAP;
 
 /**
@@ -73,11 +69,11 @@ export function createLabelLayer({ registry, teamHex, spriteAy, marksSize, cfg }
   /** Texto recortado y su ancho, de la caché; solo mide si cambió algo de lo que lo determina. */
   function textoDe(ctx, key, u, font, onlyRank) {
     const rank = String(registry.rankOf(key)?.label ?? '');
-    const name = String(registry.displayName(key) ?? LABEL_TEXT.anon);
+    const name = String(registry.displayName(key) ?? S.anon);
     let t = textos.get(key);
     if (t && t.rank === rank && t.name === name && t.onlyRank === onlyRank && t.font === font) return t;
     const RANGO = rank.toLocaleUpperCase('es');
-    const full = labelText({ rank, name, hidden: name === LABEL_TEXT.anon, onlyRank });
+    const full = labelText({ rank, name, hidden: name === S.anon, onlyRank });
     const prefix = onlyRank ? RANGO : `${RANGO} `;
     const fit = fitText({
       prefix,
@@ -126,6 +122,8 @@ export function createLabelLayer({ registry, teamHex, spriteAy, marksSize, cfg }
   const layer = {
     /** Pastillas colocadas en el último cuadro (para el clic y el Alt+clic del lote 6: `hitLabel(layer.rects, {x, y})`). */
     rects: /** @type {{key: string, x: number, y: number, w: number, h: number}[]} */ ([]),
+    /** Las pastillas que se VEN en el último cuadro, también las que se están apagando (120 ms): el clic y el Alt+clic responden en ellas. */
+    hitRects: /** @type {{key: string, x: number, y: number, w: number, h: number}[]} */ ([]),
     stats,
     /** Vacía la caché de texto medido: llega una fuente (`document.fonts` avisa `loadingdone`) y los anchos cambian. */
     invalidate() {
@@ -143,6 +141,7 @@ export function createLabelLayer({ registry, teamHex, spriteAy, marksSize, cfg }
     draw(ctx, f) {
       if (!registry) {
         layer.rects = [];
+        layer.hitRects.length = 0;
         stats.selected = stats.drawn = stats.dropped = stats.fading = 0;
         return;
       }
@@ -191,11 +190,13 @@ export function createLabelLayer({ registry, teamHex, spriteAy, marksSize, cfg }
       const n = f.icons?.count ?? 0;
       obstacles.length = 0;
       for (let i = 0; i < n; i++) obstacles.push(iconScreenRect(f.icons.descs[i], screen));
+      // lo que el HUD ocupa sobre el campo (rieles, banda inferior, marco, chip, aviso y paneles abiertos): ninguna caja lo cruza (B9)
+      if (f.blockers) for (let i = 0; i < f.blockers.length; i++) obstacles.push(f.blockers[i]);
 
       const { rects, dropped } = layoutLabels(items, {
         W,
         H,
-        bandTop: BAND * u,
+        bandTop: BAND_TOP * u,
         obstacles,
         gap: u,
         scratch: layScratch,
@@ -223,6 +224,7 @@ export function createLabelLayer({ registry, teamHex, spriteAy, marksSize, cfg }
 
       let dibujadas = 0;
       let saliendo = 0;
+      let visibles = 0;
       for (const [key, fd] of fades) {
         const paso = dt / LABEL_FADE_SECONDS;
         fd.alpha = fd.target === 1 ? Math.min(1, fd.alpha + paso) : Math.max(0, fd.alpha - paso);
@@ -234,7 +236,15 @@ export function createLabelLayer({ registry, teamHex, spriteAy, marksSize, cfg }
         if (fd.alpha <= 0) continue;
         if (fd.target === 1) dibujadas++;
         pastilla(ctx, fd, u);
+        const hr = layer.hitRects[visibles] ?? (layer.hitRects[visibles] = { key: '', x: 0, y: 0, w: 0, h: 0 });
+        hr.key = key;
+        hr.x = fd.x;
+        hr.y = fd.y;
+        hr.w = fd.w;
+        hr.h = fd.h;
+        visibles++;
       }
+      layer.hitRects.length = visibles;
       ctx.globalAlpha = 1;
       stats.drawn = dibujadas;
       stats.fading = saliendo;

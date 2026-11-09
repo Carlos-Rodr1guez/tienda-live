@@ -17,13 +17,15 @@
   <body>
     <main id="app">
       <canvas id="game" width="1920" height="1080" aria-label="Campo de batalla"></canvas>
-      <!-- Botones de la cámara del narrador (lote 5c): el texto lo pone main.js desde camera/text.js -->
+      <!-- Botones de la cámara del narrador (lote 5c): el texto lo pone main.js desde ui/strings.js; los oculta en el selector y en el error -->
       <div id="cam-bar" role="toolbar" aria-label="Cámara">
         <button id="cam-all" type="button"></button>
         <button id="cam-in" type="button"></button>
         <button id="cam-out" type="button"></button>
         <button id="cam-auto" type="button"></button>
       </div>
+      <!-- Simulador de público (F1): lo arma el kit con textContent; se abre y se cierra con F1 -->
+      <aside id="sim" class="sim"></aside>
     </main>
     <script type="module" src="./js/main.js"></script>
     <noscript>Esta página necesita JavaScript para mostrar el juego.</noscript>

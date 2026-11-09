@@ -2,6 +2,9 @@
 // que el dueño mira para la medición de 5a.10: fps, trabajo por cuadro (sim, mundo, UI) contra el presupuesto de 8 ms,
 // entidades, llamadas de dibujo, escala y modo, y el hash de estado del paso actual (con `?golden`, el dorado).
 
+import { S } from '../ui/strings.js';
+import { COLORS, fontCss } from '../ui/theme.js';
+
 /** Presupuesto de CB-18: trabajo por cuadro y cuadros por segundo con 400 unidades. */
 export const BUDGET = Object.freeze({ workMs: 8, minFps: 50 });
 
@@ -72,80 +75,80 @@ const f = (n, d) => Number(n).toFixed(d);
 export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx, camera, labels, icons, session }) {
   const t = timer.snapshot();
   const lines = [
-    { key: 'fps', label: 'cuadros por segundo', value: f(t.fps, 1) },
-    { key: 'ms.sim', label: 'ms sim', value: f(t.ms.sim, 2) },
-    { key: 'ms.world', label: 'ms mundo', value: f(t.ms.world, 2) },
-    { key: 'ms.ui', label: 'ms interfaz', value: f(t.ms.ui, 2) },
-    { key: 'ms.fx', label: 'ms efectos (dentro de mundo)', value: f(t.ms.fx, 2) },
-    { key: 'ms.work', label: 'ms trabajo por cuadro', value: f(t.ms.work, 2) },
-    { key: 'units', label: 'unidades', value: String(counts.units) },
-    { key: 'squads', label: 'grupos', value: String(counts.squads) },
-    { key: 'planes', label: 'aviones', value: String(counts.planes) },
-    { key: 'hits', label: 'golpes en vuelo', value: String(counts.hits) },
-    { key: 'particles', label: 'partículas', value: String(stats.particles) },
-    { key: 'drawCalls', label: 'llamadas de dibujo', value: String(stats.drawCalls) },
-    { key: 'culled', label: 'recortadas', value: String(stats.culled) },
-    { key: 's', label: 'escala s', value: f(stats.s, 3) },
-    { key: 'mode', label: 'modo de escala', value: stats.mode },
-    { key: 'lod', label: 'LOD', value: stats.marks ? 'marcas' : 'sprites' },
-    { key: 'devicePass', label: 'pasada de dispositivo', value: stats.devicePass ? 'sí' : 'no' },
-    { key: 'bakeCount', label: 'sprites horneados (equipos)', value: String(bakeCount) },
-    { key: 'canvases', label: 'lienzos reservados', value: String(stats.canvasesAllocated) },
-    { key: 'hash', label: 'hash del paso', value: hash },
+    { key: 'fps', label: S.f2.fps, value: f(t.fps, 1) },
+    { key: 'ms.sim', label: S.f2.msSim, value: f(t.ms.sim, 2) },
+    { key: 'ms.world', label: S.f2.msWorld, value: f(t.ms.world, 2) },
+    { key: 'ms.ui', label: S.f2.msUi, value: f(t.ms.ui, 2) },
+    { key: 'ms.fx', label: S.f2.msFx, value: f(t.ms.fx, 2) },
+    { key: 'ms.work', label: S.f2.msWork, value: f(t.ms.work, 2) },
+    { key: 'units', label: S.f2.units, value: String(counts.units) },
+    { key: 'squads', label: S.f2.squads, value: String(counts.squads) },
+    { key: 'planes', label: S.f2.planes, value: String(counts.planes) },
+    { key: 'hits', label: S.f2.hits, value: String(counts.hits) },
+    { key: 'particles', label: S.f2.particles, value: String(stats.particles) },
+    { key: 'drawCalls', label: S.f2.drawCalls, value: String(stats.drawCalls) },
+    { key: 'culled', label: S.f2.culled, value: String(stats.culled) },
+    { key: 's', label: S.f2.scale, value: f(stats.s, 3) },
+    { key: 'mode', label: S.f2.mode, value: stats.mode },
+    { key: 'lod', label: S.f2.lod, value: stats.marks ? S.f2.marks : S.f2.sprites },
+    { key: 'devicePass', label: S.f2.devicePass, value: stats.devicePass ? S.f2.yes : S.f2.no },
+    { key: 'bakeCount', label: S.f2.bakeCount, value: String(bakeCount) },
+    { key: 'canvases', label: S.f2.canvases, value: String(stats.canvasesAllocated) },
+    { key: 'hash', label: S.f2.hash, value: hash },
   ];
   if (fx) {
     const n = (k) => `${fx.usage[k]}/${fx.caps[k]}`;
-    lines.push({ key: 'fx.particles', label: 'efectos: partículas', value: n('particles') });
-    lines.push({ key: 'fx.booms', label: 'efectos: explosiones', value: n('booms') });
-    lines.push({ key: 'fx.craters', label: 'efectos: cráteres', value: n('craters') });
-    lines.push({ key: 'fx.wrecks', label: 'efectos: restos', value: n('wrecks') });
-    lines.push({ key: 'fx.large', label: 'destellos grandes (último segundo)', value: String(fx.recentLarge) });
+    lines.push({ key: 'fx.particles', label: S.f2.fxParticles, value: n('particles') });
+    lines.push({ key: 'fx.booms', label: S.f2.fxBooms, value: n('booms') });
+    lines.push({ key: 'fx.craters', label: S.f2.fxCraters, value: n('craters') });
+    lines.push({ key: 'fx.wrecks', label: S.f2.fxWrecks, value: n('wrecks') });
+    lines.push({ key: 'fx.large', label: S.f2.fxLarge, value: String(fx.recentLarge) });
   }
   if (labels) {
     lines.push({
       key: 'labels.drawn',
-      label: 'etiquetas dibujadas',
+      label: S.f2.labelsDrawn,
       value: String(labels.drawn),
     });
-    lines.push({ key: 'labels.selected', label: 'etiquetas elegidas', value: String(labels.selected ?? 0) });
-    lines.push({ key: 'labels.dropped', label: 'etiquetas descartadas por el layout', value: String(labels.dropped) });
+    lines.push({ key: 'labels.selected', label: S.f2.labelsSelected, value: String(labels.selected ?? 0) });
+    lines.push({ key: 'labels.dropped', label: S.f2.labelsDropped, value: String(labels.dropped) });
   }
-  if (icons) lines.push({ key: 'icons.drawn', label: 'íconos de rol dibujados', value: String(icons.drawn) });
+  if (icons) lines.push({ key: 'icons.drawn', label: S.f2.iconsDrawn, value: String(icons.drawn) });
   // sesión de la transmisión (lote 5e): ya vienen armadas, con sus textos, desde `live-session.js`; sin sesión (?golden) no hay
   if (session) lines.push(...session);
   if (camera) {
     lines.push({
       key: 'cam.k',
-      label: 'cámara k (objetivo / mostrado)',
+      label: S.f2.camK,
       value: `${f(camera.k, 3)} / ${f(camera.kShown, 3)}`,
     });
-    lines.push({ key: 'cam.mode', label: 'cámara', value: `${camera.text} · ${camera.mode}` });
-    lines.push({ key: 'cam.idle', label: 'segundos sin entrada del narrador', value: f(camera.idle, 1) });
-    lines.push({ key: 'cam.auto', label: 'cámara automática', value: camera.auto ? 'encendida' : 'apagada' });
+    lines.push({ key: 'cam.mode', label: S.f2.camMode, value: `${camera.text} · ${camera.mode}` });
+    lines.push({ key: 'cam.idle', label: S.f2.camIdle, value: f(camera.idle, 1) });
+    lines.push({ key: 'cam.auto', label: S.f2.camAuto, value: camera.auto ? S.f2.on : S.f2.off });
     lines.push({
       key: 'cam.focus',
-      label: 'foco de la cámara (px de mundo)',
-      value: camera.k === 1 ? 'mapa entero' : `${Math.round(camera.tx)}, ${Math.round(camera.ty)}`,
+      label: S.f2.camFocus,
+      value: camera.k === 1 ? S.f2.wholeMap : `${Math.round(camera.tx)}, ${Math.round(camera.ty)}`,
     });
   }
   if (golden) {
-    lines.push({ key: 'goldenHash', label: 'hash dorado', value: golden.expected });
+    lines.push({ key: 'goldenHash', label: S.f2.goldenHash, value: golden.expected });
     lines.push({
       key: 'goldenMatch',
-      label: 'coincide con el dorado',
+      label: S.f2.goldenMatch,
       value: golden.done
         ? golden.hash === golden.expected
-          ? 'sí coincide'
-          : 'NO coincide'
-        : `corriendo ${golden.step ?? 0}/${golden.steps ?? 0}`,
+          ? S.f2.matches
+          : S.f2.noMatch
+        : S.f2.running(golden.step ?? 0, golden.steps ?? 0),
     });
   }
   const fallas = [];
-  if (t.ms.work > BUDGET.workMs) fallas.push(`trabajo ${f(t.ms.work, 1)} ms > ${BUDGET.workMs} ms`);
-  if (t.fps > 0 && t.fps < BUDGET.minFps) fallas.push(`${f(t.fps, 0)} fps < ${BUDGET.minFps} fps`);
+  if (t.ms.work > BUDGET.workMs) fallas.push(S.f2.workOver(f(t.ms.work, 1), BUDGET.workMs));
+  if (t.fps > 0 && t.fps < BUDGET.minFps) fallas.push(S.f2.fpsUnder(f(t.fps, 0), BUDGET.minFps));
   return {
     lines,
-    budget: { ok: fallas.length === 0, text: fallas.length ? fallas.join(' · ') : 'dentro del presupuesto' },
+    budget: { ok: fallas.length === 0, text: fallas.length ? fallas.join(' · ') : S.f2.withinBudget },
   };
 }
 
@@ -165,7 +168,7 @@ export function drawF2(ctx, model, scale = 1) {
   ctx.globalAlpha = 1;
   ctx.fillStyle = 'rgba(11,15,23,0.86)';
   ctx.fillRect(pad, pad, w, h);
-  ctx.font = `${sz}px ui-monospace, Consolas, monospace`;
+  ctx.font = fontCss('mono', sz);
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
   let y = pad * 2;
@@ -173,9 +176,9 @@ export function drawF2(ctx, model, scale = 1) {
   ctx.fillText(model.budget.text, pad * 2, y);
   y += lineH;
   for (const l of model.lines) {
-    ctx.fillStyle = '#A9B5DC';
+    ctx.fillStyle = COLORS.muted;
     ctx.fillText(l.label, pad * 2, y);
-    ctx.fillStyle = '#F4F7FF';
+    ctx.fillStyle = COLORS.text;
     ctx.textAlign = 'right';
     ctx.fillText(l.value, pad + w - pad, y);
     ctx.textAlign = 'left';

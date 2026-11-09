@@ -1,25 +1,8 @@
-// Minimapa (NM-6): visible solo con k > 1. Su rectángulo es una función del tamaño del lienzo y nunca de k, así que la
-// interfaz no escala con el zoom. Aquí vive la geometría pura (rectángulo, visibilidad, clic); el dibujo está en
-// `render/minimap.js`. El lote 6 moverá estas medidas a `ui/layout.js` (escala entera de UI, diseño §10.1).
+// Minimapa (NM-6): visible solo con k > 1. Su rectángulo (`minimapRect`, en `ui/layout.js` junto con la escala entera
+// de la interfaz) es una función del tamaño del lienzo y nunca de k, así que la interfaz no escala con el zoom. Aquí
+// vive la geometría pura de la visibilidad y del clic; el dibujo está en `render/minimap.js`.
 
 import { WORLD } from './controller.js';
-
-/** Escala entera de la interfaz: 480×270 virtuales como mínimo (diseño §10.1). */
-export function uiScale(W, H) {
-  return Math.max(1, Math.floor(Math.min(W / 480, H / 270)));
-}
-
-/**
- * Rectángulo del minimapa en px de dispositivo: 84 px virtuales de ancho, centrado en la banda inferior (x 198–282 en
- * 480×270) y con la proporción del mundo.
- * @returns {{x: number, y: number, w: number, h: number}}
- */
-export function minimapRect(W, H) {
-  const u = uiScale(W, H);
-  const w = 84 * u;
-  const h = Math.round((w * WORLD.h) / WORLD.w);
-  return { x: Math.round((W - w) / 2), y: H - h - 2 * u, w, h };
-}
 
 /** El minimapa se muestra con k > 1 y se oculta en el mapa entero. */
 export function minimapVisible(k) {

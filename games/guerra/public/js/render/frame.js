@@ -171,7 +171,7 @@ export function createRenderer({
       }
       stats.drawCalls++;
 
-      // pasada en px de dispositivo: lo que se mueve va directo al canvas principal
+      // pasada en px de dispositivo: lo que se mueve va al canvas principal
       if (dev) {
         ctx.imageSmoothingEnabled = false;
         P.ctx = ctx;

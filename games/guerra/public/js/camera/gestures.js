@@ -96,22 +96,24 @@ export function createGestures({ controller, minimap = () => null }) {
       p.x0 = e.x;
       p.y0 = e.y;
     },
+    /** @returns {{tap: boolean, x: number, y: number} | undefined} `tap`: un toque sin arrastre, pellizco ni minimapa (un clic) */
     up(e) {
       const p = ptrs.get(e.id);
-      if (!p) return;
+      if (!p) return undefined;
       ptrs.delete(e.id);
       if (pinch) {
         // al levantar un dedo termina el pellizco y el otro no deja un arrastre fantasma
         pinch = null;
         for (const q of ptrs.values()) q.ghost = true;
-        return;
+        return { tap: false, x: p.x, y: p.y };
       }
-      if (p.ghost || p.map || p.drag) return;
+      if (p.ghost || p.map || p.drag) return { tap: false, x: p.x, y: p.y };
       const prev = lastTap;
       if (prev && p.t0 - prev.t < DOUBLE_TAP_MS && dist(prev.x, prev.y, p.x, p.y) < DOUBLE_TAP_PX) {
         controller.input('factor', { f: controller.cfg.dblTapZoom, x: p.x, y: p.y });
         lastTap = null;
       } else lastTap = { x: p.x, y: p.y, t: p.t0 };
+      return { tap: true, x: p.x, y: p.y };
     },
     cancel(e) {
       if (!ptrs.delete(e.id)) return;

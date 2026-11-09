@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFlashLimiter, FLASH_DEFAULTS, resolveFlash } from '../public/js/render/flash.js';
 import { createFx, wreckAlpha } from '../public/js/render/fx.js';
-import { createMotion, MOTION_NOTICE, resolveGraphics } from '../public/js/render/motion.js';
+import { createMotion, resolveGraphics } from '../public/js/render/motion.js';
+import { S } from '../public/js/ui/strings.js';
+import { findForbidden } from './support/forbidden-words.js';
 import { createScene } from '../public/js/render/scene.js';
 import { createList, createProjector, LIST_CAPS } from '../public/js/render/canvas.js';
 import { createFakeCtx } from './support/fake-canvas.js';
@@ -271,11 +273,8 @@ test('R alterna el movimiento reducido y una segunda R lo apaga', () => {
   assert.equal(s.toggle(), false);
   assert.equal(s.toggle(), true);
   // el aviso de R es español neutro y sin las palabras vedadas
-  assert.deepEqual(
-    { ...MOTION_NOTICE },
-    { on: 'Movimiento reducido: activado', off: 'Movimiento reducido: desactivado' },
-  );
-  for (const t of Object.values(MOTION_NOTICE)) assert.ok(!/guerra|trench|warfare|1917|\bdirecto\b/i.test(t));
+  assert.deepEqual({ ...S.motion }, { on: 'Movimiento reducido: activado', off: 'Movimiento reducido: desactivado' });
+  for (const t of Object.values(S.motion)) assert.deepEqual(findForbidden(t), []);
 });
 
 test('con movimiento reducido: sin temblor, sin cámara lenta, sin núcleos blancos ni parpadeo, cámara automática apagada y banners sin deslizar', () => {

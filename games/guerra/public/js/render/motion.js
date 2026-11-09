@@ -13,12 +13,6 @@ import { ConfigError } from '@tienda/kit/sim/config.js';
 
 export const MOTION_MEDIA = '(prefers-reduced-motion: reduce)';
 
-/** Avisos de `R` (español neutro; el módulo de textos del lote 6 los absorberá). */
-export const MOTION_NOTICE = Object.freeze({
-  on: 'Movimiento reducido: activado',
-  off: 'Movimiento reducido: desactivado',
-});
-
 /**
  * Valida y completa `config.game.graphics`.
  * @param {{reducedMotion?: unknown, shake?: unknown, slowMotion?: unknown} | undefined} g

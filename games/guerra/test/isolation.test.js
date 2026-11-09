@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// CB-13 y CB-18: `sim/`, `data/` y `camera/` son puros e isomórficos. Sin azar, sin reloj propio y sin DOM; y las
+// CB-13 y CB-18: `sim/`, `data/`, `camera/` y `ui/` son puros e isomórficos. Sin azar, sin reloj propio y sin DOM; y las
 // reglas (`sim/`) solo usan operaciones cuyo resultado es idéntico en todos los motores. Red de seguridad para los
 // lotes siguientes: se vuelve más estricta sola a medida que aparecen archivos.
 const GJ = fileURLToPath(new URL('../public/js/', import.meta.url));
@@ -36,7 +36,8 @@ const rel = (f) => path.relative(GJ, f).replaceAll('\\', '/');
 const RENDER_PUROS = ['render/labels.js', 'render/icons.js', 'render/project.js', 'live-session.js'].map((f) =>
   path.join(GJ, f),
 );
-const puros = ['sim', 'data', 'camera']
+// Lote 6a: `ui/` también. Sus módulos de dibujo reciben el contexto 2D por argumento y no tocan DOM, reloj ni azar.
+const puros = ['sim', 'data', 'camera', 'ui']
   .flatMap((d) => walk(path.join(GJ, d)))
   .concat(RENDER_PUROS)
   .filter((f) => f.endsWith('.js'));
@@ -78,6 +79,12 @@ test('lote 5e: live-session.js está en el escáner de pureza y match.js (sim) s
   assert.ok(puros.includes(sesion));
   assert.ok(reglas.some((f) => rel(f) === 'sim/match.js'));
   assert.match(fs.readFileSync(path.join(GJ, 'sim/match.js'), 'utf8'), /export function exportProgress/);
+});
+
+test('lote 6a: todo ui/ está en el escáner de pureza (textos, geometría, modelos y dibujo con el contexto inyectado)', () => {
+  const ui = walk(path.join(GJ, 'ui')).filter((f) => f.endsWith('.js'));
+  assert.ok(ui.length >= 10, `${ui.length} módulos en ui/`);
+  for (const f of ui) assert.ok(puros.includes(f), `${rel(f)} se revisa`);
 });
 
 test('la exención de trascendentes es solo colors.js y tiene su comentario explicando por qué', () => {

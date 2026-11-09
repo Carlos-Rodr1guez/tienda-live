@@ -245,7 +245,7 @@ test('las listas de dibujo nunca superan su tope en 1000 cuadros', () => {
   assert.equal(r.stats.labels, 24);
 });
 
-test('el modo de escala elige el camino de copia: suave directo, nítido por MID, vecino directo', () => {
+test('el modo de escala elige el camino de copia: suave sin MID, nítido por MID, vecino sin suavizado', () => {
   const copias = (s) => {
     const { r, main, factory } = crearRender(1920, 1080);
     r.startMatch(1);

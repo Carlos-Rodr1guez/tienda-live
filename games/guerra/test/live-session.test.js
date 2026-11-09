@@ -5,7 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRegistry } from '@tienda/kit/sim/registry.js';
 import { PAISES } from '../public/js/data/paises.js';
-import { createLiveSession, SESSION_TEXT } from '../public/js/live-session.js';
+import { createLiveSession } from '../public/js/live-session.js';
+import { S } from '../public/js/ui/strings.js';
+import { findForbidden } from './support/forbidden-words.js';
 import { createMatch } from '../public/js/sim/match.js';
 import { createFakeSessionServer } from './support/fake-session-server.js';
 
@@ -708,10 +710,10 @@ test('F2: dos líneas con el estado de la sesión y los usuarios fuera de la cop
   );
   await p.sesion.restore();
   const [estado, fuera] = p.sesion.f2();
-  assert.equal(estado.label, SESSION_TEXT.statusLabel);
-  assert.equal(fuera.label, SESSION_TEXT.leftOutLabel);
+  assert.equal(estado.label, S.session.statusLabel);
+  assert.equal(fuera.label, S.session.leftOutLabel);
   assert.equal(fuera.value, '0');
-  assert.ok(Object.isFrozen(SESSION_TEXT));
+  assert.ok(Object.isFrozen(S.session));
   // restaurada con N usuarios
   const a = await conHistoria(createFakeSessionServer({ store: s.store }));
   assert.ok(a);
@@ -741,8 +743,8 @@ test('f2Model suma las líneas de la sesión y no suma nada si no hay sesión (?
   const sin = f2Model(base).lines.map((l) => l.key);
   assert.equal(sin.includes('session.status'), false);
   const lineas = [
-    { key: 'session.status', label: SESSION_TEXT.statusLabel, value: 'x' },
-    { key: 'session.leftOut', label: SESSION_TEXT.leftOutLabel, value: '3' },
+    { key: 'session.status', label: S.session.statusLabel, value: 'x' },
+    { key: 'session.leftOut', label: S.session.leftOutLabel, value: '3' },
   ];
   const con = f2Model({ ...base, session: lineas }).lines;
   assert.deepEqual(
@@ -762,10 +764,9 @@ test('los textos de la sesión no llevan las palabras prohibidas ni nada de "gue
     else if (typeof v === 'function') todos.push(v(3, 'lobby'), v(0, 'selector'), v(7, 'waitingNextRound', 2));
     else if (v && typeof v === 'object') Object.values(v).forEach(juntar);
   };
-  juntar(SESSION_TEXT);
+  juntar(S.session);
   assert.ok(todos.length > 6);
-  const plegado = todos.join(' | ').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-  assert.doesNotMatch(plegado, /\b(guerra|trench|warfare|1917|directo)\b/);
+  assert.deepEqual(findForbidden(todos.join(' | ')), []);
 });
 
 test('la página no usa localStorage, sessionStorage, indexedDB ni cookies (D24, NM-11)', () => {

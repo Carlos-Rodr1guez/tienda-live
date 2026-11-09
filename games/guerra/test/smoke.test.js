@@ -127,3 +127,23 @@ test('config.json: puerto 3100, usuario de ejemplo y game vacío', async () => {
   assert.equal(typeof config.tiktokUsername, 'string');
   assert.deepEqual(config.game, {});
 });
+
+// [I] 6.9 (DOC-2): las fuentes se sirven desde el propio servidor, con el tipo que pide el navegador.
+test('fuentes: /fonts/*.woff2 responde 200 con font/woff2 y trae bytes de verdad', async () => {
+  const config = await loadConfigFile(ROOT);
+  const app = await startServer({ root: ROOT, config, port: 0, tiktok: false, log: quiet, session: false });
+  const base = `http://127.0.0.1:${app.port}`;
+  try {
+    for (const f of ['pixelify-sans-600.woff2', 'silkscreen-700.woff2']) {
+      const res = await fetch(`${base}/fonts/${f}`);
+      assert.equal(res.status, 200, f);
+      assert.match(res.headers.get('content-type') ?? '', /^font\/woff2/, f);
+      const bytes = Buffer.from(await res.arrayBuffer());
+      assert.ok(bytes.length > 1000, `${f}: ${bytes.length} bytes`);
+      assert.equal(bytes.subarray(0, 4).toString('latin1'), 'wOF2', `${f}: firma WOFF2`);
+    }
+    assert.equal((await fetch(`${base}/fonts/inexistente.woff2`)).status, 404);
+  } finally {
+    await app.close();
+  }
+});

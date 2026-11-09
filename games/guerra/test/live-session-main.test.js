@@ -57,7 +57,7 @@ test('sin sesión en el servidor (404): el juego arranca como siempre, no se env
   );
   assert.match(main.f2()[ESTADO], /sin servidor de sesión/);
   assert.ok(
-    main.textos().some((t) => /ronda 1/.test(t)),
+    main.textos().some((t) => /Ronda 1[/]3/.test(t)),
     'la partida arrancó sola como antes',
   );
 });
@@ -77,7 +77,7 @@ test('C4: si /api/config responde bien y no trae "session", la sesión queda apa
   assert.match(main.f2()[ESTADO], /sin servidor de sesión/);
   assert.equal(main.f2()[FUERA], '0');
   assert.ok(
-    main.textos().some((t) => /ronda 1/.test(t)),
+    main.textos().some((t) => /Ronda 1[/]3/.test(t)),
     'el juego arranca solo como siempre',
   );
 });
@@ -147,7 +147,7 @@ test('si el GET no contesta, a los ~3000 ms se corta y el juego arranca vacío (
   assert.equal(senal.aborted, true);
   assert.ok(ms >= 2900 && ms < 6000, `tardó ${ms} ms`);
   assert.match(main.f2()[ESTADO], /no se pudo cargar/);
-  assert.ok(main.textos().some((t) => /ronda 1/.test(t)));
+  assert.ok(main.textos().some((t) => /Ronda 1[/]3/.test(t)));
 });
 
 test('copia inválida (200 con otra forma): el juego arranca vacío y F2 lo dice', async () => {
@@ -173,17 +173,18 @@ test('recarga en pleno LIVE: rangos, donantes y partido siguen; ?donantes no los
 
   // recarga: otra página contra el mismo servidor
   const s2 = createFakeSessionServer({ store: s.store });
-  const dos = await arrancar('?f2&donantes&rapido=8', { fetch: s2.fetch });
+  const dos = await arrancar('?f2&donantes&rapido=8', { fetch: s2.fetch, selector: true });
   assert.equal(s2.sessionCalls()[0].method, 'GET');
   assert.equal(s2.sessionCalls()[0].status, 200);
   assert.match(dos.f2()[ESTADO], /restaurada con 24 usuarios · esperando la ronda siguiente/);
   assert.ok(
-    dos.textos().some((t) => /esperando al narrador/.test(t)),
+    dos.textos().some((t) => /El narrador inicia la siguiente ronda/.test(t)),
     'el juego vuelve a la espera del narrador',
   );
   assert.equal(puts(s2).length, 0, 'restaurar no es un cambio');
   // el narrador sigue: Enter arranca la ronda y los donantes sintéticos (mismos userId) vuelven a regalar sin duplicarse
   dos.tecla('Enter');
+  dos.donantes(); // los mismos userId vuelven a regalar por el puente
   await avanzar(dos, 300);
   assert.ok(puts(s2).length >= 1);
   const despues = JSON.parse(s2.store.get());
@@ -223,18 +224,18 @@ test('recarga sin par: vuelve al selector (matchup) con los rangos y Enter elige
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(copia),
   });
-  const main = await arrancar('?f2', { fetch: s.fetch });
+  const main = await arrancar('?f2&pair=PE-MX', { fetch: s.fetch, selector: true });
   assert.match(main.f2()[ESTADO], /restaurada con 1 usuarios · selector de pares/);
-  assert.ok(main.textos().some((t) => /elegir par/.test(t)));
+  assert.ok(main.textos().some((t) => /Elige los dos países/.test(t)));
   main.tecla('Enter');
   main.cuadros(2);
   assert.ok(
-    main.textos().some((t) => /sala/.test(t)),
+    main.textos().some((t) => /^Comenta 1 o Perú/.test(t)),
     'Enter eligió el par: sala',
   );
   main.tecla('Enter');
   main.cuadros(2);
-  assert.ok(main.textos().some((t) => /preparación|batalla/.test(t)));
+  assert.ok(main.textos().some((t) => /Ronda 1[/]3/.test(t)));
 });
 
 test('la página recorta con el mismo maxBytes que informa el servidor (/api/config), no con uno propio', async () => {

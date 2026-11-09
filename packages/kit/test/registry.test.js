@@ -648,3 +648,26 @@ test('setTeams: la política de un equipo fijo exige que ese equipo siga en el p
   r.setTeams([CL, MX]);
   assert.equal(r.ensureTeam(r.touch({ userId: 'q', nickname: 'Q' })), 2);
 });
+
+test('unhide (Alt+Z): deshace hide, también para quien todavía no llegó, y no cambia nada si no estaba oculto', () => {
+  const r = make();
+  joinAs(r, 'a');
+  const v0 = r.version();
+  r.hide('a');
+  assert.equal(r.displayName('a'), 'anónimo');
+  r.unhide('a');
+  assert.equal(r.displayName('a'), r.get('a').name);
+  assert.equal(r.exportLive(0).hidden.includes('a'), false);
+  assert.ok(r.version() > v0, 'ocultar ensucia la copia de la sesión');
+  r.hide('a');
+  const v1 = r.version();
+  r.unhide('a');
+  assert.ok(r.version() > v1, 'deshacer también la ensucia');
+  const v2 = r.version();
+  r.unhide('a');
+  r.unhide('nunca-llegó');
+  assert.equal(r.version(), v2, 'quitar a quien no estaba oculto no ensucia la copia');
+  r.hide('futuro');
+  r.unhide('futuro');
+  assert.equal(r.touch({ userId: 'futuro', nickname: 'Fu' }).hidden, false, 'al llegar ya no está oculto');
+});

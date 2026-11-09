@@ -383,6 +383,12 @@ export function createRegistry(o) {
       const u = byKey.get(String(key));
       if (u) u.hidden = true;
     },
+    /** Deshace `hide` (Alt+Z): el donante vuelve a mostrarse. Quitar a quien no estaba oculto no cambia nada. */
+    unhide(key) {
+      if (hiddenKeys.delete(String(key))) version++;
+      const u = byKey.get(String(key));
+      if (u) u.hidden = false;
+    },
     setAllNamesHidden(b) {
       if (allHidden !== Boolean(b)) version++;
       allHidden = Boolean(b);

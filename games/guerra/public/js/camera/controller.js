@@ -11,7 +11,7 @@
 // automáticos no lo tocan (NM-4, NM-8).
 
 import { autoTarget, restScale } from './auto.js';
-import { CAMERA_TEXT } from './text.js';
+import { S } from '../ui/strings.js';
 
 /** El mundo en px (placeholder de 1440×810, CB-15). */
 export const WORLD = Object.freeze({ w: 1440, h: 810 });
@@ -327,7 +327,7 @@ export function createCameraController({ canvas, view: cfg, reducedMotion = fals
     },
     /** Texto del estado visible en batalla: "CÁMARA AUTO" mientras la automática maneja, y si no "CÁMARA MANUAL". */
     status() {
-      return state.mode === 'auto' ? CAMERA_TEXT.auto : CAMERA_TEXT.manual;
+      return state.mode === 'auto' ? S.camera.auto : S.camera.manual;
     },
     /**
      * La tecla `A` y el botón: enciende o apaga la automática. Alternarla no es mover la cámara, así que no reinicia el
@@ -337,7 +337,7 @@ export function createCameraController({ canvas, view: cfg, reducedMotion = fals
     toggleAuto() {
       state.autoEnabled = !state.autoEnabled;
       if (!state.autoEnabled && autoActive) stopAuto();
-      return { on: state.autoEnabled, notice: state.autoEnabled ? CAMERA_TEXT.autoOn : CAMERA_TEXT.autoOff };
+      return { on: state.autoEnabled, notice: state.autoEnabled ? S.camera.autoOn : S.camera.autoOff };
     },
     /**
      * El movimiento reducido cambió (`R`, el sistema o la config). Al ENCENDERSE apaga la automática y devuelve el aviso
@@ -352,7 +352,7 @@ export function createCameraController({ canvas, view: cfg, reducedMotion = fals
       if (now && !was && state.autoEnabled) {
         state.autoEnabled = false;
         if (autoActive) stopAuto();
-        return CAMERA_TEXT.autoOff;
+        return S.camera.autoOff;
       }
       return null;
     },
@@ -545,6 +545,13 @@ export function createCameraController({ canvas, view: cfg, reducedMotion = fals
       if (follower) {
         const p = follower();
         if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) setTarget(p.x, p.y);
+        else if (!p) {
+          // el seguido se fue (S1): se suelta SIN contar como entrada del narrador, así el contador de inactividad no se reinicia
+          follower = null;
+          state.tx = state.cx;
+          state.ty = state.cy;
+          if (state.mode === 'follow') state.mode = 'manual';
+        }
       }
       // la automática toma el control tras `idleSeconds` sin entrada del narrador y reevalúa cada `every` segundos
       if (state.autoEnabled && sv && !follower && state.idle >= cfg.idleSeconds) {
