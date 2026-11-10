@@ -168,7 +168,7 @@ const avisar = (text, family = '', ms = 2500) => {
 const golden = params.has('golden')
   ? createGoldenRun({ log: GOLDEN.log, steps: GOLDEN.steps, paises: PAISES, game: GOLDEN.game, onStep })
   : null;
-// los términos vetados salen de un archivo de datos que el dueño completa antes del primer LIVE (vacío no enmascara nada)
+// los términos vetados salen de un archivo de datos del dueño (lo revisa en cada versión con tools/check-seed.mjs)
 const registry = golden
   ? null
   : createRegistry({ teams: [PAISES[0], PAISES[1]], blocklist: createBlocklist(NOMBRES_VETADOS) });

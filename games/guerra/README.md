@@ -75,19 +75,23 @@ Usa una escena **16:9** (horizontal) con una fuente de **Captura de ventana** ap
 - Tiene que haber **una persona presente**: el juego se pausa solo si nadie toca nada y es a propósito.
 - La ventana del juego debe **recibir entrada**: haz clic en ella antes de empezar. Los atajos solo funcionan con la ventana enfocada; los atajos globales fuera del navegador llegan con la versión Electron (H2).
 - Narra sin nacionalismo: cada país tiene su color y su fortín, ninguno es "el bueno". Celebra a los donantes por el nombre que se ve, no por su bando; evita burlas sobre un país.
+- **Sin presión por regalos**: no pidas regalos una y otra vez, no apeles a la culpa o a la lástima y no prometas nada a cambio de un regalo, un like o un seguidor. Las Normas de monetización de LIVE de TikTok pueden dejar sin monetización a un LIVE que lo hace.
+- **Narra la partida**: esas normas también apuntan a los LIVE que solo presentan dos posturas opuestas y piden regalos para cada una. Lo que separa a este juego de eso es tu narración: las jugadas, los giros y por qué va ganando quien gana.
+- **Nombra a todos**: celebra también a quien se une gratis comentando `1` o `2` y a quien manda likes, además de a quien regala.
+- **Seguir y compartir**: el juego da un jeep por seguir y tres soldados por compartir; deja que el juego lo muestre solo, sin venderlo como trato ("sígueme y te doy un jeep").
 - Los nombres se limpian y se enmascaran en el registro: nunca se muestra el texto de un comentario, solo el nombre saneado de quien se une o regala.
 
 ## Lista previa al LIVE
 
-- [ ] Leíste las páginas oficiales vigentes de TikTok: Normas de la comunidad, Normas de TikTok LIVE, Términos del servicio y la política de regalos y monetización de LIVE (busca la versión actual en el Centro de ayuda; las direcciones cambian).
+- [ ] Leíste las páginas oficiales vigentes de TikTok: Normas de la comunidad, Normas de las funciones LIVE, Normas de monetización de LIVE, Términos del servicio y Política de artículos virtuales (busca la versión actual en el Centro de ayuda; las direcciones cambian).
 - [ ] Ensayaste con el simulador (`F1`) un partido completo.
 - [ ] Revisaste la escena 16:9 y el marco con un segundo teléfono.
-- [ ] La semilla de 40 a 80 términos vetados está escrita y `node tools/check-seed.mjs` la aprueba (entregable del dueño, abajo).
+- [ ] Revisaste la semilla de 40 a 80 términos vetados y `node tools/check-seed.mjs` la aprueba (entregable del dueño, abajo).
 - [ ] `config.json` tiene tu usuario y los regalos que quieres usar.
 
 ## Términos vetados para nombres
 
-El dueño de la lista de términos vetados eres tú (el dueño del juego). Vive en `public/js/data/nombres-vetados.js` y se entrega vacía: escribir la semilla de **40 a 80 términos vetados** es un **entregable del dueño** que vence antes del primer LIVE y no bloquea el desarrollo. Revísala en cada versión y córrela con `node tools/check-seed.mjs` (no forma parte de `npm test`).
+El dueño de la lista de términos vetados eres tú (el dueño del juego). Vive en `public/js/data/nombres-vetados.js` y trae una semilla de **40 a 80 términos vetados**. Sigue siendo un **entregable del dueño**: la apruebas antes del primer LIVE y la revisas en cada versión con `node tools/check-seed.mjs` (no forma parte de `npm test`).
 
 La lista tiene dos modos:
 

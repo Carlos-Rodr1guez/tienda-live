@@ -139,13 +139,97 @@ test('sonido: la música está apagada por defecto', () => {
 // ---------------------------------------------------------------------------------------------------------------
 // 6.11 y 6.12 Semilla de términos vetados
 
-test('KIT-12: nombres-vetados.js se entrega VACÍO, el registro lo carga sin error y no enmascara nada', () => {
-  assert.deepEqual(NOMBRES_VETADOS, { contains: [], token: [], allow: [] });
-  const r = createRegistry({ teams: [PAISES[0], PAISES[1]], blocklist: createBlocklist(NOMBRES_VETADOS) });
-  r.touch({ userId: 'u', nickname: 'badword' });
-  assert.equal(r.displayName('u'), 'badword');
+test('KIT-12: la semilla de nombres-vetados.js tiene la forma {contains, token, allow}, el registro la carga sin error y no enmascara nombres inocentes', () => {
+  assert.deepEqual(Object.keys(NOMBRES_VETADOS).sort(), ['allow', 'contains', 'token']);
+  for (const modo of ['contains', 'token', 'allow']) {
+    assert.ok(Array.isArray(NOMBRES_VETADOS[modo]), modo);
+    for (const t of NOMBRES_VETADOS[modo])
+      assert.ok(typeof t === 'string' && t.trim() !== '', `${modo}: ${JSON.stringify(t)}`);
+  }
+  const lista = createBlocklist(NOMBRES_VETADOS);
+  const r = createRegistry({ teams: [PAISES[0], PAISES[1]], blocklist: lista });
   assert.doesNotThrow(() => createBlocklist(undefined));
   assert.doesNotThrow(() => createBlocklist({}));
+  // cada término de la semilla se veta a sí mismo y el registro lo enmascara (los términos reales no se nombran aquí)
+  for (const t of [...NOMBRES_VETADOS.contains, ...NOMBRES_VETADOS.token]) assert.equal(lista.isBlocked(t), true, t);
+  r.touch({ userId: 'v', nickname: `x${NOMBRES_VETADOS.contains[0]}x` });
+  assert.equal(r.displayName('v'), 'anónimo');
+  // cada palabra de allow contiene un término de contains (si no, no cubre nada)
+  const cubiertos = NOMBRES_VETADOS.contains.map((t) => foldForMatch(t));
+  for (const a of NOMBRES_VETADOS.allow)
+    assert.ok(
+      cubiertos.some((t) => foldForMatch(a).includes(t)),
+      `allow sin término: ${a}`,
+    );
+  // nombres inocentes de riesgo (trampas de subcadena y cruces entre palabras) que la semilla real NO enmascara
+  const inocentes = [
+    'Diputado',
+    'Diputada',
+    'Computadora',
+    'Computación',
+    'Disputa',
+    'Reputación',
+    'Imputado',
+    'Caputo',
+    'Vergara',
+    'Cachucha',
+    'Maricarmen',
+    'Mari Carmen',
+    'Mari Contreras',
+    'Mari Consuelo',
+    'Mari Constanza',
+    'Mari Concepción',
+    'Mari Conchita',
+    'Silver Gamer',
+    'River Gaming',
+    'Driver Games',
+    'Overgame',
+    'Mishi Tierna',
+    'Loco por Naruto',
+    'Todo por Nada',
+    'Fan por Nico',
+    'Penélope',
+    'Esperanza',
+    'Zoraida',
+    'Vehículo',
+    'Artículo',
+    'Cálculo',
+    'Controlo',
+    'Torpedo',
+    'Conocer',
+    'Nigeria',
+    'Nazira',
+    'Luna Zion',
+    'Bonazzi',
+    'Pachu Chávez',
+    'Viola Dorado',
+    'Yoshi Tanaka',
+    'Cris Lutz',
+    'Culiacán',
+    'Scunthorpe',
+    'Shiitake',
+    'Cuntur',
+    'Retardo',
+    'Mongolia',
+    'Concha Tuesta',
+    'xX_Esperanza_Xx',
+    'Diputado2024',
+    'ElVehiculoRojo',
+    'MariCarmen_pe',
+  ];
+  for (const n of inocentes) assert.equal(lista.isBlocked(n), false, n);
+  // y la prueba sirve: sin allow, esos mismos nombres sí caen
+  const sinAllow = createBlocklist({ ...NOMBRES_VETADOS, allow: [] });
+  assert.ok(
+    inocentes.filter((n) => sinAllow.isBlocked(n)).length >= 10,
+    'sin allow caen varios: la lista de allow hace falta',
+  );
+  for (const n of ['Diputado', 'Computadora', 'Vergara', 'Nigeria', 'Scunthorpe'])
+    assert.equal(sinAllow.isBlocked(n), true, n);
+  for (const n of inocentes) {
+    r.touch({ userId: n, nickname: n });
+    assert.equal(r.displayName(n), n, n);
+  }
 });
 
 test('KIT-12: las pruebas usan términos fixture; con ellos el registro enmascara', () => {
