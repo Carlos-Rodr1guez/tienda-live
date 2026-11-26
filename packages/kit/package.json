@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "tiktok-live-connector": "2.5.0",
-    "ws": "^8.22.0"
+    "ws": "^8.23.0"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
