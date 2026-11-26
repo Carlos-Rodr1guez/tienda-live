@@ -1,0 +1,113 @@
+---
+// Diseño base de todas las páginas: cabecera con la marca, contenido, pie y los metadatos de SEO. Los estilos y la
+// fuente son archivos aparte (sin estilos ni scripts en línea, así la CSP no necesita hashes).
+import '@fontsource-variable/oxanium';
+import '../styles/tokens.css';
+import '../styles/base.css';
+import fuenteUrl from '@fontsource-variable/oxanium/files/oxanium-latin-wght-normal.woff2?url';
+import { BRAND } from '@tienda/contracts/brand';
+import { sitio } from '@tienda/contracts/i18n';
+import SiteFooter from '../components/SiteFooter.astro';
+import { OG_IMAGE_PATH, buildSeo } from '../lib/seo.js';
+import { splitWordmark } from '../lib/wordmark.js';
+
+interface Props {
+  /** Texto completo del <title>. */
+  title: string;
+  description: string;
+  /** Ruta de la página, con barra inicial: arma el canonical y las URLs absolutas. */
+  path: string;
+  noindex?: boolean;
+  /** Valor de <meta name="referrer"> (por ejemplo "no-referrer" en /confirmar). */
+  referrer?: string;
+  /** false apaga el beacon de analítica en esta página. */
+  analytics?: boolean;
+  /** Ruta de la imagen de vista previa; sin ella se usa la del sitio. */
+  ogImage?: string;
+}
+
+const { title, description, path, noindex = false, referrer, analytics = true, ogImage = OG_IMAGE_PATH } = Astro.props;
+
+const site = (Astro.site ?? new URL(BRAND.siteUrlDefault)).origin;
+const seo = buildSeo({
+  site,
+  path,
+  titulo: title,
+  descripcion: description,
+  nombreSitio: BRAND.name,
+  imagen: ogImage,
+  noindex,
+});
+const { inicio, final } = splitWordmark(BRAND.name);
+---
+
+<!doctype html>
+<html lang={sitio.idioma} data-analytics={analytics ? 'on' : 'off'}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#04060c" />
+    {seo.robots && <meta name="robots" content={seo.robots} />}
+    {referrer && <meta name="referrer" content={referrer} />}
+    {!noindex && <link rel="canonical" href={seo.canonical} />}
+    {seo.openGraph.map(({ property, content }) => (
+      <meta property={property} content={content} />
+    ))}
+    {seo.twitter.map(({ name, content }) => (
+      <meta name={name} content={content} />
+    ))}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" as="font" type="font/woff2" href={fuenteUrl} crossorigin />
+  </head>
+  <body>
+    <a class="skip-link" href="#contenido">
+      {sitio.saltar}
+    </a>
+    <header class="cabecera">
+      <div class="container">
+        <a class="marca" href="/">
+          {inicio} <b>{final}</b>
+        </a>
+      </div>
+    </header>
+    <main id="contenido" tabindex="-1">
+      <slot />
+    </main>
+    <SiteFooter />
+    <script>
+      import '../lib/beacon-entry.js';
+    </script>
+  </body>
+</html>
+
+<style>
+  .cabecera {
+    padding-block: 0.875rem;
+  }
+
+  .marca {
+    display: inline-flex;
+    align-items: center;
+    /* en un contenedor flex el espacio entre "Tienda" y "LIVE" se pierde: el hueco lo da el gap */
+    gap: 0.3em;
+    min-height: 44px;
+    color: var(--text);
+    font-size: 1.125rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .marca b {
+    color: var(--gold);
+  }
+
+  /* Al saltar con el teclado el foco llega a <main>: no hace falta un anillo sobre toda la página */
+  main:focus {
+    outline: none;
+  }
+</style>

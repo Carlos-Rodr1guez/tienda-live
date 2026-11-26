@@ -1,0 +1,38 @@
+---
+// Páginas legales (aviso y privacidad), una por archivo de src/content/legal. Mientras el archivo diga
+// `borrador: true` se muestra un aviso visible de que el texto no es definitivo.
+import { getCollection, render } from 'astro:content';
+import { BRAND } from '@tienda/contracts/brand';
+import { legal, sitio } from '@tienda/contracts/i18n';
+import Icon from '../../components/Icon.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { legalMeta } from '../../lib/legal.js';
+
+export async function getStaticPaths() {
+  const entradas = await getCollection('legal');
+  return entradas.map((entrada) => ({ params: { slug: entrada.id }, props: { entrada } }));
+}
+
+const { entrada } = Astro.props;
+const { Content } = await render(entrada);
+const meta = legalMeta(entrada.data, BRAND.name);
+---
+
+<BaseLayout title={meta.titulo} description={meta.descripcion} path={`/legal/${entrada.id}`}>
+  <article class="sec container apoyo">
+    <h1>{entrada.data.titulo}</h1>
+    {entrada.data.borrador && (
+      <div class="aviso-panel" role="note">
+        <Icon nombre="alert" class="aviso-panel__icono" />
+        <div>
+          <p class="aviso-panel__titulo">{legal.borradorTitulo}</p>
+          <p>{sitio.borrador}</p>
+        </div>
+      </div>
+    )}
+    <p class="num">{meta.versionActualizado}</p>
+    <div class="prose">
+      <Content />
+    </div>
+  </article>
+</BaseLayout>

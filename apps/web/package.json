@@ -1,0 +1,25 @@
+{
+  "name": "@tienda/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vitrina estática de la tienda: portada, ficha de ASEDIO, lista de espera y páginas legales.",
+  "type": "module",
+  "scripts": {
+    "dev": "node ../../scripts/run.mjs --port 4400 astro dev",
+    "build": "node ../../scripts/run.mjs astro build",
+    "typecheck": "node ../../scripts/run.mjs astro check",
+    "test": "node --test \"test/unit/**/*.test.js\"",
+    "test:dist": "node --test \"test/dist/**/*.test.js\"",
+    "check:schema": "node scripts/expect-invalid-content.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/oxanium": "5.3.0",
+    "@tienda/contracts": "*",
+    "astro": "7.4.5"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.12",
+    "parse5": "^8.1.0",
+    "typescript": "~6.0.3"
+  }
+}

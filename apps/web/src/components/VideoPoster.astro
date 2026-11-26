@@ -1,0 +1,113 @@
+---
+// El póster (o el video) de un juego, en formato 9:16. Mientras no haya video muestra la captura real del juego con el
+// aviso "Video próximamente" y SIN botón de reproducir (no hay nada que reproducir). Con `video` muestra un <video>
+// con controles visibles, carga diferida, el póster y los subtítulos (.vtt) del mismo nombre.
+// La imagen sale de src/assets: Astro genera AVIF y WebP al construir. Si el archivo falta, la construcción falla.
+import { Picture, getImage } from 'astro:assets';
+import { inicio } from '@tienda/contracts/i18n';
+import { resolvePoster } from '../lib/images.js';
+import { subtitulosDe } from '../lib/video-files.js';
+
+interface Props {
+  /** Ruta del póster relativa a src/assets, por ejemplo "juegos/asedio/poster.png". */
+  poster: string;
+  /** Ruta del video en public, por ejemplo "/videos/asedio.mp4". Sin ella se muestra "Video próximamente". */
+  video?: string;
+  /** Texto alternativo del póster: describe la escena. */
+  alt: string;
+  /** Qué ancho ocupa en pantalla (atributo sizes). */
+  sizes?: string;
+  /** El póster de la portada es lo primero que se ve: carga ya y con prioridad. */
+  prioridad?: boolean;
+}
+
+// El marco mide min(54vw, 230px) por debajo de 860px (Hero.astro y juegos/[slug].astro) y 330px desde 860px: 54vw solo
+// manda hasta 425px (54vw = 230px a 426px). Con `widths` de 360/540/720/1080 hay candidatos cerca de 1x/2x/3x de ambos.
+const {
+  poster,
+  video,
+  alt,
+  sizes = '(min-width: 860px) 330px, (min-width: 426px) 230px, 54vw',
+  prioridad = false,
+} = Astro.props;
+
+const modulos = import.meta.glob<{ default: ImageMetadata }>('/src/assets/juegos/**/*.{png,jpg,jpeg,webp}', {
+  eager: true,
+});
+const imagen = resolvePoster(poster, modulos) as ImageMetadata;
+
+let posterVideo = '';
+let subtitulos = '';
+if (video) {
+  // Falla al construir si el .vtt del mismo nombre no está en public
+  subtitulos = subtitulosDe(video);
+  posterVideo = (await getImage({ src: imagen, format: 'webp', width: 720 })).src;
+}
+---
+
+<div class="poster">
+  {video ? (
+    <video
+      class="poster__medio"
+      controls
+      preload="none"
+      playsinline
+      poster={posterVideo}
+      aria-label={alt}
+      data-seguimiento="video"
+    >
+      <source src={video} type={video.endsWith('.webm') ? 'video/webm' : 'video/mp4'} />
+      <track kind="captions" src={subtitulos} srclang="es" label={inicio.subtitulosEtiqueta} default />
+    </video>
+  ) : (
+    <>
+      <Picture
+        class="poster__medio"
+        src={imagen}
+        alt={alt}
+        formats={['avif', 'webp']}
+        fallbackFormat="jpeg"
+        widths={[360, 540, 720, 1080]}
+        sizes={sizes}
+        loading={prioridad ? 'eager' : 'lazy'}
+        fetchpriority={prioridad ? 'high' : 'auto'}
+        decoding="async"
+      />
+      <p class="chip poster__chip">{inicio.videoProximamente}</p>
+    </>
+  )}
+</div>
+
+<style>
+  .poster {
+    position: relative;
+    aspect-ratio: 9 / 16;
+    overflow: hidden;
+    border-radius: var(--radius-phone-inner);
+    background: var(--surface-1);
+  }
+
+  /* La imagen la pinta el componente Picture de Astro, por eso el selector es global dentro de .poster */
+  .poster :global(.poster__medio) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* El aviso es una etiqueta, no un botón: sin borde, sin cursor de mano y sin acción */
+  .poster__chip {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 5%;
+    width: max-content;
+    max-width: 90%;
+    margin-inline: auto;
+    border-radius: var(--radius-chip);
+    background: var(--scrim);
+    color: var(--text);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: center;
+  }
+</style>

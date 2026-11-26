@@ -1,0 +1,20 @@
+{
+  // Lo revisa `astro check` con el TypeScript 6 de este paquete. La raíz (TypeScript 7) excluye apps/web: ADR-009.
+  "extends": "astro/tsconfigs/strict",
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist", "test"],
+  "compilerOptions": {
+    // @tienda/contracts es JavaScript con JSDoc. Sin allowJs, TypeScript lo trata como un módulo sin tipos (ts7016) y
+    // todo lo que se importa de ahí es `any`. Con allowJs los tipos de JSDoc llegan a la web; checkJs sigue apagado,
+    // así que solo se revisan los archivos que empiezan con // @ts-check.
+    "allowJs": true,
+    "checkJs": false,
+    // El paquete se resuelve por node_modules (un enlace al paquete real) y TypeScript lo trata como externo: no lee
+    // su JavaScript (maxNodeModuleJsDepth 1 no alcanzó, probado). Se apunta a las fuentes con `paths`, que además
+    // refleja el campo "exports" de packages/contracts/package.json.
+    "paths": {
+      "@tienda/contracts/i18n": ["../../packages/contracts/src/i18n/index.js"],
+      "@tienda/contracts/*": ["../../packages/contracts/src/*.js"]
+    }
+  }
+}

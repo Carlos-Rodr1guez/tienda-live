@@ -1,0 +1,207 @@
+---
+// Ficha de un juego: SOLO los que no son concepto (hoy ASEDIO LIVE). Un concepto no tiene página ni enlace. Muestra el
+// resumen, las mecánicas, los regalos con su efecto y los requisitos, tal como están en el archivo del juego.
+import { getCollection, render } from 'astro:content';
+import { BRAND } from '@tienda/contracts/brand';
+import { fmt, inicio, juego as textos, opciones, sitio } from '@tienda/contracts/i18n';
+import VideoPoster from '../../components/VideoPoster.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { splitCatalog } from '../../lib/catalog.js';
+
+export async function getStaticPaths() {
+  const { fichas } = splitCatalog(await getCollection('juegos'));
+  return fichas.map((entrada) => ({ params: { slug: entrada.id }, props: { entrada } }));
+}
+
+const { entrada } = Astro.props;
+const { data } = entrada;
+const { Content } = await render(entrada);
+const categoria = (opciones.categorias as Record<string, { nombre: string }>)[data.categoria].nombre;
+const estado = (opciones.estados as Record<string, string>)[data.estado];
+const rol = (opciones.roles as Record<string, string>)[data.rolStreamer];
+if (!data.poster) throw new Error(`la ficha ${entrada.id} necesita póster`);
+---
+
+<BaseLayout
+  title={fmt(sitio.tituloPagina, { titulo: data.nombre, marca: BRAND.name })}
+  description={data.resumen}
+  path={`/juegos/${entrada.id}`}
+>
+  <article class="sec container ficha">
+    <div class="ficha__cabeza">
+      <h1>{data.nombre}</h1>
+      <p class="ficha__etiquetas">
+        <span class="chip ficha__chip">{estado}</span>
+        <span class="ficha__dato">{categoria}</span>
+        <span class="ficha__dato">{rol}</span>
+      </p>
+      <p>{data.resumen}</p>
+      <div class="prose">
+        <Content />
+      </div>
+      <a class="btn" href="/#anotarme">
+        {textos.ficha.anotarme}
+      </a>
+    </div>
+
+    <div class="ficha__marco">
+      <VideoPoster poster={data.poster} video={data.video} alt={inicio.videoPosterAlt} prioridad />
+    </div>
+
+    <div class="ficha__detalle">
+      {data.mecanicas.length > 0 && (
+        <section aria-labelledby="ficha-mecanicas">
+          <h2 id="ficha-mecanicas">{textos.ficha.mecanicas}</h2>
+          <ul class="lista">
+            {data.mecanicas.map((m) => (
+              <li>{m}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {data.regalos.length > 0 && (
+        <section aria-labelledby="ficha-regalos">
+          <h2 id="ficha-regalos">{textos.ficha.regalos}</h2>
+          <ul class="regalos">
+            {data.regalos.map((r) => (
+              <li class="regalo">
+                <span class="num regalo__monedas">
+                  {r.monedas.replace('+', ' o más')} {textos.monedasPalabra}
+                </span>
+                <span>{r.efecto}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {data.requisitos.length > 0 && (
+        <section aria-labelledby="ficha-requisitos">
+          <h2 id="ficha-requisitos">{textos.ficha.requisitos}</h2>
+          <ul class="lista">
+            {data.requisitos.map((r) => (
+              <li>{r}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <a class="ficha__volver" href="/">
+        {textos.ficha.volver}
+      </a>
+    </div>
+  </article>
+</BaseLayout>
+
+<script>
+  import '../../lib/home-entry.js';
+</script>
+
+<style>
+  .ficha {
+    display: grid;
+    gap: var(--sp-6);
+    grid-template-areas:
+      'cabeza'
+      'marco'
+      'detalle';
+  }
+
+  .ficha__cabeza {
+    grid-area: cabeza;
+    display: grid;
+    gap: var(--sp-4);
+    justify-items: start;
+    min-width: 0;
+  }
+
+  .ficha__cabeza h1 {
+    font-size: var(--fs-hero);
+    overflow-wrap: anywhere;
+  }
+
+  .ficha__etiquetas {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-1) var(--sp-3);
+  }
+
+  .ficha__chip {
+    background: var(--gold);
+    color: var(--on-gold);
+  }
+
+  .ficha__dato {
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  .ficha__marco {
+    grid-area: marco;
+    justify-self: center;
+    width: min(54vw, 230px);
+    padding: 6px;
+    border-radius: var(--radius-phone-outer);
+    background: var(--surface-2);
+    box-shadow: var(--glow-def);
+  }
+
+  .ficha__detalle {
+    grid-area: detalle;
+    display: grid;
+    gap: var(--sp-6);
+    min-width: 0;
+  }
+
+  .ficha__detalle h2 {
+    margin-block-end: var(--sp-3);
+    font-size: var(--fs-xl);
+  }
+
+  .lista {
+    display: grid;
+    gap: var(--sp-3);
+    padding-inline-start: var(--sp-5);
+    list-style: disc;
+    max-inline-size: var(--measure);
+  }
+
+  .regalos {
+    display: grid;
+    gap: var(--sp-3);
+  }
+
+  .regalo {
+    display: grid;
+    gap: var(--sp-1);
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--radius-card);
+    background: var(--surface-1);
+  }
+
+  .regalo__monedas {
+    color: var(--gold);
+    font-weight: 800;
+  }
+
+  .ficha__volver {
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+    min-height: 44px;
+  }
+
+  @media (min-width: 860px) {
+    .ficha {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      grid-template-areas:
+        'cabeza marco'
+        'detalle marco';
+      column-gap: var(--sp-8);
+      align-items: start;
+    }
+
+    .ficha__marco {
+      width: clamp(260px, 26vw, 330px);
+    }
+  }
+</style>

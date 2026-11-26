@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- La nave "caza" en dorado (#ffc23d) sobre un cuadrado redondeado del color de fondo (#04060c). -->
+  <rect width="48" height="48" rx="10" fill="#04060c" />
+  <path transform="translate(8.4 8.4) scale(0.65)" d="M24 4 34 42 24 34 14 42Z" fill="#ffc23d" />
+</svg>

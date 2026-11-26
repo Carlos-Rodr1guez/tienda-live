@@ -1,0 +1,8 @@
+/* Fixture: el escáner de URL de terceros debe fallar con este archivo y no con la de localhost. */
+.logo {
+  background: url(https://example.com/x.png);
+}
+
+.local {
+  background: url(http://localhost:3100/ok.png);
+}

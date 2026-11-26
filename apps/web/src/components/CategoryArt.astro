@@ -1,0 +1,75 @@
+---
+// Arte de una categoría (acción, público, relax o metas). El dibujo sale de lib/category-art.js, que falla si la
+// categoría no existe. Con `decorativo` (miniaturas junto a un título que ya nombra la categoría) el SVG se oculta a
+// los lectores de pantalla; si no, lleva role="img" y un <title> del diccionario.
+import { artAlt, renderArt } from '../lib/category-art.js';
+
+interface Props {
+  categoria: string;
+  decorativo?: boolean;
+  class?: string;
+}
+
+const { categoria, decorativo = false, class: clase } = Astro.props;
+const formas = renderArt(categoria);
+const alt = decorativo ? null : artAlt(categoria);
+---
+
+<svg
+  class:list={['arte', `arte--${categoria}`, clase]}
+  viewBox="0 0 200 200"
+  role={decorativo ? undefined : 'img'}
+  aria-hidden={decorativo ? 'true' : undefined}
+  focusable="false"
+>
+  {alt && <title>{alt}</title>}
+  <Fragment set:html={formas} />
+</svg>
+
+<style is:global>
+  .arte {
+    width: 100%;
+    aspect-ratio: 1;
+    --kb: var(--surface-2);
+  }
+
+  .arte--accion {
+    --k1: var(--inv);
+    --k2: var(--text);
+  }
+
+  .arte--publico {
+    --k1: var(--def);
+    --k2: var(--inv);
+  }
+
+  .arte--relax {
+    --k1: var(--ok);
+    --k2: var(--text);
+  }
+
+  .arte--metas {
+    --k1: var(--gold);
+    --k2: var(--text);
+  }
+
+  .arte .kb {
+    fill: var(--kb);
+  }
+
+  .arte .k1 {
+    fill: var(--k1);
+  }
+
+  .arte .k2 {
+    fill: var(--k2);
+  }
+
+  .arte .k1s {
+    stroke: var(--k1);
+  }
+
+  .arte .k2s {
+    stroke: var(--k2);
+  }
+</style>

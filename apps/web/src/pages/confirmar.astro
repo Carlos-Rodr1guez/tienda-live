@@ -1,0 +1,41 @@
+---
+// Confirmación del correo. El enlace del mensaje trae el token en el fragmento (#t=...), que no viaja al servidor:
+// el script lo lee, lo borra de la barra de direcciones y solo manda la confirmación cuando la persona pulsa el botón.
+// No se indexa, no lleva el beacon, ni Turnstile ni eventos de medición.
+import { BRAND } from '@tienda/contracts/brand';
+import { confirmar, fmt, sitio } from '@tienda/contracts/i18n';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const titulo = fmt(sitio.tituloPagina, { titulo: confirmar.titulo, marca: BRAND.name });
+---
+
+<BaseLayout
+  title={titulo}
+  description={confirmar.descripcion}
+  path="/confirmar"
+  noindex
+  referrer="no-referrer"
+  analytics={false}
+>
+  <section class="sec container apoyo">
+    <h1>{confirmar.titulo}</h1>
+    <div class="aviso-panel">
+      <p id="confirmar-mensaje" role="status" aria-live="polite" tabindex="-1"></p>
+    </div>
+    <button id="confirmar-boton" class="btn" type="button" hidden>
+      {confirmar.boton}
+    </button>
+    <a id="confirmar-volver" class="btn" href="/" hidden>
+      {confirmar.volver}
+    </a>
+    <noscript>
+      <p class="aviso-panel">{confirmar.noscript}</p>
+    </noscript>
+  </section>
+</BaseLayout>
+
+<script>
+  import { initConfirmPage } from '../lib/confirm/controller.js';
+
+  initConfirmPage();
+</script>

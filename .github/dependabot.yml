@@ -9,6 +9,11 @@ updates:
       # ESLint, Prettier y TypeScript llegan juntos en un solo pull request
       herramientas:
         dependency-type: development
+    ignore:
+      # La raíz usa TypeScript 7 y apps/web usa TypeScript 6 para astro check (ADR-009).
+      # Un salto de versión mayor lo decidimos a mano, no con un pull request automático.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /

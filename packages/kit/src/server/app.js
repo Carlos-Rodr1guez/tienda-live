@@ -1,6 +1,7 @@
 // Servidor local: sirve el juego, expone la configuración y reenvía los eventos
 // del LIVE al navegador por WebSocket.
 
+import { sameOriginLoopback } from './origin.js';
 import http from 'node:http';
 import { createReadStream } from 'node:fs';
 import { readFile, readdir, stat } from 'node:fs/promises';
@@ -9,8 +10,9 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createTikTokBridge } from './tiktok.js';
 import { packageDir } from './package-dir.js';
+import { createSessionStore } from './session.js';
 
-export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const KIT_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -33,7 +35,12 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
-export async function loadConfigFile(root = ROOT) {
+/**
+ * Lee `config.json` de la carpeta del juego. Si falta o no es JSON válido devuelve `{}`.
+ * @param {string} root carpeta del juego (obligatoria)
+ */
+export async function loadConfigFile(root) {
+  if (typeof root !== 'string' || !root) throw new TypeError('loadConfigFile: falta "root", la carpeta del juego');
   try {
     const raw = await readFile(path.join(root, 'config.json'), 'utf8');
     return JSON.parse(raw);
@@ -49,17 +56,31 @@ function safeJoin(dir, rel) {
   return full;
 }
 
-export async function startServer({
-  config = {},
-  port = 3000,
-  host = '127.0.0.1',
-  root = ROOT,
-  tiktok = true,
-  log = console,
-} = {}) {
+/**
+ * Arranca el servidor local de un juego.
+ * `session`: apagada por defecto (KIT-1). Con `true` o con `{maxBytes}` monta `/api/session`, la copia de la sesión del
+ * LIVE en la memoria del proceso (KIT-28). Sin ella la ruta no existe y el servidor es el de siempre.
+ * @param {{ root: string, config?: object, port?: number, host?: string, tiktok?: boolean,
+ *   log?: {info?:Function, warn?:Function, error?:Function}, mounts?: {prefix:string, dir:string}[],
+ *   session?: boolean | {maxBytes?: number} }} opts
+ */
+export async function startServer(opts) {
+  if (typeof opts?.root !== 'string' || !opts.root) {
+    throw new TypeError('startServer: falta "root", la carpeta del juego');
+  }
+  const { root, config = {}, port = 3000, host = '127.0.0.1', tiktok = true, log = console } = opts;
+  const sessionOpt = opts.session;
+  const session =
+    sessionOpt === true || (sessionOpt !== null && typeof sessionOpt === 'object')
+      ? createSessionStore(sessionOpt === true ? {} : sessionOpt)
+      : null;
+  // El orden importa: gana el primer prefijo que coincide. `src/server` no tiene montaje a propósito (KIT-2).
   const mounts = [
     { prefix: '/vendor/three/', dir: packageDir('three', root) },
+    { prefix: '/kit/sim/', dir: path.join(KIT_SRC, 'sim') },
+    { prefix: '/kit/client/', dir: path.join(KIT_SRC, 'client') },
     { prefix: '/models/', dir: path.join(root, 'models') },
+    ...(opts.mounts ?? []),
     { prefix: '/', dir: path.join(root, 'public') },
   ];
 
@@ -127,8 +148,14 @@ export async function startServer({
             tiktokUsername: bridge?.status?.username || '',
             game: config.game || {},
             models,
+            // solo con la sesión prendida: el tope de bytes que la página usa para recortar su copia (KIT-28)
+            ...(session ? { session: { maxBytes: session.maxBytes } } : {}),
           }),
         );
+        return;
+      }
+      if (session && p === '/api/session') {
+        await session.handle(req, res);
         return;
       }
       if (p === '/api/status') {
@@ -137,6 +164,11 @@ export async function startServer({
         return;
       }
       if (p === '/api/simulate' && req.method === 'POST') {
+        // solo el propio juego (mismo origen, Host de loopback) puede mandar eventos de prueba
+        if (!sameOriginLoopback(req)) {
+          res.writeHead(403).end();
+          return;
+        }
         let body = '';
         for await (const chunk of req) {
           body += chunk;
@@ -163,7 +195,7 @@ export async function startServer({
     }
   });
 
-  const wss = new WebSocketServer({ server, path: '/ws' });
+  const wss = new WebSocketServer({ server, path: '/ws', verifyClient: ({ req }) => sameOriginLoopback(req) });
   wss.on('connection', (ws) => {
     clients.add(ws);
     if (lastStatus) ws.send(JSON.stringify(lastStatus));

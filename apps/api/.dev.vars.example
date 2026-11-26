@@ -1,0 +1,5 @@
+# Variables para desarrollo local. `npm run dev:api` copia este archivo a .dev.vars si no existe (.dev.vars no se versiona).
+# La clave secreta es la de PRUEBA de Turnstile: siempre aprueba y solo sirve en local.
+ENVIRONMENT=development
+SITE_URL=http://localhost:4400
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA

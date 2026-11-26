@@ -1,0 +1,84 @@
+---
+// Pie de todas las páginas, incluidas la 404 y /confirmar: la marca, el aviso de no afiliación (en negrita) y los
+// enlaces legales. El correo de contacto sale de BRAND; mientras no exista, se muestra "pendiente".
+import { BRAND } from '@tienda/contracts/brand';
+import { fmt, pie } from '@tienda/contracts/i18n';
+import { splitWordmark } from '../lib/wordmark.js';
+
+const { inicio, final } = splitWordmark(BRAND.name);
+const aviso = fmt(pie.noAfiliacion, { marca: BRAND.name });
+---
+
+<footer class="pie">
+  <div class="container pie__contenido">
+    <p class="pie__marca">
+      {inicio} <b>{final}</b>
+    </p>
+    <p class="pie__aviso">{aviso}</p>
+    <nav aria-label={pie.navegacion}>
+      <ul class="pie__enlaces">
+        <li>
+          <a href="/legal/aviso">{pie.aviso}</a>
+        </li>
+        <li>
+          <a href="/legal/privacidad">{pie.privacidad}</a>
+        </li>
+        <li>
+          <span class="pie__contacto">
+            {pie.contacto}:{' '}
+            {BRAND.contactEmail ? (
+              <a href={`mailto:${BRAND.contactEmail}`}>{BRAND.contactEmail}</a>
+            ) : (
+              <span>{pie.pendiente}</span>
+            )}
+          </span>
+        </li>
+        <li>
+          <a href="/licencias/oxanium-OFL.txt">{pie.licencias}</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+<style>
+  .pie {
+    padding-block: var(--sp-6) var(--sp-7);
+    background: var(--surface-1);
+  }
+
+  .pie__contenido {
+    display: grid;
+    gap: var(--sp-4);
+  }
+
+  .pie__marca {
+    font-size: 1.125rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+  }
+
+  .pie__marca b {
+    color: var(--gold);
+  }
+
+  .pie__aviso {
+    font-weight: 700;
+  }
+
+  .pie__enlaces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-1) var(--sp-5);
+  }
+
+  .pie__enlaces a,
+  .pie__contacto {
+    display: inline-flex;
+    align-items: center;
+    /* en un contenedor flex el espacio entre "Contacto:" y su valor se pierde: el hueco lo da el gap */
+    gap: 0.3em;
+    min-height: 44px;
+  }
+</style>

@@ -6,7 +6,7 @@ import { build } from 'esbuild';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { packageDir } from '../server/package-dir.js';
+import { packageDir } from '@tienda/kit/server';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const local = process.argv.includes('--local');

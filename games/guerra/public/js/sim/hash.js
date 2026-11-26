@@ -1,0 +1,205 @@
+// Hash de estado de reglas (diseño D14): FNV-1a de 32 bits sobre el estado ordenado por id, con los números
+// flotantes por sus bits (IEEE-754, big-endian). Lo usan el hash dorado, la repetición y F2. No depende del
+// motor: solo enteros de 32 bits y `Math.imul`.
+
+import { cmpCodePoints } from '@tienda/kit/sim/words.js';
+
+const FNV_OFFSET = 0x811c9dc5;
+const FNV_PRIME = 0x01000193;
+
+const view = new DataView(new ArrayBuffer(8));
+
+function byte(h, b) {
+  return Math.imul(h ^ b, FNV_PRIME) >>> 0;
+}
+function int(h, n) {
+  const v = n | 0;
+  h = byte(h, v & 255);
+  h = byte(h, (v >>> 8) & 255);
+  h = byte(h, (v >>> 16) & 255);
+  return byte(h, (v >>> 24) & 255);
+}
+function num(h, x) {
+  view.setFloat64(0, x, false);
+  for (let i = 0; i < 8; i++) h = byte(h, view.getUint8(i));
+  return h;
+}
+function str(h, s) {
+  h = int(h, s.length);
+  for (let i = 0; i < s.length; i++) h = int(h, s.charCodeAt(i));
+  return h;
+}
+const flag = (h, b) => byte(h, b ? 1 : 0);
+
+/** Pliega el estado de reglas del mundo en `h`. */
+function foldWorld(h, w) {
+  h = int(h, w.step);
+  h = int(h, w.nextId);
+  h = int(h, w.nextHitId);
+  h = flag(h, w.over !== null);
+  if (w.over !== null) {
+    h = int(h, w.over.step);
+    h = int(h, w.over.winner === null ? -1 : w.over.winner);
+  }
+  h = int(h, w.lastLaunch[0]);
+  h = int(h, w.lastLaunch[1]);
+  for (const t of w.teams) {
+    h = num(h, t.structDamage);
+    h = num(h, t.energyAsked);
+  }
+  h = int(h, w.roundStart);
+  h = int(h, w.round);
+  h = str(h, w.phase);
+  h = flag(h, w.paused);
+  // solo si hay golpes de energía pendientes por una pausa: así el mundo vacío conserva su hash
+  if (w.pendingStrikes[0] !== 0 || w.pendingStrikes[1] !== 0) {
+    h = int(h, w.pendingStrikes[0]);
+    h = int(h, w.pendingStrikes[1]);
+  }
+  const c = w.credit;
+  for (const v of [c.paid, c.destroyedUser, c.destroyedUnattr, c.retired, c.overflow[0], c.overflow[1]]) h = num(h, v);
+  for (const v of [c.teamValue[0], c.teamValue[1], c.teamCoins[0], c.teamCoins[1]]) h = num(h, v);
+  for (const q of w.queues) {
+    h = num(h, q.tokens);
+    h = int(h, q.wait);
+    h = int(h, q.warnStep);
+    for (const list of [q.ground, q.air]) {
+      h = int(h, list.length);
+      for (const o of list) {
+        h = str(h, o.kind);
+        h = str(h, o.owner ?? '');
+        h = int(h, o.remaining);
+        h = num(h, o.unitValue);
+      }
+    }
+  }
+  h = int(h, w.doorN[0]);
+  h = int(h, w.doorN[1]);
+
+  h = int(h, w.units.length);
+  for (const u of w.units) {
+    h = int(h, u.id);
+    h = int(h, u.side);
+    h = str(h, u.kind);
+    h = flag(h, u.alive);
+    h = num(h, u.hp);
+    h = num(h, u.valueAlive);
+    h = str(h, u.phase);
+    h = num(h, u.yg);
+    h = num(h, u.yoff);
+    h = int(h, u.seek === null ? 0 : u.seek.id);
+    h = int(h, u.shieldUntil);
+    h = str(h, u.owner ?? '');
+    h = num(h, u.x);
+    h = num(h, u.y);
+    h = num(h, u.vx);
+    h = num(h, u.vy);
+    h = int(h, u.dir);
+    h = int(h, u.faceSteps);
+    h = int(h, u.cd);
+    h = str(h, u.tgtKind);
+    h = int(h, u.tgt === null ? 0 : (u.tgt.id ?? u.tgt.k + 1));
+  }
+
+  h = int(h, w.hits.length);
+  for (const x of w.hits) {
+    h = int(h, x.id);
+    h = int(h, x.due);
+    h = str(h, x.kind);
+    h = int(h, x.side);
+    h = num(h, x.dmg);
+    h = num(h, x.tx);
+    h = num(h, x.ty);
+  }
+
+  h = int(h, w.bombs.length);
+  for (const b of w.bombs) {
+    h = int(h, b.id);
+    h = int(h, b.side);
+    h = int(h, b.dropStep);
+    h = int(h, b.impactStep);
+    h = num(h, b.tx);
+    h = num(h, b.ty);
+  }
+
+  h = int(h, w.planes.length);
+  for (const p of w.planes) {
+    h = int(h, p.id);
+    h = int(h, p.side);
+    h = num(h, p.x);
+    h = num(h, p.y);
+    h = num(h, p.vy);
+    h = int(h, p.bombsLeft);
+    h = num(h, p.value);
+    h = int(h, p.nextDrop);
+  }
+
+  for (const b of w.bases) {
+    h = num(h, b.hp);
+    h = num(h, b.bucket);
+    h = flag(h, b.fell);
+    for (const t of b.turrets) {
+      h = num(h, t.hp);
+      h = int(h, t.cd);
+      h = flag(h, t.on);
+    }
+  }
+  return h;
+}
+
+const hex = (h) => h.toString(16).padStart(8, '0');
+
+/**
+ * Hash del estado de reglas del mundo, en 8 dígitos hexadecimales.
+ * @param {any} w mundo (`createWorld`)
+ */
+export function hashWorld(w) {
+  return hex(foldWorld(FNV_OFFSET, w));
+}
+
+/**
+ * Hash del partido: el mundo, la máquina de estados (fase, rondas, pausa, reloj del log) y, si hay registro, los
+ * usuarios ordenados por clave (equipo, rango, XP, monedas, valor y bajas por alcance).
+ * @param {any} m partido (`createMatch`)
+ */
+export function hashMatch(m) {
+  let h = foldWorld(FNV_OFFSET, m.world);
+  h = str(h, m.state);
+  h = int(h, m.wins[0]);
+  h = int(h, m.wins[1]);
+  h = int(h, m.round);
+  h = int(h, m.tick);
+  h = int(h, m.stateSteps);
+  h = str(h, m.pause ?? '');
+  h = int(h, m.winner ?? -1);
+  h = int(h, m.joinSeq);
+  h = int(h, m.firstJoin[0] ?? -1);
+  h = int(h, m.firstJoin[1] ?? -1);
+  h = str(h, m.pair === null ? '' : m.pair.teams.map((t) => t.id).join('/'));
+  h = int(h, m.results.length);
+  for (const r of m.results) {
+    h = int(h, r.round);
+    h = int(h, r.winner);
+    h = str(h, r.reason);
+    h = int(h, r.step);
+  }
+  if (m.registry) {
+    const users = [...m.registry.users()].sort((a, b) => cmpCodePoints(a.key, b.key));
+    h = int(h, users.length);
+    for (const u of users) {
+      h = str(h, u.key);
+      h = int(h, u.team ?? -1);
+      h = int(h, u.rank);
+      h = flag(h, u.hidden);
+      for (const s of [u.xp, u.coins, u.value]) {
+        h = num(h, s.live);
+        h = num(h, s.match);
+        h = num(h, s.round);
+      }
+      h = int(h, u.kills.live);
+      h = int(h, u.kills.match);
+      h = int(h, u.kills.round);
+    }
+  }
+  return hex(h);
+}

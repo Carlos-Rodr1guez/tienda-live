@@ -1,0 +1,125 @@
+---
+// ASEDIO LIVE en la portada: la presentación, cinco filas con la tecla de cada mecánica (azul para los Defensores, rojo
+// para los Invasores) y la escalera de regalos. Los números salen del juego, no se inventan. El enlace lleva a la ficha.
+import { juego } from '@tienda/contracts/i18n';
+import GiftLadder from './GiftLadder.astro';
+import Icon from './Icon.astro';
+
+interface Props {
+  /** Enlace a la ficha del juego (/juegos/asedio). */
+  href: string;
+}
+
+const { href } = Astro.props;
+---
+
+<section class="sec container destacado" aria-labelledby="titulo-juego">
+  <div class="destacado__cabeza">
+    <div class="destacado__intro">
+      <h2 id="titulo-juego" class="destacado__titulo">
+        {juego.titulo}
+      </h2>
+      <p>{juego.resumen}</p>
+      <a class="enlace-ficha" href={href}>
+        {juego.verFicha}
+        <Icon nombre="chevron" size={20} />
+      </a>
+    </div>
+    <div class="destacado__mecanicas">
+      <h3 class="destacado__subtitulo">{juego.mecanicasTitulo}</h3>
+      <ul class="mecanicas">
+        {juego.mecanicasPortada.map((fila) => (
+          <li class="mecanica">
+            <span class={`chip tecla tecla--${fila.tono}`}>{fila.tecla}</span>
+            <p>{fila.texto}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </div>
+  <GiftLadder />
+</section>
+
+<style>
+  .destacado {
+    display: grid;
+    gap: var(--sp-8);
+  }
+
+  .destacado__cabeza {
+    display: grid;
+    gap: var(--sp-6);
+    align-items: start;
+  }
+
+  .destacado__intro {
+    display: grid;
+    gap: var(--sp-4);
+    justify-items: start;
+  }
+
+  .destacado__titulo {
+    font-size: clamp(2.25rem, 1.4rem + 4vw, 4.25rem);
+    overflow-wrap: anywhere;
+  }
+
+  .destacado__subtitulo {
+    margin-block-end: var(--sp-3);
+  }
+
+  .enlace-ficha {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 44px;
+    font-weight: 800;
+  }
+
+  /* El chevron del icono mira hacia abajo: acá apunta a la derecha, hacia la ficha */
+  .enlace-ficha :global(svg) {
+    transform: rotate(-90deg);
+  }
+
+  .mecanicas {
+    display: grid;
+    gap: var(--sp-3);
+  }
+
+  .mecanica {
+    display: grid;
+    grid-template-columns: minmax(4.75rem, auto) minmax(0, 1fr);
+    gap: var(--sp-4);
+    align-items: center;
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--radius-card);
+    background: var(--surface-1);
+  }
+
+  /* Tecla: texto oscuro sobre el color del equipo (nunca blanco sobre azul) */
+  .tecla {
+    padding: var(--sp-2) var(--sp-3);
+    color: var(--ink);
+    font-size: 1rem;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .tecla--def {
+    background: var(--def);
+  }
+
+  .tecla--inv {
+    background: var(--inv);
+  }
+
+  .tecla--gold {
+    background: var(--gold);
+  }
+
+  @media (min-width: 860px) {
+    .destacado__cabeza {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      column-gap: var(--sp-8);
+    }
+  }
+</style>

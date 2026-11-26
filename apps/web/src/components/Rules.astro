@@ -1,0 +1,48 @@
+---
+// Las dos reglas que no cambian, visibles en la portada: tú estás en el LIVE (presencia) y nada se decide por casualidad
+// (el efecto de un regalo depende solo de su valor). Dos paneles; el título de la sección solo lo leen los lectores
+// de pantalla porque cada panel ya tiene el suyo.
+import { reglas } from '@tienda/contracts/i18n';
+
+const paneles = [reglas.presencia, reglas.sinAzar];
+---
+
+<section class="sec container" aria-labelledby="titulo-reglas">
+  <h2 id="titulo-reglas" class="sr-only">
+    {reglas.titulo}
+  </h2>
+  <div class="reglas">
+    {paneles.map((regla) => (
+      <div class="regla">
+        <h3>{regla.titulo}</h3>
+        <p>{regla.texto}</p>
+      </div>
+    ))}
+  </div>
+</section>
+
+<style>
+  .reglas {
+    display: grid;
+    gap: var(--sp-4);
+  }
+
+  .regla {
+    display: grid;
+    gap: var(--sp-3);
+    align-content: start;
+    padding: var(--sp-5);
+    border-radius: var(--radius-panel);
+    background: var(--surface-2);
+  }
+
+  @media (min-width: 860px) {
+    .reglas {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .regla {
+      padding: var(--sp-6);
+    }
+  }
+</style>

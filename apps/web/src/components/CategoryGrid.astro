@@ -1,0 +1,170 @@
+---
+// Las cuatro categorías de juego, cada una con su arte propio. No es una cuadrícula de iconos: cada panel tiene otra
+// composición. En móvil van apilados; desde 860px forman una cuadrícula de 6 columnas (Acción y Metas a lo ancho,
+// Público y Relax a media fila). Los datos de cada categoría salen del diccionario y recorren CATEGORIES de contracts:
+// si falta una, CategoryArt falla al construir.
+import { CATEGORIES } from '@tienda/contracts/enums';
+import { categorias, opciones } from '@tienda/contracts/i18n';
+import CategoryArt from './CategoryArt.astro';
+
+const datos = opciones.categorias as Record<string, (typeof opciones.categorias)['accion']>;
+const roles = opciones.roles as Record<string, string>;
+---
+
+<section class="band" aria-labelledby="titulo-categorias">
+  <div class="container categorias">
+    <div class="categorias__cabeza">
+      <h2 id="titulo-categorias">{categorias.titulo}</h2>
+      <p>{categorias.intro}</p>
+    </div>
+    <ul class="categorias__lista">
+      {CATEGORIES.map((slug) => {
+        const c = datos[slug];
+        return (
+          <li class={`cat cat--${slug}`}>
+            <div class="cat__arte">
+              <CategoryArt categoria={slug} />
+            </div>
+            <div class="cat__texto">
+              <h3 class="cat__nombre">{c.nombre}</h3>
+              <p>{c.descripcion}</p>
+              <p class="cat__rol">
+                {categorias.rolEtiqueta}: {roles[c.rolStreamer]}
+              </p>
+              <p class="cat__dato">
+                <b>{categorias.idealParaEtiqueta}:</b> {c.idealPara}
+              </p>
+              <p class="cat__dato">
+                <b>{categorias.notaEtiqueta}:</b> {c.nota}
+              </p>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  </div>
+</section>
+
+<style>
+  .categorias {
+    display: grid;
+    gap: var(--sp-6);
+  }
+
+  .categorias__cabeza {
+    display: grid;
+    gap: var(--sp-3);
+    justify-items: start;
+  }
+
+  .categorias__lista {
+    display: grid;
+    gap: var(--sp-4);
+  }
+
+  /* Los paneles van en --surface-2 porque la franja de fondo ya es --surface-1: así se distinguen */
+  .cat {
+    display: grid;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: var(--radius-panel);
+    background: var(--surface-2);
+  }
+
+  .cat--accion {
+    --cat: var(--inv);
+    --arte-proporcion: 16 / 8;
+  }
+
+  .cat--publico {
+    --cat: var(--def);
+    --arte-proporcion: 16 / 10;
+  }
+
+  .cat--relax {
+    --cat: var(--ok);
+    --arte-proporcion: 4 / 3;
+  }
+
+  .cat--metas {
+    --cat: var(--gold);
+    --arte-proporcion: 1 / 1;
+  }
+
+  .cat__arte {
+    aspect-ratio: var(--arte-proporcion);
+    overflow: hidden;
+  }
+
+  /* El SVG llena la caja: el fondo del arte es más grande que su lienzo, así que no queda hueco */
+  .cat__arte :global(.arte) {
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+  .cat__texto {
+    display: grid;
+    gap: var(--sp-3);
+    align-content: center;
+    justify-items: start;
+    min-width: 0;
+    padding: var(--sp-5);
+  }
+
+  .cat__rol {
+    color: var(--cat);
+    font-size: 1.125rem;
+    font-weight: 800;
+  }
+
+  .cat__dato {
+    color: var(--muted);
+    font-size: 0.9375rem;
+  }
+
+  .cat__dato b {
+    color: var(--text);
+  }
+
+  @media (min-width: 860px) {
+    .categorias__lista {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .cat--accion,
+    .cat--metas {
+      grid-column: span 6;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .cat--publico,
+    .cat--relax {
+      grid-column: span 3;
+    }
+
+    /* Acción: texto a la izquierda y arte a la derecha. Metas: arte a la izquierda y texto a la derecha. */
+    .cat--accion .cat__arte {
+      order: 2;
+    }
+
+    .cat--accion .cat__arte,
+    .cat--metas .cat__arte {
+      aspect-ratio: auto;
+      min-height: 16rem;
+    }
+
+    .cat--accion .cat__texto,
+    .cat--metas .cat__texto {
+      padding: var(--sp-6);
+    }
+
+    /* Relax: el arte va debajo del texto */
+    .cat--relax {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .cat--relax .cat__arte {
+      order: 2;
+    }
+  }
+</style>

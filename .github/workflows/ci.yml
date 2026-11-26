@@ -35,11 +35,24 @@ jobs:
       - run: npm run licenses
       - name: Vulnerabilidades altas en dependencias de producción
         run: npm audit --omit=dev --audit-level=high
+      # Las dos comprobaciones siguientes son locales: no suben nada ni necesitan credenciales de Cloudflare.
+      - name: El paquete del Worker solo tiene código propio
+        run: npm run check:bundle -w @tienda/api
+      - name: Humo de D1 - las migraciones corren en SQLite real (workerd)
+        run: npm run db:migrate -w @tienda/api
 
   pruebas:
     name: Pruebas (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 15
+    # Entorno de la construcción de la web. Las pruebas de dist leen SITE_URL y esperan este origen.
+    # El sitekey es el de PRUEBA de Turnstile (siempre aprueba). No hay token del beacon: la CI no lleva analítica.
+    # El estado de las herramientas (Astro, Wrangler) va a la carpeta por defecto de scripts/run.mjs,
+    # `<repo>/../.dev-state/tienda-live`: fuera del checkout y dentro de la carpeta de trabajo del runner.
+    # Aquí no se puede usar el contexto `runner` (no existe a nivel de job y el workflow no arrancaría).
+    env:
+      SITE_URL: http://localhost:8790
+      PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
     strategy:
       fail-fast: false
       matrix:
@@ -55,3 +68,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      # La vitrina: tipos, construcción real, pruebas sobre el HTML construido y el esquema de contenido.
+      - name: Tipos de la web (astro check)
+        run: npm run typecheck -w @tienda/web
+      - name: Construcción de la web
+        run: npm run build -w @tienda/web
+      - name: Pruebas del dist (HTML, cabeceras, imágenes y presupuesto de JS)
+        run: npm run test:dist -w @tienda/web
+      - name: El esquema rechaza contenido inválido y nombra archivo y campo
+        run: npm run check:schema -w @tienda/web

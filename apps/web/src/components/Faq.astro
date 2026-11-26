@@ -1,0 +1,75 @@
+---
+// Preguntas frecuentes con <details>: funcionan sin JavaScript y se abren al instante (sin animación). Una pregunta
+// larga se parte en varias líneas en lugar de salirse del panel.
+import { faq } from '@tienda/contracts/i18n';
+import Icon from './Icon.astro';
+---
+
+<section class="band" aria-labelledby="titulo-faq">
+  <div class="container faq">
+    <h2 id="titulo-faq">{faq.titulo}</h2>
+    <div class="faq__lista">
+      {faq.preguntas.map((p) => (
+        <details class="faq__item">
+          <summary class="faq__pregunta">
+            <span>{p.pregunta}</span>
+            <Icon nombre="chevron" size={22} class="faq__icono" />
+          </summary>
+          <p class="faq__respuesta">{p.respuesta}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .faq {
+    display: grid;
+    gap: var(--sp-6);
+  }
+
+  .faq__lista {
+    display: grid;
+    gap: var(--sp-3);
+    max-inline-size: 52rem;
+  }
+
+  .faq__item {
+    border-radius: var(--radius-panel);
+    background: var(--surface-2);
+  }
+
+  .faq__pregunta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    padding: var(--sp-4) var(--sp-5);
+    border-radius: var(--radius-panel);
+    font-weight: 800;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .faq__pregunta::-webkit-details-marker {
+    display: none;
+  }
+
+  .faq__pregunta span {
+    min-width: 0;
+  }
+
+  .faq__pregunta :global(.faq__icono) {
+    flex-shrink: 0;
+    color: var(--gold);
+  }
+
+  /* El chevron mira hacia abajo cerrado y hacia arriba abierto, sin animar (los desplegables son instantáneos) */
+  .faq__item[open] :global(.faq__icono) {
+    transform: rotate(180deg);
+  }
+
+  .faq__respuesta {
+    padding: 0 var(--sp-5) var(--sp-5);
+  }
+</style>

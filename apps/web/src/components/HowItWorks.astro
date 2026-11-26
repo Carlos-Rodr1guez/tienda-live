@@ -1,0 +1,73 @@
+---
+// Cómo funciona, en tres verbos. Es una lista ordenada de verdad (<ol>), sin numerales decorativos: cada paso lleva una
+// barra de color (dorado, azul y verde). Desde 860px los pasos suben como una escalera, eco de la escalera de regalos.
+import { pasos } from '@tienda/contracts/i18n';
+---
+
+<section class="band" aria-labelledby="titulo-pasos">
+  <div class="container pasos">
+    <h2 id="titulo-pasos" class="sr-only">
+      {pasos.titulo}
+    </h2>
+    <ol class="pasos__lista">
+      {pasos.lista.map((paso, i) => (
+        <li class={`paso paso--${i + 1}`}>
+          <span class="paso__barra" aria-hidden="true" />
+          <h3 class="paso__verbo">{paso.verbo}</h3>
+          <p>{paso.detalle}</p>
+        </li>
+      ))}
+    </ol>
+  </div>
+</section>
+
+<style>
+  .pasos__lista {
+    display: grid;
+    gap: var(--sp-6);
+  }
+
+  .paso {
+    display: grid;
+    gap: var(--sp-3);
+    justify-items: start;
+    min-width: 0;
+  }
+
+  .paso__barra {
+    width: 56px;
+    height: 8px;
+    border-radius: var(--radius-chip);
+    background: var(--gold);
+  }
+
+  .paso--2 .paso__barra {
+    background: var(--def);
+  }
+
+  .paso--3 .paso__barra {
+    background: var(--ok);
+  }
+
+  .paso__verbo {
+    font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2.25rem);
+    overflow-wrap: anywhere;
+  }
+
+  @media (min-width: 860px) {
+    .pasos__lista {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--sp-6);
+      align-items: start;
+    }
+
+    /* escalera ascendente: 0, 2.5rem y 5rem de desplazamiento */
+    .paso--2 {
+      margin-block-start: 2.5rem;
+    }
+
+    .paso--3 {
+      margin-block-start: 5rem;
+    }
+  }
+</style>

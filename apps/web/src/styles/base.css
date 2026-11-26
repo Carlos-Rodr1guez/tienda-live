@@ -1,0 +1,330 @@
+/*
+ * Base de la vitrina: reinicio, superficies del navegador, tipografía, estados y piezas que usan todas las páginas.
+ * Los valores salen de tokens.css. Reglas que no se rompen:
+ *  - solo se anima transform y opacity, nunca `transition: all`;
+ *  - el :hover va dentro de (hover: hover) and (pointer: fine);
+ *  - alturas con dvh, nunca 100vh;
+ *  - el campo de estrellas es un archivo propio (la CSP es default-src 'self': un URI de datos queda bloqueado).
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Superficies del navegador: lo que el sistema pinta lo pintamos del color de la marca */
+html {
+  color-scheme: dark;
+  accent-color: var(--gold);
+  caret-color: var(--gold);
+  scrollbar-color: #2a3550 var(--bg);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-padding-top: var(--sp-6);
+}
+
+::selection {
+  background: rgb(47 155 255 / 0.35);
+  color: var(--text);
+}
+
+body {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100dvh;
+  margin: 0;
+  background-color: var(--bg);
+  background-image: url('./estrellas.svg');
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  font-weight: 500;
+  line-height: var(--lh-body);
+  overflow-wrap: break-word;
+}
+
+/* Tipografía */
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 800;
+  line-height: var(--lh-head);
+  letter-spacing: var(--tracking-head);
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: var(--fs-hero);
+}
+
+h2 {
+  font-size: var(--fs-2xl);
+}
+
+h3 {
+  font-size: var(--fs-xl);
+}
+
+p {
+  margin: 0;
+  max-inline-size: var(--measure);
+  text-wrap: pretty;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: var(--def);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+svg {
+  display: block;
+}
+
+/* Un elemento con hidden no se muestra aunque su clase le dé display */
+[hidden] {
+  display: none !important;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Anillo de foco: visible con teclado en cualquier superficie */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* Toques cómodos: objetivos de 44px como mínimo y sin retraso por doble toque */
+a,
+button,
+input,
+select,
+textarea,
+summary,
+label {
+  touch-action: manipulation;
+}
+
+button,
+summary,
+select,
+input:not([type='checkbox']):not([type='radio']),
+textarea {
+  min-height: 44px;
+}
+
+/* Campos: nunca por debajo de 16px (en iOS, menos hace saltar el zoom al enfocar) */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  font-size: var(--fs-base);
+}
+
+input:not([type='checkbox']):not([type='radio']),
+select,
+textarea {
+  width: 100%;
+  padding: 0 0.875rem;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-field);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+textarea {
+  padding-block: var(--sp-3);
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+[aria-invalid='true'] {
+  border-color: var(--error);
+}
+
+/* Disposición */
+.container {
+  width: var(--container);
+  margin-inline: auto;
+}
+
+.band {
+  padding-block: var(--section-pad);
+  background: var(--surface-1);
+}
+
+.sec {
+  padding-block: var(--section-pad);
+}
+
+.panel {
+  padding: var(--sp-5);
+  border-radius: var(--radius-panel);
+  background: var(--surface-2);
+}
+
+.chip {
+  display: inline-block;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-chip);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Enlace para saltar al contenido: oculto hasta que recibe el foco con teclado */
+.skip-link {
+  position: absolute;
+  z-index: 10;
+  inset-block-start: var(--sp-2);
+  inset-inline-start: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-btn);
+  background: var(--gold);
+  color: var(--on-gold);
+  font-weight: 800;
+  text-decoration: none;
+  transform: translateY(-300%);
+}
+
+.skip-link:focus-visible {
+  transform: none;
+}
+
+/* Botón principal: dorado, con texto oscuro (11.5:1) */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 52px;
+  padding: 0 1.75rem;
+  border: 0;
+  border-radius: var(--radius-btn);
+  background: var(--gold);
+  color: var(--on-gold);
+  font-size: var(--fs-base);
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .btn:not(:disabled):hover {
+    transform: translateY(-2px);
+  }
+}
+
+.btn:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* Páginas de apoyo (404, legales y confirmación): una columna con el título, la prosa y los avisos */
+.apoyo {
+  display: grid;
+  gap: var(--sp-5);
+  justify-items: start;
+}
+
+.apoyo h1 {
+  font-size: var(--fs-2xl);
+}
+
+.prose {
+  max-inline-size: var(--measure);
+}
+
+.prose > * + * {
+  margin-top: var(--sp-3);
+}
+
+.prose h2 {
+  margin-top: var(--sp-6);
+  font-size: var(--fs-xl);
+}
+
+.prose ul {
+  padding-inline-start: var(--sp-5);
+  list-style: disc;
+}
+
+/* Aviso o estado sobre una superficie elevada: sin franja de color lateral, el tono va en el texto y el icono */
+.aviso-panel {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  max-inline-size: var(--measure);
+  padding: var(--sp-5);
+  border-radius: var(--radius-panel);
+  background: var(--surface-2);
+}
+
+.aviso-panel__icono {
+  flex: none;
+  margin-block-start: 0.1em;
+  color: var(--gold);
+}
+
+.aviso-panel__titulo {
+  font-weight: 800;
+}
+
+[data-tono='ok'] {
+  color: var(--ok);
+}
+
+[data-tono='error'] {
+  color: var(--error);
+}
+
+/* Movimiento reducido: no se mueve nada; opacidad y color se conservan */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .btn:not(:disabled):active {
+    transform: none;
+  }
+}
