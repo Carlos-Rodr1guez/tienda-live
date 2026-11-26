@@ -26,12 +26,12 @@ test('el roster de tierra tiene 8 tipos, en el orden de su costo', () => {
   assert.deepEqual([...UNIT_KINDS].sort(), [...ORDEN, 'avion'].sort());
 });
 
-test('regla de stats: hp = 60·c·bonoHP y dps = 6·c·bonoDPS; ninguno trae `dmg` y el daño sale de dps × cadencia', () => {
+test('regla de stats: hp = 60·c·bonoHP·hpScale y dps = 6·c·bonoDPS; ninguno trae `dmg` y el daño sale de dps × cadencia', () => {
   for (const k of GROUND_KINDS) {
     const u = cfg.units[k];
     assert.ok(!('dmg' in u), k);
     const s = unitStats(cfg, k);
-    assert.equal(s.hp, 60 * u.c * u.bonoHP, k);
+    assert.equal(s.hp, 60 * u.c * u.bonoHP * u.hpScale, k); // v2.9: `hpScale` (×0,6; tanque y lobo ×0,4)
     assert.equal(s.dps, 6 * u.c * u.bonoDPS, k);
     assert.equal(s.damage, s.dps * u.cadence, k);
   }
@@ -42,10 +42,11 @@ test('valores finales de los tipos nuevos', () => {
     const s = unitStats(cfg, k);
     return { hp: s.hp, dps: s.dps, range: s.range, splash: s.splash, vision: s.vision, spacing: s.spacing };
   };
-  assert.deepEqual(v('francotirador'), { hp: 180, dps: 30, range: 170, splash: 0, vision: 230, spacing: 12 });
-  assert.deepEqual(v('blindado'), { hp: 2700, dps: 144, range: 90, splash: 0, vision: 240, spacing: 24 });
-  assert.deepEqual(v('lanzacohetes'), { hp: 9000, dps: 1800, range: 190, splash: 26, vision: 280, spacing: 32 });
-  assert.deepEqual(v('lobo'), { hp: 144000, dps: 16200, range: 24, splash: 22, vision: 240, spacing: 28 });
+  // v2.9: vida × 0,6 (lobo × 0,4): francotirador 180 → 108, blindado 2 700 → 1 620, lanzacohetes 9 000 → 5 400, lobo 144 000 → 57 600
+  assert.deepEqual(v('francotirador'), { hp: 108, dps: 30, range: 170, splash: 0, vision: 230, spacing: 12 });
+  assert.deepEqual(v('blindado'), { hp: 1620, dps: 144, range: 90, splash: 0, vision: 240, spacing: 24 });
+  assert.deepEqual(v('lanzacohetes'), { hp: 5400, dps: 1800, range: 190, splash: 26, vision: 280, spacing: 32 });
+  assert.deepEqual(v('lobo'), { hp: 57600, dps: 16200, range: 24, splash: 22, vision: 240, spacing: 28 });
 });
 
 test('el poder por moneda es parecido entre tipos: índice bonoHP × bonoDPS entre 0,5 y 1,6', () => {
@@ -120,7 +121,7 @@ test('tabla de tramos: monedas de UN regalo → unidad', () => {
   assert.deepEqual(
     ROUTER_DEFAULTS.tiers.map((t) => [t.minCoins, t.unit, t.coinsPerUnit]),
     [
-      [1, 'soldado', 1],
+      [1, 'soldado', 0.2], // v2.9: una moneda da 5 soldados (0,2 monedas por soldado)
       [5, 'francotirador', 5],
       [10, 'jeep', 10],
       [30, 'blindado', 30],
@@ -159,6 +160,56 @@ test('combo: un regalo de 5 monedas ×4 da 4 francotiradores; ×99 se recorta al
   assert.equal(cien.cmd.orders[0].count, 10);
   assert.ok(cien.meta.trimmed > 0);
   assert.ok(Math.abs(cien.cmd.orders[0].count * cien.cmd.orders[0].unitValue - 5 * 99) < 1e-9);
+});
+
+test('v2.9: una rosa (1 moneda) da 5 soldados; el tramo 1 a 4 da 5 por moneda (4 monedas → 20) y cada soldado vale 0,2', () => {
+  for (const c of [1, 2, 3, 4]) {
+    const r = regalo(c);
+    const o = r.cmd.orders[0];
+    assert.equal(o.kind, 'soldado', `${c} monedas`);
+    assert.equal(o.count, 5 * c, `${c} monedas dan ${5 * c} soldados`);
+    assert.equal(r.meta.trimmed, 0, `${c} monedas no se recorta`);
+    assert.ok(Math.abs(o.unitValue - 0.2) < 1e-12, `${c}: cada soldado vale 0,2 (${o.unitValue})`);
+    assert.ok(Math.abs(o.count * o.unitValue - c) < 1e-12, `${c}: la suma de valor es igual a las monedas`);
+  }
+  // el tramo siguiente no cambia: 5 monedas siguen siendo UN francotirador
+  assert.deepEqual([regalo(5).cmd.orders[0].kind, regalo(5).cmd.orders[0].count], ['francotirador', 1]);
+  assert.equal(ROUTER_DEFAULTS.tiers[0].maxPerGift, 20);
+});
+
+test('v2.9: combos de rosas: ×3 da 15 soldados, ×20 llega al tope del evento (100) y más se recorta sin perder el valor', () => {
+  assert.equal(regalo(1, 3).cmd.orders[0].count, 15);
+  const veinte = regalo(1, 20);
+  assert.equal(veinte.cmd.orders[0].count, 100);
+  assert.equal(veinte.meta.trimmed, 0);
+  const muchas = regalo(1, 99);
+  assert.equal(muchas.cmd.orders[0].count, 100);
+  assert.equal(muchas.meta.trimmed, 395);
+  assert.ok(Math.abs(muchas.cmd.orders[0].count * muchas.cmd.orders[0].unitValue - 99) < 1e-9, 'lo pagado se conserva');
+  assert.equal(router.eventCaps.get('soldado'), 100);
+  assert.equal(router.maxPerEvent, 100);
+});
+
+test('v2.9: el valor fraccionario es determinista y el libro cuadra: dos mundos con las mismas rosas dan el mismo hash', async () => {
+  const { hashWorld } = await import('../public/js/sim/hash.js');
+  const correr = () => {
+    const w = createWorld({ hq: { hp: 1e12 } }, { phase: 'sandbox' });
+    for (const c of [1, 2, 3, 4, 1, 1]) {
+      const g = regalo(c).cmd;
+      for (const o of g.orders) submitOrder(w, o);
+    }
+    for (let i = 0; i < 600; i++) stepWorld(w);
+    return w;
+  };
+  const a = correr();
+  const b = correr();
+  assert.equal(hashWorld(a), hashWorld(b));
+  const l = ledger(a);
+  assert.ok(Math.abs(l.sum - l.paid) < 1e-9, `el libro cuadra: ${l.sum} contra ${l.paid}`);
+  assert.equal(l.paid, 12, 'se pagaron 12 monedas y se registran como 12');
+  const soldados =
+    a.units.filter((u) => u.kind === 'soldado').length + enCola(a, 0, 'soldado') + enCola(a, 1, 'soldado');
+  assert.ok(soldados <= 60, 'no salen más soldados de los pagados');
 });
 
 test('los regalos grandes (lanzacohetes, pesado y lobo) llevan el cartel del donante', () => {

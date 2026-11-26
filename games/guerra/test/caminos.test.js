@@ -269,8 +269,11 @@ test('la visión sigue siendo mayor que el alcance en todos los tipos (200/240/2
   }
 });
 
-test('el pesado pierde un tercio de vida: 90 000 → 60 000 (bonoHP 1,5 → 1); el resto de los tipos no cambia', () => {
-  const cfg = resolveConfig();
+test('el pesado pierde un tercio de vida: 90 000 → 60 000 (bonoHP 1,5 → 1); el resto de los tipos no cambia (con hpScale 1, sin la rebaja de v2.9)', () => {
+  // v2.9 baja la vida de todos con `hpScale`; aquí se fija en 1 para seguir comprobando el bonoHP de v2.7
+  const cfg = resolveConfig({
+    units: { soldado: { hpScale: 1 }, jeep: { hpScale: 1 }, tanque: { hpScale: 1 }, pesado: { hpScale: 1 } },
+  });
   assert.equal(cfg.units.pesado.bonoHP, 1);
   assert.equal(unitStats(cfg, 'pesado').hp, 60000);
   assert.ok(Math.abs(unitStats(cfg, 'pesado').hp / 90000 - 2 / 3) < 1e-9, '−33,3 %');

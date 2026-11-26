@@ -112,15 +112,17 @@ export function panelModel(config) {
   });
   /** @type {Map<string, SimGift>} */
   const gifts = new Map();
-  const add = (name, coins, id, autoWeight) => {
+  const add = (name, coins, id, autoWeight, auto) => {
     const key = normWord(name);
     if (!key || gifts.has(key)) return;
     const gift = { name: String(name), coins: Number(coins) >= 1 ? Number(coins) : 1, id: id ? String(id) : '' };
     if (Number.isFinite(autoWeight) && autoWeight > 0) gift.autoWeight = autoWeight;
+    // `auto: false`: el regalo solo sale del botón manual (o de un regalo real); el tráfico automático jamás lo manda
+    if (auto === false) gift.auto = false;
     gifts.set(key, gift);
   };
   for (const g of config?.simulator?.gifts ?? [])
-    if (g && typeof g.name === 'string') add(g.name, g.coins, g.id, Number(g.autoWeight));
+    if (g && typeof g.name === 'string') add(g.name, g.coins, g.id, Number(g.autoWeight), g.auto);
   // un override sin nombre ("id:5655") solo vale si un regalo del simulador lleva ese id
   for (const name of Object.keys(config?.giftOverrides ?? {})) if (!name.startsWith('id:')) add(name, 1, '');
   const list = [...gifts.values()].sort((a, b) => a.coins - b.coins);
@@ -152,7 +154,9 @@ const MIX_MAX = [0.05, 0.25, 0.55, 0.9, 0.95, 1];
  */
 export function pickAuto(rng, cfg) {
   const teams = cfg?.teams ?? [];
-  const gifts = [...(cfg?.gifts ?? [])].sort((a, b) => a.coins - b.coins);
+  // v2.9: un regalo con `auto: false` (p. ej. el héroe de 3000 monedas) no entra al tráfico automático en NINGÚN nivel, ni en
+  // «máximo»; solo sale de su botón manual. El «grande» pasa a ser el siguiente más caro.
+  const gifts = (cfg?.gifts ?? []).filter((g) => g.auto !== false).sort((a, b) => a.coins - b.coins);
   const names = cfg?.names?.length ? cfg.names : DEFAULT_NAMES;
   const mix = cfg?.level === 'max' ? MIX_MAX : MIX_DEFAULT;
   const pickFrom = (list) => list[Math.floor(rng() * list.length)];
@@ -174,15 +178,8 @@ export function pickAuto(rng, cfg) {
     gift = gifts[0];
     count = 1 + Math.floor(rng() * 6);
   } else if (kind === 'big') {
-    // `autoWeight` también reparte entre los dos regalos más caros (solo si alguno lo trae y no es el nivel «max»): un héroe
-    // de 3000 monedas sale poco. Sin pesos en ninguno de los dos, es el más caro de siempre y no se gasta ningún azar de más.
-    const tops = gifts.slice(-2);
-    if (cfg?.level !== 'max' && tops.length === 2 && tops.some((g) => g.autoWeight !== undefined)) {
-      const [a, b] = tops.map((g) => g.autoWeight ?? 1);
-      gift = rng() * (a + b) < a ? tops[0] : tops[1];
-    } else {
-      gift = gifts[gifts.length - 1];
-    }
+    // el regalo grande es siempre el más caro de los que pueden salir solos (el héroe queda fuera con `auto: false`)
+    gift = gifts[gifts.length - 1];
   } else if (gifts.length > 2) {
     const medios = gifts.slice(1, -1);
     // `autoWeight` (opcional, 1 por defecto) baja la frecuencia de un regalo en el tráfico automático; los botones manuales

@@ -252,27 +252,35 @@ test('KIT-27: autoCount da lo esperado por nivel, repetible y 0 para "off"', () 
   assert.ok(total('max') >= 3000, 'el máximo da varios eventos por vuelta');
 });
 
-test('KIT-27: autoWeight también reparte entre los dos regalos más caros (el "grande"), y sin pesos sigue siendo el más caro', () => {
-  const regalos = (heroe) => [
+test('KIT-27: un regalo con `auto: false` NUNCA sale del tráfico automático (en ningún nivel, ni en "máximo"); el "grande" pasa al siguiente más caro', () => {
+  const regalos = [
     { name: 'Rosa', coins: 1 },
     { name: 'A', coins: 5 },
-    { name: 'Gran', coins: 1000, ...(heroe ? { autoWeight: 0.4 } : {}) },
-    { name: 'Héroe', coins: 3000, ...(heroe ? { autoWeight: 0.05 } : {}) },
+    { name: 'B', coins: 30, auto: false },
+    { name: 'Gran', coins: 1000 },
+    { name: 'Héroe', coins: 3000, auto: false },
   ];
-  const cuentaGrandes = (heroe, level) => {
-    const m = panelModel({ teams: CONFIG.teams, simulator: { gifts: regalos(heroe) } });
+  const m = panelModel({ teams: CONFIG.teams, simulator: { gifts: regalos } });
+  // el modelo conserva la marca (los botones manuales siguen ahí) y no la inventa en los demás
+  assert.equal(m.gifts.find((g) => g.name === 'Héroe').auto, false);
+  assert.equal(m.gifts.find((g) => g.name === 'B').auto, false);
+  assert.equal(m.gifts.find((g) => g.name === 'Gran').auto, undefined);
+  for (const level of ['low', 'mid', 'high', 'max']) {
     const rng = mulberry32(5);
-    const n = { Gran: 0, Héroe: 0 };
+    const n = { Gran: 0, Héroe: 0, B: 0, A: 0 };
     for (let i = 0; i < 20000; i++)
       for (const e of pickAuto(rng, { ...m, names: ['ana'], level }))
-        if (e.type === 'gift' && e.giftName in n && e.coins >= 1000) n[e.giftName]++;
-    return n;
-  };
-  const con = cuentaGrandes(true, 'mid');
-  assert.ok(con.Héroe > 0 && con.Héroe < con.Gran * 0.2, `con pesos el héroe sale poco: ${JSON.stringify(con)}`);
-  // sin pesos, el "grande" (5 % de los eventos) es siempre el más caro: el héroe sale mucho más que con pesos
-  const sin = cuentaGrandes(false, 'mid');
-  assert.ok(sin.Héroe > con.Héroe * 3, `sin pesos: ${JSON.stringify(sin)}`);
-  const max = cuentaGrandes(true, 'max');
-  assert.ok(max.Héroe > con.Héroe * 3, `"máximo" no usa pesos: ${JSON.stringify(max)}`);
+        if (e.type === 'gift' && e.giftName in n) n[e.giftName]++;
+    assert.equal(n.Héroe, 0, `${level}: el héroe nunca sale solo`);
+    assert.equal(n.B, 0, `${level}: un regalo intermedio con auto:false tampoco`);
+    assert.ok(n.Gran > 0, `${level}: el grande es ahora el siguiente más caro (${JSON.stringify(n)})`);
+  }
+  // si ningún regalo es automático, el tráfico no manda regalos (cae a likes) y no lanza
+  const todos = panelModel({
+    teams: CONFIG.teams,
+    simulator: { gifts: regalos.map((g) => ({ ...g, auto: false })) },
+  });
+  const rng = mulberry32(3);
+  for (let i = 0; i < 500; i++)
+    for (const e of pickAuto(rng, { ...todos, names: ['ana'], level: 'max' })) assert.notEqual(e.type, 'gift');
 });

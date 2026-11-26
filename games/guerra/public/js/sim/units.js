@@ -1,5 +1,5 @@
-// Roster y stats de las unidades (diseño D16, CB-9). Regla de stats (#327): hp = 60·c·bonoHP, dps = 6·c·bonoDPS
-// y daño por disparo = dps × cadencia. Alcance, velocidad y salpicadura son px (R2).
+// Roster y stats de las unidades (diseño D16, CB-9). Regla de stats (#327): hp = 60·c·bonoHP·hpScale (v2.9: `hpScale`
+// acorta las peleas), dps = 6·c·bonoDPS y daño por disparo = dps × cadencia. Alcance, velocidad y salpicadura son px (R2).
 
 import { SIM_HZ } from './defaults.js';
 
@@ -39,7 +39,7 @@ export function unitStats(cfg, kind) {
   const dps = 6 * u.c * u.bonoDPS;
   return {
     kind,
-    hp: 60 * u.c * u.bonoHP,
+    hp: 60 * u.c * u.bonoHP * u.hpScale,
     dps,
     cadence: u.cadence,
     damage: dps * u.cadence,

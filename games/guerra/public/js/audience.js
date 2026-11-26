@@ -33,7 +33,9 @@ export const UNIT_KINDS = Object.freeze([
 /** Poder de los regalos, proporcional a las monedas (diseño §4). El README explica cómo cambiarlos en `config.json`. */
 export const ROUTER_DEFAULTS = Object.freeze({
   tiers: [
-    { minCoins: 1, unit: 'soldado', coinsPerUnit: 1, maxPerGift: 4 },
+    // v2.9: una moneda da 5 soldados (0,2 monedas por soldado; 4 monedas → 20). floor(n / 0,2) es exacto de 1 a 4 monedas y
+    // cada soldado vale 0,2: la suma de valor de un regalo sigue siendo igual a sus monedas (crédito, XP, MVP y ranking).
+    { minCoins: 1, unit: 'soldado', coinsPerUnit: 0.2, maxPerGift: 20 },
     { minCoins: 5, unit: 'francotirador', coinsPerUnit: 5, maxPerGift: 1 },
     { minCoins: 10, unit: 'jeep', coinsPerUnit: 10, maxPerGift: 2 },
     { minCoins: 30, unit: 'blindado', coinsPerUnit: 30, maxPerGift: 3 },
@@ -44,12 +46,14 @@ export const ROUTER_DEFAULTS = Object.freeze({
     { minCoins: 3000, unit: 'lobo', coinsPerUnit: 3000, maxPerGift: 1 },
   ],
   giftOverrides: {},
-  maxPerEvent: 40,
+  // v2.9: con 5 soldados por moneda el tope del evento sube de 40 a 100 (antes 40 monedas de rosas, ahora 20): sin esto,
+  // un combo de 9 rosas ya se recortaría. Los demás tipos tienen topes propios mucho menores.
+  maxPerEvent: 100,
   // v2.8: un avión por unidad de regalo (un combo ×5 da 5 aviones, que salen de a uno); más de 5 se recorta.
   // v2.8 (precios por monedas de un solo regalo): un regalo único nunca se recorta (`maxPerGift` ≤ tope del evento); los
   // topes cortan solo combos. El lobo es héroe: 2 por evento y, como mucho, 1 vivo por lado (sim/queue.js).
   eventCaps: {
-    soldado: 40,
+    soldado: 100,
     francotirador: 10,
     jeep: 8,
     blindado: 6,
@@ -76,8 +80,9 @@ export const SIM_GIFTS = Object.freeze([
   // el avión pesa 0,2 en el tráfico automático (medio y alto): sigue en el botón manual, pero sale mucho menos
   Object.freeze({ name: 'Airplane', coins: 500, autoWeight: 0.2 }),
   Object.freeze({ name: 'Galaxy', coins: 1000, autoWeight: 0.4 }),
-  // el héroe: con 0,05 sale en ~1 de cada 20 regalos caros del tráfico automático (el nivel «máximo» no usa pesos)
-  Object.freeze({ name: '3000 monedas', coins: 3000, autoWeight: 0.05 }),
+  // v2.9: el héroe SOLO sale por donación (este botón o un regalo real de ≥ 3000 monedas): `auto: false` lo deja fuera del
+  // tráfico automático en todos los niveles, incluido el «máximo». El regalo grande del tráfico es Galaxy (1000 → pesados).
+  Object.freeze({ name: '3000 monedas', coins: 3000, auto: false }),
 ]);
 
 /** Las claves de `config.json → game` que mueven el router. */

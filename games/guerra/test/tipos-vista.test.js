@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { panelModel, pickAuto } from '@tienda/kit/client/simulator-events.js';
 import { createRegistry } from '@tienda/kit/sim/registry.js';
+import { mulberry32 } from '@tienda/kit/sim/rng.js';
 import { SPRITES } from '../public/js/data/sprites.js';
 import { buildSprites } from '../tools/sprite-recipes.js';
 import { KIND_WEIGHT } from '../public/js/camera/auto.js';
@@ -296,5 +298,34 @@ test('simulador F1: un regalo por tramo de la tabla (de 1 a 3000 monedas), con n
   for (const g of SIM_GIFTS.filter((x) => [10, 300, 3000].includes(x.coins)))
     assert.match(g.name, /monedas$/, `${g.name} debe ser un nombre neutro «N monedas»`);
   const lobo = SIM_GIFTS.find((g) => g.coins === 3000);
-  assert.ok(lobo.autoWeight > 0 && lobo.autoWeight < 1, 'el lobo sale poco en el tráfico automático');
+  // v2.9: el lobo SOLO sale por donación (el botón manual o un regalo real de ≥ 3000): el tráfico automático nunca lo manda
+  assert.equal(lobo.auto, false, 'el regalo del lobo no entra al tráfico automático');
+  assert.equal(lobo.autoWeight, undefined, 'ya no usa peso: la marca explícita manda');
+  assert.equal(
+    SIM_GIFTS.filter((g) => g.auto === false).length,
+    1,
+    'solo el lobo queda fuera del tráfico automático (el resto sigue saliendo solo)',
+  );
+});
+
+test('simulador F1: ni en el nivel "máximo" el tráfico automático manda el regalo del lobo; el botón manual sigue en el panel', () => {
+  const modelo = panelModel({
+    teams: [{ id: 'pe', name: 'Perú', aliases: ['peru'] }],
+    simulator: { gifts: SIM_GIFTS },
+  });
+  assert.ok(
+    modelo.gifts.some((g) => g.coins === 3000),
+    'el botón manual de 3000 monedas existe',
+  );
+  for (const level of ['low', 'mid', 'high', 'max']) {
+    const rng = mulberry32(2026);
+    let grandes = 0;
+    for (let i = 0; i < 30000; i++)
+      for (const e of pickAuto(rng, { ...modelo, names: ['ana'], level })) {
+        if (e.type !== 'gift') continue;
+        assert.ok(e.coins < 3000, `${level}: salió un regalo de ${e.coins} monedas solo`);
+        if (e.coins >= 1000) grandes++;
+      }
+    assert.ok(grandes > 0, `${level}: el regalo grande del tráfico es ahora el de 1000 monedas`);
+  }
 });

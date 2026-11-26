@@ -23,6 +23,9 @@ function mundo(extra = {}) {
 /** Una unidad suelta, quieta, con dueño y valor. */
 function suelta(w, side, kind, x, y, o = {}) {
   const u = seedUnits(w, { side, kind, x, y, yg: y, pinned: true, owner: o.owner, value: o.value }).units[0];
+  // el crédito solo depende de la FRACCIÓN de vida golpeada: estas pruebas fijan 60 de vida para que los golpes (45, 30, 24)
+  // sean las mismas de siempre aunque el balance cambie (v2.9: el soldado pasó de 60 a 36)
+  u.hp = u.maxHp = 60;
   if (o.value) addPaid(w, side, o.value);
   return u;
 }

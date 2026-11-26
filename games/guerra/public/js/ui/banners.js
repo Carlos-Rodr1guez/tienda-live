@@ -159,13 +159,28 @@ export function createBanners({ registry, ladder = DEFAULT_LADDER, cfg }) {
     gift(items) {
       for (const g of items) {
         if (g === null || typeof g !== 'object') continue;
-        enqueue({
+        const b = {
           kind: g.kind === 'plane' ? 'plane' : g.kind === 'wolf' ? 'wolf' : 'gift',
           key: typeof g.owner === 'string' ? g.owner : null,
           giftName: typeof g.giftName === 'string' ? g.giftName : '',
           team: null,
           rare: true,
-        });
+        };
+        if (b.kind !== 'wolf') {
+          enqueue(b);
+          continue;
+        }
+        // v2.9: el aviso del lobo tiene prioridad sobre los ascensos. Salta al frente de la cola (detrás de otros lobos, en
+        // orden de llegada) y, si un ascenso estaba en pantalla, lo cede ya: el lobo no espera su ritmo ni queda tapado.
+        // Un avión o un regalo grande en pantalla (avisos raros) terminan su tiempo.
+        if (queue.length >= QUEUE_CAP) queue.shift();
+        let at = 0;
+        while (at < queue.length && queue[at].kind === 'wolf') at++;
+        queue.splice(at, 0, { id: nextId++, ...b });
+        if (current !== null && !current.rare) {
+          current = null;
+          readyAt = -Infinity;
+        }
       }
     },
     /**

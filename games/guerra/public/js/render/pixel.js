@@ -9,6 +9,21 @@ export function disc(g, cx, cy, r, k = 1) {
   }
 }
 
+/** Anillo (círculo hueco) de radio exterior `r` y grosor `th` centrado en (cx, cy), en px de destino. */
+export function ring(g, cx, cy, r, th, k = 1) {
+  const ri = r - th;
+  for (let dy = -r; dy <= r; dy++) {
+    const wo = Math.floor(Math.sqrt(r * r + r * 0.8 - dy * dy));
+    const wi = ri > 0 && Math.abs(dy) <= ri ? Math.floor(Math.sqrt(ri * ri + ri * 0.8 - dy * dy)) : -1;
+    if (wi < 0) {
+      g.fillRect(cx - wo * k, cy + dy * k, (wo * 2 + 1) * k, k);
+    } else if (wo > wi) {
+      g.fillRect(cx - wo * k, cy + dy * k, (wo - wi) * k, k);
+      g.fillRect(cx + (wi + 1) * k, cy + dy * k, (wo - wi) * k, k);
+    }
+  }
+}
+
 /** Elipse de semiejes (rx, ry) centrada en (cx, cy). */
 export function ell(g, cx, cy, rx, ry, k = 1) {
   for (let dy = -ry; dy <= ry; dy++) {

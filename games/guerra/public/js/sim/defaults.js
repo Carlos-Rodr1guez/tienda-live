@@ -32,6 +32,12 @@ export const DEFAULTS = deepFreeze({
   round: { seconds: 180, introSeconds: 5, resultsSeconds: 5, winsToMatch: 2 },
   hq: { hp: 60000, minSeconds: 75 },
   turret: { hp: 3000, dmg: 40, cooldown: 0.33, range: 105, arcPx: 4, phaseStep: 0.1 },
+  // v2.9 (las peleas duraban demasiado): `hpScale` multiplica la vida, hp = 60·c·bonoHP·hpScale. Todas las unidades de
+  // tierra × 0,6 y el tanque y el hombre lobo × 0,4; el daño (dps) no cambia, ni las torretas, la base y el avión.
+  // Vida anterior → nueva: soldado 60 → 36, francotirador 180 → 108, jeep 600 → 360, blindado 2 700 → 1 620,
+  // tanque 7 500 → 3 000 (×0,4), lanzacohetes 9 000 → 5 400, pesado 60 000 → 36 000, lobo 144 000 → 57 600 (×0,4).
+  // `bonoHP` y el índice de poder (bonoHP × bonoDPS) quedan como estaban: `hpScale` es la perilla de la duración de las peleas.
+  //
   // hp y dps salen de la regla (#327): hp = 60·c·bonoHP, dps = 6·c·bonoDPS, daño = dps × cadencia. v2.7: el pesado pierde
   // un tercio de vida (bonoHP 1,5 → 1: 90 000 → 60 000 de HP, −33,3 %). v2.8: el alcance de tierra sube ×1,5 otra vez
   // (42/54/66/78 → 63/81/99/117) y las torretas a 105 (siguen sin alcanzar la zona de asalto desde las laterales: la
@@ -45,13 +51,54 @@ export const DEFAULTS = deepFreeze({
   //  · lanzacohetes (300): 9 000 HP y 1 800 dps, alcance 190 y salpicadura 26; artillería frágil. Índice 0,5.
   //  · lobo (3 000, héroe): 144 000 HP y 16 200 dps, cuerpo a cuerpo (24) con zarpazo en área (22); rápido. Índice 0,72.
   units: {
-    soldado: { c: 1, bonoHP: 1, bonoDPS: 1, cadence: 1.0, range: 63, speed: 38.4, splash: 0, foot: [6, 4] },
-    francotirador: { c: 5, bonoHP: 0.6, bonoDPS: 1, cadence: 2.5, range: 170, speed: 30, splash: 0, foot: [6, 4] },
-    jeep: { c: 10, bonoHP: 1, bonoDPS: 1, cadence: 0.7, range: 81, speed: 64, splash: 0, foot: [18, 8] },
-    blindado: { c: 30, bonoHP: 1.5, bonoDPS: 0.8, cadence: 0.5, range: 90, speed: 48, splash: 0, foot: [20, 9] },
+    soldado: {
+      c: 1,
+      bonoHP: 1,
+      hpScale: 0.6,
+      bonoDPS: 1,
+      cadence: 1.0,
+      range: 63,
+      speed: 38.4,
+      splash: 0,
+      foot: [6, 4],
+    },
+    francotirador: {
+      c: 5,
+      bonoHP: 0.6,
+      hpScale: 0.6,
+      bonoDPS: 1,
+      cadence: 2.5,
+      range: 170,
+      speed: 30,
+      splash: 0,
+      foot: [6, 4],
+    },
+    jeep: {
+      c: 10,
+      bonoHP: 1,
+      hpScale: 0.6,
+      bonoDPS: 1,
+      cadence: 0.7,
+      range: 81,
+      speed: 64,
+      splash: 0,
+      foot: [18, 8],
+    },
+    blindado: {
+      c: 30,
+      bonoHP: 1.5,
+      hpScale: 0.6,
+      bonoDPS: 0.8,
+      cadence: 0.5,
+      range: 90,
+      speed: 48,
+      splash: 0,
+      foot: [20, 9],
+    },
     tanque: {
       c: 100,
       bonoHP: 1.25,
+      hpScale: 0.4,
       bonoDPS: 1.25,
       cadence: 1.25,
       range: 99,
@@ -62,6 +109,7 @@ export const DEFAULTS = deepFreeze({
     lanzacohetes: {
       c: 300,
       bonoHP: 0.5,
+      hpScale: 0.6,
       bonoDPS: 1,
       cadence: 2.5,
       range: 190,
@@ -69,8 +117,28 @@ export const DEFAULTS = deepFreeze({
       splash: 26,
       foot: [26, 10],
     },
-    pesado: { c: 1000, bonoHP: 1, bonoDPS: 0.5, cadence: 1.5, range: 117, speed: 25.6, splash: 19.2, foot: [34, 14] },
-    lobo: { c: 3000, bonoHP: 0.8, bonoDPS: 0.9, cadence: 0.6, range: 24, speed: 80, splash: 22, foot: [16, 10] },
+    pesado: {
+      c: 1000,
+      bonoHP: 1,
+      hpScale: 0.6,
+      bonoDPS: 0.5,
+      cadence: 1.5,
+      range: 117,
+      speed: 25.6,
+      splash: 19.2,
+      foot: [34, 14],
+    },
+    lobo: {
+      c: 3000,
+      bonoHP: 0.8,
+      hpScale: 0.4,
+      bonoDPS: 0.9,
+      cadence: 0.6,
+      range: 24,
+      speed: 80,
+      splash: 22,
+      foot: [16, 10],
+    },
   },
   // velocidades de vuelo (px/s): la bala de los francotiradores es más rápida, el cohete más lento que un obús de tanque
   // y el zarpazo del lobo llega en un paso
@@ -78,11 +146,13 @@ export const DEFAULTS = deepFreeze({
   // Bombardero (v2.6, D-R3/D-R5): vuela RECTO a velocidad constante por la `y` de la banda de `band` px con más fuerza
   // enemiga y suelta una alfombra: una bomba cada `bombSpacing` px de impacto, desde el frente propio (`dropFrom`)
   // hasta el borde enemigo. Con los valores por defecto son 34 bombas de `bombDmg` y radio `bombRadius`.
+  // v2.9: el radio de cada bomba sube ×1,6 (24 → 38,4 px) y la explosión de la vista se dibuja de ese tamaño real. Con la
+  // separación de 40 px, cada unidad de la franja queda ahora al alcance de casi 2 bombas de la alfombra (antes, de 1,2).
   plane: {
     speed: 120,
     altitude: 48,
     bombDmg: 300,
-    bombRadius: 24,
+    bombRadius: 38.4,
     bombSpacing: 40,
     dropFrom: 'ownFront',
     band: 48,
@@ -262,7 +332,7 @@ function validate(cfg) {
     const u = cfg.units[k];
     if (!u) throw new ConfigError(`falta units.${k}`);
     if ('dmg' in u) throw new ConfigError(`units.${k}.dmg no existe: el daño sale de dps × cadencia`);
-    for (const key of ['c', 'cadence', 'range', 'speed']) {
+    for (const key of ['c', 'cadence', 'range', 'speed', 'hpScale']) {
       if (!(Number(u[key]) > 0)) throw new ConfigError(`units.${k}.${key} debe ser mayor que 0`);
     }
   }

@@ -12,7 +12,7 @@ import { PALETA } from '../data/paleta.js';
 import { BASE_STATE_THRESHOLDS, HANGAR_ART, MIDY, baseState } from './base-art.js';
 import { createFlashLimiter } from './flash.js';
 import { createMotion } from './motion.js';
-import { disc, ell } from './pixel.js';
+import { disc, ell, ring } from './pixel.js';
 
 const INK = PALETA.ink;
 
@@ -39,6 +39,33 @@ export const FX_IDS = Object.freeze({
 
 /** Radios de las explosiones (diseño: 5 / 11 / 18 / 28). */
 export const BOOM_R = Object.freeze({ small: 5, med: 11, large: 18, huge: 28 });
+
+/** Lo que dura el anillo de onda expansiva de una bomba, en segundos de vista (crece y se desvanece en ese tiempo). */
+export const RING_SECONDS = 0.5;
+/** Qué tan chico nace el anillo respecto de su radio final. */
+const RING_FROM = 0.25;
+/** El humo que deja una bomba vive de 2 a 2,9 s (el de una explosión común, de 0,9 a 1,8 s). */
+const HUMO_BOMBA = 2;
+/** Radio de una bomba si el mundo no trae `plane.bombRadius` (el valor por defecto de la config). */
+const BOMBA_RADIO = 38.4;
+
+/**
+ * Estado del anillo de una bomba a los `t` segundos: radio (px de mundo, entero), opacidad (0 a 1) y grosor (px de mundo).
+ * Crece de `RING_FROM` × radio al radio completo con ease-out; con movimiento reducido ya nace del radio completo y solo
+ * se desvanece. Escribe en `out` (sin asignaciones por cuadro).
+ * @param {number} R radio final
+ * @param {number} t segundos desde la explosión
+ * @param {boolean} reduced movimiento reducido
+ * @param {{r: number, a: number, th: number}} out
+ */
+export function bombRing(R, t, reduced, out) {
+  const s = Math.min(1, Math.max(0, t / RING_SECONDS));
+  const e = 1 - (1 - s) * (1 - s);
+  out.r = Math.max(1, Math.round(reduced ? R : R * (RING_FROM + (1 - RING_FROM) * e)));
+  out.a = s >= 1 ? 0 : 0.9 * (1 - s);
+  out.th = 1 + Math.round(3 * (1 - s));
+  return out;
+}
 
 const T_SPARK = 0;
 const T_SMOKE = 1;
@@ -96,6 +123,9 @@ const nuevaExplosion = () => ({
   y: 0,
   gy: 0,
   R: 0,
+  /** Anillo de onda expansiva (solo las bombas del avión): radio final en px de mundo y su opacidad máxima; 0 = sin anillo. */
+  ring: 0,
+  ringA: 1,
   t: 0,
   d: 0,
   sd: 0,
@@ -162,6 +192,8 @@ const MAX_DT = 0.25;
  */
 export function createFx({ seed = 'efectos', sprites, flash, motion = createMotion() } = {}) {
   const politica = motion.politica;
+  /** Salida reutilizada de `bombRing` (el dibujo no reserva nada por cuadro). */
+  const ringOut = { r: 0, a: 0, th: 1 };
   let rnd = mulberry32(seedFrom(seed));
   // el temblor tiene su propio RNG: pedirlo por cuadro no debe cambiar los efectos que salen del RNG principal
   let shakeRnd = mulberry32(seedFrom(`${seed}:temblor`));
@@ -722,9 +754,11 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
      * @param {number} gy suelo
      * @param {'small'|'med'|'large'|'huge'} size
      * @param {number} [z] altura sobre el suelo
+     * @param {number} [radius] radio propio en px de mundo (las bombas del avión: el radio real de daño); `size` solo
+     *   decide cuánto humo y escombro suelta
      */
-    boom(x, gy, size, z = 0) {
-      const R = BOOM_R[size] ?? BOOM_R.med;
+    boom(x, gy, size, z = 0, radius = 0) {
+      const R = radius > 0 ? radius : (BOOM_R[size] ?? BOOM_R.med);
       const vy = gy - z - R * 0.3;
       const b = booms[bHead];
       bHead = (bHead + 1) % FX_CAPS.booms;
@@ -733,6 +767,8 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
       b.y = Math.round(vy);
       b.gy = Math.round(gy);
       b.R = R;
+      b.ring = 0;
+      b.ringA = 1;
       b.t = 0;
       b.d = 0.2 + R * 0.012;
       b.sd = ri(0, 99);
@@ -871,6 +907,45 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
       if (!base) fx.addCrater(tx, ty, Math.max(4, Math.round(splash * 0.55)), step);
     },
 
+    /**
+     * Una bomba del bombardero cayó (v2.9). Se dibuja del tamaño del radio REAL de daño: bola de fuego que llega a `radius`,
+     * anillo de onda expansiva que crece hasta él y humo y escombro que quedan más que los de una explosión común. Si dañó a
+     * alguien (`hits > 0`) es completa y deja cráter; sobre el vacío la bola es más chica y el anillo más tenue, sin cráter
+     * (así los 34 impactos de la alfombra no tapan el campo, pero cada uno marca por dónde pega).
+     * @param {number} x
+     * @param {number} gy suelo (y del impacto)
+     * @param {number} radius `plane.bombRadius` en px de mundo
+     * @param {number} hits unidades dañadas (`bombImpact.hits`)
+     * @param {number} step
+     */
+    bombBlast(x, gy, radius, hits, step) {
+      const daño = hits > 0;
+      const b = fx.boom(x, gy, daño ? 'large' : 'med', 2, daño ? radius : radius * 0.6);
+      b.ring = radius;
+      b.ringA = daño ? 1 : 0.55;
+      for (let i = 0, n = daño ? 6 : 2; i < n; i++) {
+        const a = rnd() * 6.28;
+        const d = rnd() * radius * 0.7;
+        const p = fx.smoke(
+          x + Math.cos(a) * d,
+          gy - 6 + Math.sin(a) * d * 0.5,
+          3 + rnd() * 2,
+          (rnd() - 0.5) * 14,
+          -8 - rnd() * 10,
+          HUMO_BOMBA + rnd() * 0.9,
+        );
+        if (politica.stillSmoke) {
+          p.vx = 0;
+          p.vy = 0;
+          p.gr = 0;
+        }
+      }
+      if (daño) {
+        fx.debris(x, gy - 6, 6, '#4F5A70', gy);
+        fx.addCrater(x, gy, Math.round(radius * 0.6), step);
+      }
+    },
+
     // -------------------------------------------------------------------------------------------------------------
     // Dibujo (capa 9 del orden de D21). `P` es el proyector del cuadro: coordenadas de mundo -> destino.
 
@@ -970,7 +1045,16 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
       // cuerpo de las explosiones (por encima del humo)
       for (let i = 0; i < booms.length; i++) {
         const b = booms[i];
-        if (!b.a || !P.visible(b.x, b.y, b.R + 20)) continue;
+        if (!b.a || !P.visible(b.x, b.y, Math.max(b.R, b.ring) + 20)) continue;
+        if (b.ring > 0 && b.t < RING_SECONDS) {
+          // onda expansiva de la bomba: un círculo del radio real de daño; no es un destello, así que el limitador no la toca
+          bombRing(b.ring, b.t, politica.reduced, ringOut);
+          g.globalAlpha = ringOut.a * b.ringA;
+          g.fillStyle = b.t < RING_SECONDS * 0.4 ? '#FFF1C1' : '#FFB86B';
+          P.stats.drawCalls += 4 * ringOut.r + 2;
+          ring(g, P.x(b.x), P.y(b.gy), ringOut.r, ringOut.th, k);
+          g.globalAlpha = 1;
+        }
         if (b.degraded) {
           stats.coresDegraded++;
           continue;
@@ -1101,14 +1185,9 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
           break;
         }
         case 'bombImpact':
-          // la alfombra suelta una bomba cada 40 px: sobre el vacío (hits 0) es un estallido pequeño y sin cráter; si
-          // dañó unidades, mediano y con cráter. Un evento sin `hits` cuenta como ninguna unidad.
-          if (e.hits > 0) {
-            fx.boom(e.x, e.y, 'med', 2);
-            fx.addCrater(e.x, e.y, 14, world.step);
-          } else {
-            fx.boom(e.x, e.y, 'small', 2);
-          }
+          // la alfombra suelta una bomba cada 40 px; v2.9: la explosión mide el radio real de daño de la config. Sobre el vacío
+          // (hits 0) es más chica y sin cráter; si dañó unidades, completa y con cráter. Un evento sin `hits` cuenta como ninguna.
+          fx.bombBlast(e.x, e.y, world?.cfg?.plane?.bombRadius ?? BOMBA_RADIO, e.hits > 0 ? e.hits : 0, world.step);
           break;
         default:
           break;

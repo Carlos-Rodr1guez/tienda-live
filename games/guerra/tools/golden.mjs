@@ -14,7 +14,8 @@ import { PAISES } from '../public/js/data/paises.js';
 import { hashMatch } from '../public/js/sim/hash.js';
 import { replayMatch } from '../public/js/sim/replay.js';
 
-const VERSION = 5; // v2.8b: cuatro tipos nuevos (francotirador, blindado, lanzacohetes y lobo) y tabla de precios por monedas
+// v2.9: vida × 0,6 (tanque y lobo × 0,4), bombas de radio 38,4 y una moneda = 5 soldados (cada uno vale 0,2)
+const VERSION = 6; // v2.8b era 5: cuatro tipos nuevos (francotirador, blindado, lanzacohetes y lobo) y tabla de precios por monedas
 const STEPS = 10400;
 /**
  * Rondas de 150 s con intro y resultados de 2 s. Las bases y las torretas son más frágiles que las de producción para
@@ -33,8 +34,9 @@ const cmd = (step, type, extra = {}) => add(step, 'cmd', { type, ...extra });
 // Valor por unidad (el mismo que el router da con la config por defecto): lo pagado es count × unitValue.
 // [tipo, valor, peso en %, tope por orden]; los pesos suman 100. El lobo (héroe) sale en el 4 %: con uno vivo, el siguiente se
 // vuelve pesados y así el log ejercita también esa conversión.
+// v2.9: el soldado vale 0,2 (una moneda da 5) y sale de 5 en 5, como lo da el router: así el log también ejercita el valor fraccionario.
 const KINDS = [
-  ['soldado', 1, 38, 20],
+  ['soldado', 0.2, 38, 20],
   ['francotirador', 5, 12, 4],
   ['jeep', 10, 14, 6],
   ['blindado', 30, 8, 3],
@@ -62,11 +64,11 @@ function audienceEvent(step) {
   const r = int(1, 100);
   if (r <= 45) {
     const [kind, unitValue, , maxCount] = pickKind();
-    const count = int(1, maxCount);
+    const count = kind === 'soldado' ? 5 * int(1, maxCount / 5) : int(1, maxCount);
     add(step, 'evt', {
       type: 'gift',
       owner: u.id,
-      coins: count * unitValue,
+      coins: Math.round(count * unitValue * 100) / 100,
       orders: [{ kind, team: u.side + 1, owner: u.id, count, unitValue, source: 'gift' }],
     });
   } else if (r <= 57) {

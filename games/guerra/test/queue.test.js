@@ -47,13 +47,17 @@ test('tope de 200 vivos por lado en CADA paso: 500 unidades pedidas durante 5 mi
   const w = mundo();
   submitOrder(w, orden('soldado', 1, 500, 1, 'A'));
   let max = 0;
+  let nacidas = 0;
   for (let i = 0; i < 9000; i++) {
     stepWorld(w);
+    for (const e of w.drain()) if (e.type === 'spawn' && e.side === 0) nacidas++;
     max = Math.max(max, vivos(w, 0));
     assert.ok(vivos(w, 0) <= 200, `paso ${i}: ${vivos(w, 0)} vivos`);
     if (i === 900) {
       assert.equal(vivos(w, 0), 200);
-      assert.equal(enCola(w, 0), 300, 'el resto sigue esperando');
+      // v2.9: con menos vida las torretas ya matan a alguno antes de los 30 s y su lugar lo ocupa uno de la cola
+      assert.ok(nacidas >= 200);
+      assert.equal(enCola(w, 0), 500 - nacidas, 'el resto sigue esperando (nada se pierde)');
     }
   }
   assert.equal(max, 200);

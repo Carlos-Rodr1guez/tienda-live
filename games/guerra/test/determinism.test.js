@@ -217,7 +217,7 @@ const foto = (m) => ({
 });
 
 test('hash dorado: el log versionado corrido en Node da el hash versionado', () => {
-  assert.equal(GOLDEN.version, 5);
+  assert.equal(GOLDEN.version, 6); // v2.9: vida × 0,6 (tanque y lobo × 0,4), bombas de radio 38,4 y 5 soldados por moneda
   assert.equal(
     hashMatch(dorado()),
     GOLDEN.hash,

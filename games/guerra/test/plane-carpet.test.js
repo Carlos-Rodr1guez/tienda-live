@@ -147,22 +147,26 @@ test('la config manda: bombSpacing 60 da menos bombas (el conteo sale de la geom
   assert.equal(vuela(w, p).length, p.bombsTotal);
 });
 
-test('el daño es bombDmg 300 con radio 24: mata soldados de un golpe y pega solo a quien está a ≤ 24 px del impacto', () => {
+test('el daño es bombDmg 300 con radio 38,4 (v2.9: 24 × 1,6): mata soldados de un golpe y pega solo a quien está a ≤ 38,4 px del impacto', () => {
   const w = createWorld();
   assert.equal(w.cfg.plane.bombDmg, 300);
-  assert.equal(w.cfg.plane.bombRadius, 24);
+  assert.equal(w.cfg.plane.bombRadius, 38.4);
+  assert.ok(Math.abs(w.cfg.plane.bombRadius / 24 - 1.6) < 1e-12, 'el radio anterior (24) × 1,6');
   assert.equal(w.cfg.plane.bombSpacing, 40);
-  // el impacto de la bomba 14 cae en (610, 450); los demás, a 40 px a cada lado
+  // el impacto de la bomba 14 cae en (610, 450); los demás, a 40 px a cada lado (más allá del radio: 40 > 38,4)
   const centro = quieta(w, 1, 'tanque', 610, 450, { hp: 5000 });
-  const dentro = quieta(w, 1, 'tanque', 610, 473, { hp: 5000 }); // a 23 px
-  const fuera = quieta(w, 1, 'tanque', 610, 476, { hp: 5000 }); // a 26 px de todos los impactos
+  const dentro = quieta(w, 1, 'tanque', 610, 486, { hp: 5000 }); // a 36 px (a 54 de los impactos vecinos)
+  const fuera = quieta(w, 1, 'tanque', 610, 491, { hp: 5000 }); // a 41 px de todos los impactos
+  // dos tanques más en la banda de y 450 para que siga siendo la más fuerte (los de y 486 y 491 caen en la de abajo)
+  quieta(w, 1, 'tanque', 900, 430, { hp: 5000 });
+  quieta(w, 1, 'tanque', 960, 430, { hp: 5000 });
   const p = launchPlane(w, 0).plane;
   assert.equal(p.y, 450);
   vuela(w, p);
   run(w, FALL_STEPS + 2);
   assert.equal(centro.hp, 5000 - 300, 'un solo golpe de 300');
-  assert.equal(dentro.hp, 5000 - 300, 'a 23 px: dentro del radio');
-  assert.equal(fuera.hp, 5000, 'a 26 px: fuera');
+  assert.equal(dentro.hp, 5000 - 300, 'a 36 px: dentro del radio');
+  assert.equal(fuera.hp, 5000, 'a 41 px: fuera');
   const soldado = createWorld();
   const s = quieta(soldado, 1, 'soldado', 610, 450);
   vuela(soldado, launchPlane(soldado, 0).plane);
@@ -214,7 +218,7 @@ test('bombImpact lleva hits = unidades dañadas: 0 sobre el vacío y n con n uni
   const w = createWorld();
   quieta(w, 1, 'tanque', 610, 450, { hp: 90000 });
   quieta(w, 1, 'tanque', 622, 455, { hp: 90000 });
-  quieta(w, 1, 'tanque', 610 + 60, 450 + 0, { hp: 90000 }); // fuera de los radios del impacto de 610; recibe el de 650
+  quieta(w, 1, 'tanque', 610 + 100, 450 + 0, { hp: 90000 }); // a 100 px: fuera del impacto de 610 (y del de 650: 50 px)
   const p = launchPlane(w, 0).plane;
   const impactos = [];
   let n = 0;
@@ -224,8 +228,10 @@ test('bombImpact lleva hits = unidades dañadas: 0 sobre el vacío y n con n uni
   }
   assert.equal(impactos.length, 34);
   const en = (x) => impactos.find((ev) => ev.x === x);
-  assert.equal(en(610).hits, 2, 'dos tanques a ≤ 24 px');
-  assert.equal(en(650).hits, 1);
+  assert.equal(en(610).hits, 2, 'dos tanques a ≤ 38,4 px');
+  assert.equal(en(650).hits, 1, 'el de 622 (a 28 px); el de 610 (a 40) queda fuera y el de 710 (a 60) también');
+  assert.equal(en(690).hits, 1, 'el de 710 (a 20 px)');
+  assert.equal(en(730).hits, 1, 'el de 710 (a 20 px)');
   assert.equal(en(90).hits, 0, 'sobre el vacío');
   for (const ev of impactos) assert.ok(Number.isInteger(ev.hits) && ev.hits >= 0);
 });

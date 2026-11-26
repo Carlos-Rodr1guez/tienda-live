@@ -12,10 +12,12 @@ const cfg = resolveConfig();
 
 test('hp y dps salen de la regla y daño / cadencia = dps en cada tipo', () => {
   const esperado = {
-    soldado: { hp: 60, dps: 6, damage: 6 },
-    jeep: { hp: 600, dps: 60, damage: 42 },
-    tanque: { hp: 7500, dps: 750, damage: 937.5 },
-    pesado: { hp: 60000, dps: 3000, damage: 4500 }, // v2.7: bonoHP 1,5 → 1 (−33 %)
+    // v2.9: vida × 0,6 (tanque y lobo × 0,4): soldado 60 → 36, jeep 600 → 360, tanque 7 500 → 3 000, pesado 60 000 → 36 000;
+    // el daño no cambia (v2.7: el pesado ya había bajado de 90 000 a 60 000 con bonoHP 1,5 → 1)
+    soldado: { hp: 36, dps: 6, damage: 6 },
+    jeep: { hp: 360, dps: 60, damage: 42 },
+    tanque: { hp: 3000, dps: 750, damage: 937.5 },
+    pesado: { hp: 36000, dps: 3000, damage: 4500 },
   };
   for (const [kind, e] of Object.entries(esperado)) {
     const s = unitStats(cfg, kind);
@@ -101,14 +103,14 @@ const run = (w, n) => {
   for (let i = 0; i < n; i++) stepWorld(w);
 };
 
-test('cada unidad de tierra es una entidad propia: 40 de daño a un soldado de 5 juntos solo cambia su HP', () => {
+test('cada unidad de tierra es una entidad propia: 30 de daño a un soldado de 5 juntos solo cambia su HP', () => {
   const w = createWorld();
   const { members: quietos } = hold(w, 0, 'soldado', 300, 448, 5);
   const antes = quietos.map((u) => u.hp);
-  damageUnit(w, quietos[2], 40, { side: 1 });
+  damageUnit(w, quietos[2], 30, { side: 1 }); // v2.9: el soldado tiene 36 de vida (antes 60 y el golpe era de 40)
   assert.deepEqual(
     quietos.map((u) => u.hp),
-    antes.map((h, i) => (i === 2 ? 20 : h)),
+    antes.map((h, i) => (i === 2 ? 6 : h)),
   );
   assert.ok(quietos.every((u) => u.alive));
   damageUnit(w, quietos[2], 1000, { side: 1 }); // sin sobredaño: aplica solo lo que queda

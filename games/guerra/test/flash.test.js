@@ -980,20 +980,22 @@ const impactos = (fx, evs) => {
   for (const e of evs) fx.consume(e, mundoVacio());
 };
 
-test('bombImpact sin unidades dañadas (hits 0): estallido pequeño y sin cráter; con hits > 0: mediano y con cráter', () => {
+test('bombImpact sin unidades dañadas (hits 0): estallido más chico y sin cráter; con hits > 0: del radio real y con cráter', () => {
+  // v2.9: ya no son 5 y 11 px fijos: la bola de fuego mide el radio real de la bomba (38,4) o el 60 % de él sobre el vacío
+  const radio = DEFAULTS.plane.bombRadius;
   const fx = createFx({ seed: 'efectos:alfombra', motion: normalMotion() });
   impactos(fx, [{ type: 'bombImpact', x: 300, y: 300, side: 0, hits: 0 }]);
   assert.equal(fx.booms.filter((b) => b.a).length, 1);
-  assert.equal(fx.booms.find((b) => b.a).R, 5, 'small');
+  assert.ok(Math.abs(fx.booms.find((b) => b.a).R - radio * 0.6) < 1e-9, 'más chica');
   assert.equal(fx.craters.length, 0, 'sin cráter');
   const fx2 = createFx({ seed: 'efectos:alfombra', motion: normalMotion() });
   impactos(fx2, [{ type: 'bombImpact', x: 300, y: 300, side: 0, hits: 2 }]);
-  assert.equal(fx2.booms.find((b) => b.a).R, 11, 'med');
+  assert.equal(fx2.booms.find((b) => b.a).R, radio, 'del radio real');
   assert.equal(fx2.craters.length, 1, 'con cráter');
-  // un evento viejo sin `hits` no cava cráter ni sube a mediano (dato ausente = ninguna unidad)
+  // un evento viejo sin `hits` no cava cráter ni sube al tamaño completo (dato ausente = ninguna unidad)
   const fx3 = createFx({ seed: 'efectos:alfombra', motion: normalMotion() });
   impactos(fx3, [{ type: 'bombImpact', x: 300, y: 300, side: 0 }]);
-  assert.equal(fx3.booms.find((b) => b.a).R, 5);
+  assert.ok(Math.abs(fx3.booms.find((b) => b.a).R - radio * 0.6) < 1e-9);
   assert.equal(fx3.craters.length, 0);
 });
 

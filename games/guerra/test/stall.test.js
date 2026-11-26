@@ -329,7 +329,10 @@ test('asedio S1: la zona de asalto es un frente, no una pila (solape mediano ≤
 });
 
 test('escenario simétrico de 200 por lado: el solape p95 de la zona de asalto también se mide (≤ 60 %; medido 43 %)', () => {
-  const w = createWorld({ hq: { hp: 1e12 } }, { phase: 'sandbox' });
+  // v2.9: con la vida reducida (×0,6 y ×0,4) los 200 contra 200 se aniquilan a mitad de campo y nadie llega a la zona de
+  // asalto, así que no habría qué medir. Esta prueba mide MOVIMIENTO (solape), no balance: fija la vida de v2.8 (hpScale 1).
+  const vidaV28 = { soldado: { hpScale: 1 }, jeep: { hpScale: 1 }, tanque: { hpScale: 1 }, pesado: { hpScale: 1 } };
+  const w = createWorld({ hq: { hp: 1e12 }, units: vidaV28 }, { phase: 'sandbox' });
   for (const team of [1, 2]) for (const [k, n] of MEZCLA) submitOrder(w, orden(k, team, n));
   const zona = [];
   for (let i = 0; i < 120 * SIM_HZ; i++) {
