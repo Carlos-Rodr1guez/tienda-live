@@ -15,7 +15,7 @@ export const SCENE_CAPS = Object.freeze({
 
 export { LIFE };
 
-const BALA = new Set(['soldado', 'jeep']);
+const BALA = new Set(['soldado', 'jeep', 'blindado']);
 /**
  * Pasos que dura el destello blanco de un golpe y pasos hasta el siguiente. CB-20: a lo sumo 3 destellos grandes por
  * segundo, así que entre inicios hay 11 pasos (0,37 s): en una ventana cerrada de 31 pasos caben 3 inicios (con 10
@@ -54,7 +54,6 @@ export function createScene({ teamHex, sprites, fx = createFx({ seed: 'efectos:e
     cfg: null,
     units: [],
     /** Grupos del mundo (por referencia): los íconos de rol se arman con ellos. */
-    squads: [],
     planes: [],
     bombs: [],
     bases: null,
@@ -68,7 +67,6 @@ export function createScene({ teamHex, sprites, fx = createFx({ seed: 'efectos:e
     turretShown: (side, k, simAlive) => fx.turretShown(side, k, simAlive),
     /** ¿Se dibuja la base en ruinas? (tras la explosión final de su secuencia). */
     baseFell: (side, b) => fx.baseFell(side, b),
-    drawIcons: /** @type {((P: any) => void) | null} */ (null),
     flashUntil: (id) => {
       if (!fx.motion.politica.flicker) return 0; // movimiento reducido: el golpe no parpadea en blanco
       const start = flashes.get(id);
@@ -79,7 +77,6 @@ export function createScene({ teamHex, sprites, fx = createFx({ seed: 'efectos:e
       scene.step = world.step;
       scene.cfg = world.cfg;
       scene.units = world.units;
-      scene.squads = world.squads;
       scene.planes = world.planes;
       scene.bombs = world.bombs;
       scene.bases = world.bases;
@@ -169,7 +166,33 @@ export function createScene({ teamHex, sprites, fx = createFx({ seed: 'efectos:e
     const dir = e.tx >= e.x ? 1 : -1;
     const mx = e.x + dir * (sp.mz[0] - sp.ax);
     const z0 = sp.ay - sp.mz[1];
-    if (BALA.has(e.kind)) {
+    if (e.kind === 'lobo') {
+      // cuerpo a cuerpo: el zarpazo no vuela, es un tajo delante de él (el golpe lo da el sim un paso después)
+      fx.claw(mx, e.y - z0, dir);
+      return;
+    }
+    if (e.kind === 'francotirador') {
+      // trazador largo y fino (kind 2): llega casi de inmediato
+      proyectil(2, mx, e.y, z0, e.tx, e.ty, ALTURA.soldado, cfg.projectiles.sniper, step, 0, false);
+    } else if (e.kind === 'lanzacohetes') {
+      // cohete con estela (kind 3): arco bajo, estalla como un obús mediano
+      const dist = Math.sqrt((e.tx - e.x) * (e.tx - e.x) + (e.ty - e.y) * (e.ty - e.y));
+      const splash = cfg.units.lanzacohetes.splash;
+      proyectil(
+        3,
+        mx,
+        e.y,
+        z0,
+        e.tx,
+        e.ty,
+        ALTURA.tanque,
+        cfg.projectiles.rocket,
+        step,
+        Math.min(10, dist * 0.12),
+        false,
+        splash,
+      );
+    } else if (BALA.has(e.kind)) {
       proyectil(0, mx, e.y, z0, e.tx, e.ty, ALTURA.soldado, cfg.projectiles.bullet, step, 0, false);
     } else {
       const grande = e.kind === 'pesado';
@@ -193,15 +216,20 @@ export function createScene({ teamHex, sprites, fx = createFx({ seed: 'efectos:e
     fx.muzzle(e.kind, mx, e.y - z0, dir);
   }
 
-  /** Un obús que cumplió su tiempo de vuelo estalla (una sola vez) y cava su cráter si no iba a la base. */
+  /**
+   * Un obús que cumplió su tiempo de vuelo estalla (una sola vez) y cava su cráter si no iba al hangar; una bala que llega a
+   * la cara del hangar suelta chispas ahí.
+   */
   function llegadas(world) {
     const step = world.step;
     for (let i = 0; i < scene.projectiles.length; i++) {
       const p = scene.projectiles[i];
-      if (p.kind !== 1 || p.landed || step < p.step0 + Math.round(p.dur * 30)) continue;
+      if (p.landed || step < p.step0 + Math.round(p.dur * 30)) continue;
       p.landed = true;
-      const base = world.bases[0].frontX === p.tx || world.bases[1].frontX === p.tx;
-      fx.shellImpact(p.tx, p.ty, p.tz, p.big, p.splash, base, step);
+      // la cara del hangar (v2.8) es el frente: lo que llega a su x apuntaba al hangar
+      const lado = world.bases[0].frontX === p.tx ? 0 : world.bases[1].frontX === p.tx ? 1 : -1;
+      if (p.kind === 1 || p.kind === 3) fx.shellImpact(p.tx, p.ty, p.tz, p.big, p.splash, lado >= 0, step);
+      else if (lado >= 0) fx.faceSpark(lado, p.tx, p.ty);
     }
   }
 

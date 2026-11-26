@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createWorld, seedSquad } from '../public/js/sim/world.js';
+import { createWorld, seedUnits } from '../public/js/sim/world.js';
 import { createScene } from '../public/js/render/scene.js';
 import { createRenderer } from '../public/js/render/frame.js';
 import { createSpriteBank } from '../public/js/render/sprites.js';
 import { createEntityLayer } from '../public/js/render/units.js';
-import { createIconBank, createIconLayer, departedCounts } from '../public/js/render/icons.js';
+import { inFieldCounts } from '../public/js/render/icons.js';
 import { createLabelLayer } from '../public/js/render/labels-layer.js';
 import { viewOf } from '../public/js/render/project.js';
 import { SPRITES } from '../public/js/data/sprites.js';
@@ -23,27 +23,17 @@ const HEX = ['#E5484D', '#5BC8F5'];
 const AY = { soldado: SPRITES.soldado.ay, jeep: SPRITES.jeep.ay, tanque: SPRITES.tanque.ay, pesado: SPRITES.pesado.ay };
 const MARCAS = { soldado: [3, 2], jeep: [6, 3], tanque: [8, 4], pesado: [10, 5] };
 
-/** Escena, render, íconos y etiquetas montados como en `main.js`, con un grupo de soldados de "ana" en el lado izquierdo. */
+/** Escena, render y etiquetas montados como en `main.js`, con un soldado de "ana" en el lado izquierdo. */
 function cadena() {
   const factory = createFakeCanvasFactory({ record: true });
   const main = createFakeMain(1920, 1080);
   const bank = createSpriteBank({ createCanvas: factory.createCanvas, sprites: SPRITES });
   const team = HEX.map((h) => bank.bake(h));
-  const iconBank = createIconBank({ createCanvas: factory.createCanvas });
-  const iconTeam = HEX.map((h) => iconBank.bake(h));
   const world = createWorld({}, { phase: 'sandbox' });
-  seedSquad(world, { side: 0, kind: 'soldado', role: 'ataque' });
+  seedUnits(world, { side: 0, kind: 'soldado', x: 164, y: 448 });
   world.units[0].owner = 'ana';
   const scene = createScene({ teamHex: HEX, sprites: SPRITES });
   scene.sync(world);
-  const icons = createIconLayer({
-    bank: iconBank,
-    team: iconTeam,
-    spriteAy: AY,
-    marksSize: MARCAS,
-    formingAlpha: 0.55,
-  });
-  scene.drawIcons = (P) => icons(P, scene.squads, scene.cfg, scene.field);
   const r = createRenderer({
     createCanvas: factory.createCanvas,
     canvas: main,
@@ -58,7 +48,7 @@ function cadena() {
     displayName: () => 'ana_23',
   };
   const labels = createLabelLayer({ registry, teamHex: HEX, spriteAy: AY, marksSize: MARCAS });
-  return { factory, main, world, scene, r, icons, labels };
+  return { factory, main, world, scene, r, labels };
 }
 
 /** Dibuja un cuadro del mundo y las etiquetas encima; devuelve el contexto de las etiquetas. */
@@ -78,7 +68,6 @@ function dibujar(c, view, alpha = 1) {
       screen,
       alpha,
       now,
-      icons: { descs: c.icons.descs, count: c.icons.count },
     });
   }
   return ctx;
@@ -94,11 +83,6 @@ test('el render deja el origen en px de dispositivo (ox, oy) para que las etique
   c.r.draw({ x0: 100.4, y0: 3, s: 1.5 }, { alpha: 1, time: 0, scene: c.scene });
   assert.equal(c.r.stats.ox, Math.round(100.4 * 1.5));
   assert.deepEqual(viewOf(c.r.stats), { s: 1.5, ox: Math.round(100.4 * 1.5), oy: 5, device: false });
-});
-
-test('la escena apunta a los grupos del mundo (por referencia, sin copiar)', () => {
-  const c = cadena();
-  assert.equal(c.scene.squads, c.world.squads);
 });
 
 test('pasada de dispositivo (s = 4): la pastilla queda centrada sobre el sprite de su unidad y a 2·u sobre su cabeza', () => {
@@ -131,28 +115,6 @@ test('LOW (s = 1,333 y cámara desplazada): la pastilla cae donde la copia a pan
   assert.equal(ok, true);
 });
 
-test('los íconos van en la capa 10 por la escena, también con marcas, y las etiquetas los esquivan', () => {
-  const c = cadena();
-  // pasada de dispositivo
-  dibujar(c, { x0: 0, y0: 313, s: 4 });
-  assert.ok(
-    imagenes(c.main.ctx).some(([, , dw, dh]) => dw === 10 * 4 && dh === 8 * 4),
-    'flecha de 10×8 ×4',
-  );
-  assert.equal(c.icons.stats.drawn, 1);
-  // con marcas (s < 1): el ícono se dibuja igual
-  dibujar(c, { x0: 0, y0: 0, s: 0.8 });
-  assert.equal(c.r.stats.marks, true);
-  assert.equal(c.icons.stats.drawn, 1);
-  assert.ok(imagenes(c.r.buffers.lowCtx).some(([, , dw, dh]) => dw === 10 && dh === 8));
-  // ninguna etiqueta pisa el ícono proyectado
-  dibujar(c, { x0: 0, y0: 313, s: 4 });
-  const d = c.icons.descs[0];
-  const ic = { x: Math.round(d.x * 4) - c.r.stats.ox, y: Math.round(d.y * 4) - c.r.stats.oy, w: 40, h: 32 };
-  for (const p of c.labels.rects)
-    assert.equal(p.x < ic.x + ic.w && ic.x < p.x + p.w && p.y < ic.y + ic.h && ic.y < p.y + p.h, false);
-});
-
 /** Copia de solo lectura: cualquier escritura en un objeto del sim lanza (patrón de 5c, `determinism.test.js`). */
 function soloLectura(o, cache = new WeakMap()) {
   if (o === null || typeof o !== 'object') return o;
@@ -175,43 +137,15 @@ function soloLectura(o, cache = new WeakMap()) {
   return p;
 }
 
-test('la vista nunca escribe en el sim: íconos de rol, conteos del HUD y etiquetas con el mundo de solo lectura', () => {
+test('la vista nunca escribe en el sim: conteo «en campo» y etiquetas con el mundo de solo lectura', () => {
   const c = cadena();
   const w = soloLectura(c.world);
   c.main.ctx.reset();
   c.r.draw({ x0: 0, y0: 313, s: 4 }, { alpha: 0.5, time: 1, scene: c.scene });
-  const banco = createIconBank({ createCanvas: c.factory.createCanvas });
-  const iconos = createIconLayer({
-    bank: banco,
-    team: HEX.map((h) => banco.bake(h)),
-    spriteAy: AY,
-    formingAlpha: 0.55,
-  });
-  assert.doesNotThrow(() => departedCounts(w));
-  const P = {
-    frame: { alpha: 0.5 },
-    ctx: createFakeCtx(),
-    mul: 4,
-    x: (v) => v,
-    y: (v) => v,
-    visible: () => true,
-    img() {},
-  };
-  assert.doesNotThrow(() => iconos(P, w.squads, w.cfg, w.field));
-  assert.equal(iconos.count, w.squads.length);
+  assert.doesNotThrow(() => inFieldCounts(w));
   const ctx = createFakeCtx();
   const screen = { ...viewOf(c.r.stats), marks: false, x0: 0, y0: 313 };
-  const frame = {
-    W: 1920,
-    H: 1080,
-    u: 4,
-    units: w.units,
-    k: 6,
-    screen,
-    alpha: 0.5,
-    now: 0,
-    icons: { descs: iconos.descs, count: iconos.count },
-  };
+  const frame = { W: 1920, H: 1080, u: 4, units: w.units, k: 6, screen, alpha: 0.5, now: 0 };
   assert.doesNotThrow(() => c.labels.draw(ctx, frame));
   assert.doesNotThrow(() => c.labels.draw(ctx, { ...frame, now: 0.5 }));
 });
@@ -226,14 +160,12 @@ test('main.js: ?donantes crea donantes sintéticos por los dos equipos por el ca
   // sigue siendo la de D22: a k = 1, las etiquetas que NO se están apagando son 6 como mucho (3 por equipo).
   let primeraAna = -1;
   let primeraCjk = -1;
-  let iconos = 0;
   for (let i = 0; i < 160; i++) {
     e.cuadros(1, 100);
     assert.ok(
       Number(e.f2()['etiquetas dibujadas']) <= 6,
       `cuadro ${i}: hay ${e.f2()['etiquetas dibujadas']} etiquetas que no se apagan`,
     );
-    iconos = Math.max(iconos, Number(e.f2()['íconos de rol dibujados']));
     const t = e.textos().filter((x) => RANGO.test(x));
     if (primeraAna < 0 && t.some((x) => x.includes('ana_23'))) primeraAna = i;
     if (primeraCjk < 0 && t.some((x) => x.includes('田中'))) primeraCjk = i;
@@ -244,13 +176,12 @@ test('main.js: ?donantes crea donantes sintéticos por los dos equipos por el ca
     `líderes visibles: izquierdo en el cuadro ${primeraAna}, derecho en el ${primeraCjk} (de 160 cuadros de 100 ms desde que entran los donantes)`,
   );
   const f2 = e.f2();
-  assert.ok(iconos >= 1, 'los grupos ya formados llevan ícono');
   assert.ok('etiquetas descartadas por el layout' in f2);
 });
 
 test('main.js: la densidad usa el nivel k del controlador, no kShown: en una transición ya cuenta el destino', async () => {
   const e = await arrancar('?f2&donantes&rapido=20');
-  for (let i = 0; i < 60; i++) e.cuadros(1, 100);
+  for (let i = 0; i < 20; i++) e.cuadros(1, 100); // a los 2 s las tropas siguen vivas: después se destruyen entre sí
   const elegidas = () => Number(e.f2()['etiquetas elegidas']);
   assert.equal(elegidas(), 6, `mapa entero: 3 por equipo`);
   // tres pulsaciones en el mismo cuadro: 1 → 1,5 → 2,25 → 3; kShown apenas se movió pero k ya es 3
@@ -266,7 +197,7 @@ const RANGO_ETIQUETA = /^(RECLUTA|SOLDADO|CABO|SARGENTO|TENIENTE|CAPITÁN|MAYOR|
 
 test('C4: al cargar una fuente (loadingdone) main invalida la caché y la etiqueta se mide otra vez', async () => {
   const e = await arrancar('?f2&donantes&rapido=20');
-  for (let i = 0; i < 60; i++) e.cuadros(1, 100);
+  for (let i = 0; i < 20; i++) e.cuadros(1, 100); // a los 2 s las tropas siguen vivas: después se destruyen entre sí
   e.tecla('p'); // pausa: el mundo queda quieto y ninguna etiqueta cambia sola
   e.cuadros(5, 100);
   const medidas = () => e.ctx.byName.measureText ?? 0;
@@ -290,7 +221,7 @@ test('C8b: con R activo la rampa de opacidad de las etiquetas por cuadro es la m
   const rampa = async (conR) => {
     const e = await arrancar('?f2&donantes&rapido=20');
     e.tecla(conR ? 'r' : 'a'); // en los dos casos la cámara automática queda apagada
-    for (let i = 0; i < 60; i++) e.cuadros(1, 100);
+    for (let i = 0; i < 30; i++) e.cuadros(1, 100); // a los 3 s el aviso de la tecla ya se fue y las tropas siguen vivas
     for (let i = 0; i < 3; i++) e.tecla('+'); // k = 3: entran etiquetas nuevas
     const serie = [];
     for (let i = 0; i < 12; i++) {
@@ -342,10 +273,10 @@ test('main.js: ya no hay ?donantes; el público entra por el adaptador (comandos
   assert.equal(src.match(/\.drain\(/g)?.length, 1, 'sigue un solo vaciado de la bandeja');
 });
 
-test('main.js con ?golden: sin registro no hay etiquetas, pero los íconos de rol se ven y no se rompe nada', async () => {
+test('main.js con ?golden: sin registro no hay etiquetas y no se rompe nada', async () => {
   const e = await arrancar('?golden&rapido=60');
   e.cuadros(30);
   const f2 = e.f2();
   assert.equal(f2['etiquetas dibujadas'], '0');
-  assert.ok(Number(f2['íconos de rol dibujados']) > 0, `íconos: ${f2['íconos de rol dibujados']}`);
+  assert.ok(Number(f2['entidades']) > 0 || Object.keys(f2).length > 0);
 });

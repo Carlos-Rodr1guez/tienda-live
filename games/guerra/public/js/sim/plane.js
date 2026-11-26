@@ -1,13 +1,18 @@
-// Avión y bombas (diseño D16, R3, CB-9). El avión no tiene HP: nadie le apunta, no choca ni dispara, y nunca daña a
-// su equipo. Vuela a z 48 y cada bomba nace a z 44 y cae 14 pasos (0,481 s con gravedad 380). Posición y tiempo de
-// caída son funciones puras del estado; sin azar (el blanco sale de la fuerza y del id).
+// Bombardero (diseño D16 y D31, R3, CB-9; v2.6 D-R3/D-R5). Vuela RECTO a velocidad constante: al lanzarlo se fija la
+// `y` de su línea (el centro de la banda de 48 px con más fuerza enemiga) y desde ahí `vy` es 0 siempre. Suelta una
+// alfombra: una bomba cada `bombSpacing` px de IMPACTO, desde que el impacto cae sobre el frente propio hasta el borde
+// enemigo (34 con la config por defecto). El avión no tiene HP: nadie le apunta, no choca ni dispara, y las bombas
+// nunca dañan a su equipo (`applyArea` solo mira lo del otro lado). Vuela a z 48 y cada bomba nace a z 44 y cae 14
+// pasos (0,481 s con gravedad 380). Todo es función pura del estado: sin azar.
 
 import { DT } from './defaults.js';
 import { retire } from './credit.js';
-import { squadStrength } from './squads.js';
 
 /** Pasos que tarda una bomba en caer desde z 44 con gravedad 380: sqrt(2·44/380)/DT ≈ 14,4, redondeado a 14. */
 export const FALL_STEPS = 14;
+
+/** Holgura de coma flotante al comparar la x del avión con un punto de suelta (la x suma 4 px por paso). */
+const EPS = 1e-6;
 
 /** ¿Puede lanzarse otro avión de este lado ahora? ≤ 2 vivos y ≥ 1,5 s desde el lanzamiento anterior. */
 export function canLaunchPlane(world, side) {
@@ -22,7 +27,35 @@ export function canLaunchPlane(world, side) {
 }
 
 /**
- * Lanza un avión del lado `side`: entra por su borde a z 48 con `vx = ±120`. `value` es lo que pagó su dueño.
+ * La `y` de la línea de un avión del lado `side`: el centro de la banda de `plane.band` px (contadas desde el borde
+ * superior del suelo) con más fuerza enemiga, o sea Σ c·hp/maxHp de las unidades vivas del otro lado. Empate (y sin
+ * enemigos): la banda más cercana a la altura de la puerta, y a igual distancia la de arriba.
+ * @returns {number}
+ */
+export function planeLine(world, side) {
+  const { cfg, field } = world;
+  const [g0, g1] = field.ground;
+  const band = cfg.plane.band;
+  const n = Math.max(1, Math.ceil((g1 - g0) / band));
+  const fuerza = new Array(n).fill(0);
+  for (const u of world.units) {
+    if (u.side === side || !u.alive) continue;
+    const i = Math.min(n - 1, Math.max(0, Math.floor((u.y - g0) / band)));
+    fuerza[i] += u.stats.c * (u.hp / u.maxHp);
+  }
+  const door = field.sides[0].door.y;
+  const centro = (i) => g0 + i * band + Math.min(band, g1 - (g0 + i * band)) / 2;
+  let mejor = 0;
+  for (let i = 1; i < n; i++) {
+    if (fuerza[i] > fuerza[mejor]) mejor = i;
+    else if (fuerza[i] === fuerza[mejor] && Math.abs(centro(i) - door) < Math.abs(centro(mejor) - door)) mejor = i;
+  }
+  return centro(mejor);
+}
+
+/**
+ * Lanza un avión del lado `side`: entra por su borde a z 48 con `vx = ±120` y vuela por su línea hasta el borde
+ * opuesto. `value` es lo que pagó su dueño. `bombsTotal` es N, las bombas de la pasada; `bombsLeft` baja con cada suelta.
  * @returns {{ok:true, plane:any} | {ok:false, reason:string}}
  */
 export function launchPlane(world, side, owner = null, value = 0) {
@@ -30,8 +63,13 @@ export function launchPlane(world, side, owner = null, value = 0) {
   if (!can.ok) return can;
   const { cfg, field } = world;
   const dir = field.sides[side].dir;
+  const frente = field.sides[side].frontX;
   const x = dir > 0 ? -cfg.plane.margin : field.w + cfg.plane.margin;
-  const y = field.sides[0].gates[1];
+  const y = planeLine(world, side);
+  // el impacto de la primera bomba cae sobre el frente propio; el del último punto, a lo más en el borde enemigo
+  const tramo = dir > 0 ? field.w - frente : frente;
+  const total = Math.floor(tramo / cfg.plane.bombSpacing + EPS) + 1;
+  const caida = FALL_STEPS * DT * cfg.plane.speed;
   const plane = {
     id: ++world.nextId,
     side,
@@ -45,9 +83,11 @@ export function launchPlane(world, side, owner = null, value = 0) {
     vy: 0,
     z: cfg.plane.altitude,
     launchStep: world.step,
-    decided: false,
-    bombsLeft: cfg.plane.bombs,
-    targets: [],
+    bombsLeft: total,
+    bombsTotal: total,
+    /** Índice de la próxima bomba y x de suelta de la primera (su impacto cae sobre el frente propio). */
+    nextDrop: 0,
+    dropX0: frente - dir * caida,
   };
   world.planes.push(plane);
   world.lastLaunch[side] = world.step;
@@ -55,101 +95,32 @@ export function launchPlane(world, side, owner = null, value = 0) {
   return { ok: true, plane };
 }
 
-/** Blanco: el grupo enemigo salido de mayor fuerza en la mitad lejana; si no hay, el de mayor fuerza; si no, null. */
-export function planeTargetSquad(world, p) {
-  const dir = world.field.sides[p.side].dir;
-  let best = null;
-  let bestS = -1;
-  let far = null;
-  let farS = -1;
-  for (const sq of world.squads) {
-    if (sq.side === p.side || sq.members.length === 0 || sq.state === 'forming') continue;
-    const s = squadStrength(sq);
-    if (s > bestS) {
-      best = sq;
-      bestS = s;
-    }
-    if ((sq.anchor.x - world.field.midX) * dir > 0 && s > farS) {
-      far = sq;
-      farS = s;
-    }
-  }
-  return far ?? best;
-}
-
-/** Decisión: hasta 5 puntos de impacto en el grupo (miembros por |y − y_avión| y por id) o en el frente enemigo. */
-function decide(world, p) {
-  const { cfg, field } = world;
-  const dir = field.sides[p.side].dir;
-  const n = cfg.plane.bombs;
-  const pts = [];
-  const sq = planeTargetSquad(world, p);
-  if (sq !== null) {
-    const order = sq.members.slice().sort((a, b) => Math.abs(a.y - p.y) - Math.abs(b.y - p.y) || a.id - b.id);
-    for (let i = 0; i < n && i < order.length; i++) pts.push({ x: order[i].x, y: order[i].y, member: order[i] });
-    const extra = [16, -16, 32, -32];
-    for (let i = 0; pts.length < n; i++) {
-      const k = extra[i % extra.length];
-      pts.push({ x: sq.anchor.x + k, y: sq.anchor.y, member: null });
-    }
-  } else {
-    const fx = field.sides[1 - p.side].frontX;
-    const ys = [-32, -16, 0, 16, 32];
-    for (let i = 0; i < n; i++) pts.push({ x: fx, y: p.y + ys[i % ys.length], member: null });
-  }
-  const fall = FALL_STEPS * DT * cfg.plane.speed;
-  for (const t of pts) {
-    t.dropX = t.x - dir * fall;
-    t.dropped = false;
-  }
-  // se sueltan en el orden en que el avión pasa por su punto de suelta
-  pts.sort((a, b) => (a.dropX - b.dropX) * dir);
-  p.targets = pts;
-  p.decided = true;
-  p.vy = 0;
-}
-
-/** Paso 10: rumbo, decisión, suelta y salida de cada avión. */
+/** Paso 10: avance, suelta de la alfombra y salida de cada avión. */
 export function stepPlanes(world) {
   const { cfg, field } = world;
-  const steerEvery = Math.round(cfg.plane.steerEvery / DT);
+  const caida = FALL_STEPS * DT * cfg.plane.speed;
   let w = 0;
   for (let i = 0; i < world.planes.length; i++) {
     const p = world.planes[i];
     const dir = field.sides[p.side].dir;
     p.x += p.vx * DT;
-    p.y += p.vy * DT;
-    const decisionX = field.midX - dir * cfg.plane.decisionOffset;
-    if (!p.decided) {
-      if ((p.x - decisionX) * dir >= 0) {
-        decide(world, p);
-      } else if ((world.step - p.launchStep) % steerEvery === 0) {
-        const sq = planeTargetSquad(world, p);
-        const ty = sq !== null ? sq.anchor.y : field.sides[0].gates[1];
-        const v = (ty - p.y) / cfg.plane.steerEvery;
-        p.vy = Math.max(-cfg.plane.steerSpeed, Math.min(cfg.plane.steerSpeed, v));
-      }
-    }
-    if (p.decided) {
-      for (const t of p.targets) {
-        if (t.dropped || (p.x - t.dropX) * dir < 0) continue;
-        t.dropped = true;
-        p.bombsLeft--;
-        const tx = t.member !== null && t.member.alive ? t.member.x : t.x;
-        const ty = t.member !== null && t.member.alive ? t.member.y : t.y;
-        world.bombs.push({
-          id: ++world.nextId,
-          side: p.side,
-          owner: p.owner,
-          x0: p.x,
-          y0: p.y,
-          tx,
-          ty,
-          dropStep: world.step,
-          impactStep: world.step + FALL_STEPS,
-        });
-        world.emit({ type: 'bombDrop', x: p.x, y: p.y, side: p.side });
-      }
+    while (p.nextDrop < p.bombsTotal) {
+      const dropX = p.dropX0 + dir * cfg.plane.bombSpacing * p.nextDrop;
+      if ((p.x - dropX) * dir < -EPS) break;
+      p.nextDrop++;
+      p.bombsLeft--;
+      world.bombs.push({
+        id: ++world.nextId,
+        side: p.side,
+        owner: p.owner,
+        x0: p.x,
+        y0: p.y,
+        tx: dropX + dir * caida,
+        ty: p.y,
+        dropStep: world.step,
+        impactStep: world.step + FALL_STEPS,
+      });
+      world.emit({ type: 'bombDrop', x: p.x, y: p.y, side: p.side });
     }
     const out = dir > 0 ? field.w + cfg.plane.margin : -cfg.plane.margin;
     if ((p.x - out) * dir >= 0) {

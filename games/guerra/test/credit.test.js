@@ -1,8 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRegistry } from '@tienda/kit/sim/registry.js';
-import { createWorld, stepWorld } from '../public/js/sim/world.js';
-import { addUnit, createSquad } from '../public/js/sim/squads.js';
+import { createWorld, seedUnits, stepWorld } from '../public/js/sim/world.js';
 import { damageUnit } from '../public/js/sim/combat.js';
 import { damageTurret, requestBaseDamage } from '../public/js/sim/base.js';
 import { addPaid, ledger, retireQueues, retireRound } from '../public/js/sim/credit.js';
@@ -21,11 +20,9 @@ function mundo(extra = {}) {
   return { w, registry };
 }
 
-/** Una unidad suelta en un grupo propio, quieta, con dueño y valor. */
+/** Una unidad suelta, quieta, con dueño y valor. */
 function suelta(w, side, kind, x, y, o = {}) {
-  const sq = createSquad(w, { side, kind, role: 'defensa', state: 'holding', x, y, pinned: true });
-  sq.postPos = { x, y };
-  const u = addUnit(w, sq, x, y, o);
+  const u = seedUnits(w, { side, kind, x, y, yg: y, pinned: true, owner: o.owner, value: o.value }).units[0];
   if (o.value) addPaid(w, side, o.value);
   return u;
 }
@@ -139,10 +136,9 @@ test('un avión que sale ileso pasa su valor a retirado y no da XP', () => {
   assert.ok(Math.abs(l.sum - l.paid) < 1e-6);
 });
 
-test('fin de ronda: el valor de las unidades vivas (también las que forman) y de los aviones pasa a retirado', () => {
+test('fin de ronda: el valor de las unidades vivas y de los aviones pasa a retirado', () => {
   const { w } = mundo();
-  const a = suelta(w, 0, 'soldado', 300, 448, { value: 30 });
-  a.squad.state = 'forming';
+  suelta(w, 0, 'soldado', 300, 448, { value: 30 });
   suelta(w, 1, 'soldado', 800, 448, { value: 20 });
   addPaid(w, 0, 100);
   launchPlane(w, 0, 'P', 100);

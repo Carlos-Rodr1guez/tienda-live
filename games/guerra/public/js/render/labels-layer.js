@@ -9,7 +9,6 @@
 // Solo LEE el sim y el registro del kit (get, rankOf, displayName): nunca `registry.drain()` ni escribe en nada.
 
 import { PALETA } from '../data/paleta.js';
-import { iconScreenRect } from './icons.js';
 import {
   createLayoutScratch,
   createRanking,
@@ -134,8 +133,7 @@ export function createLabelLayer({ registry, teamHex, spriteAy, marksSize, cfg }
      * @param {{
      *   W: number, H: number, u: number, units: ArrayLike<any>, k: number,
      *   screen: {s: number, ox: number, oy: number, device: boolean, marks: boolean, x0: number, y0: number},
-     *   alpha: number, now: number, spotlight?: string | null, onlyRank?: boolean,
-     *   icons?: {descs: any[], count: number}
+     *   alpha: number, now: number, spotlight?: string | null, onlyRank?: boolean
      * }} f
      */
     draw(ctx, f) {
@@ -186,10 +184,7 @@ export function createLabelLayer({ registry, teamHex, spriteAy, marksSize, cfg }
         porClave.set(e.key, it);
       }
 
-      // los íconos de rol proyectados a pantalla: ninguna pastilla los pisa
-      const n = f.icons?.count ?? 0;
       obstacles.length = 0;
-      for (let i = 0; i < n; i++) obstacles.push(iconScreenRect(f.icons.descs[i], screen));
       // lo que el HUD ocupa sobre el campo (rieles, banda inferior, marco, chip, aviso y paneles abiertos): ninguna caja lo cruza (B9)
       if (f.blockers) for (let i = 0; i < f.blockers.length; i++) obstacles.push(f.blockers[i]);
 

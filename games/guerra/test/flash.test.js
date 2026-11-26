@@ -441,8 +441,8 @@ const escenaConMovimiento = (systemReduced) => {
   const w = {
     ...mundoVacio(),
     bases: [
-      { frontX: 110, turrets: [{ x: 100, y: 242 }] },
-      { frontX: 1330, turrets: [{ x: 1340, y: 242 }] },
+      { frontX: 90, turrets: [{ x: 100, y: 242 }] },
+      { frontX: 1350, turrets: [{ x: 1340, y: 242 }] },
     ],
   };
   sc.consume(
@@ -604,7 +604,7 @@ test('secuencia de la base: la base y las torretas siguen en pie hasta su moment
   assert.equal(sc.baseFell(1, w.bases[1]), false, 'aún no hubo explosión final');
   correSecuencia(sc.fx, w, 0.4);
   assert.equal(sc.baseFell(1, w.bases[1]), true, 'tras la explosión final, ruinas');
-  // las explosiones de la secuencia caen sobre la base derecha (x entre 1336 y 1434)
+  // las explosiones de la secuencia caen sobre el hangar derecho (x entre 1350 y 1426) o en una torreta (x 1340)
   for (const b of sc.fx.booms) if (b.a) assert.ok(b.x >= 1330 && b.x <= 1440, `x = ${b.x}`);
 });
 
@@ -831,7 +831,7 @@ test('F2 muestra el tiempo de efectos (aparte del trabajo), el uso de cada pool 
       devicePass: false,
       canvasesAllocated: 2,
     },
-    counts: { units: 1, squads: 1, planes: 0, hits: 0 },
+    counts: { units: 1, planes: 0, hits: 0 },
     bakeCount: 2,
     hash: 'abc',
     fx: { usage: { particles: 12, booms: 3, craters: 4, wrecks: 5 }, caps: FX_CAPS, recentLarge: 2 },
@@ -856,7 +856,7 @@ test('F2 muestra el tiempo de efectos (aparte del trabajo), el uso de cada pool 
       devicePass: false,
       canvasesAllocated: 2,
     },
-    counts: { units: 0, squads: 0, planes: 0, hits: 0 },
+    counts: { units: 0, planes: 0, hits: 0 },
     bakeCount: 0,
     hash: '',
   });
@@ -971,4 +971,79 @@ test('una unidad golpeada en cada paso durante 2 s inicia como máximo 3 parpade
     const n = inicios.filter((q) => q >= p && q <= p + 30).length;
     assert.ok(n <= 3, `${n} parpadeos desde el paso ${p}`);
   }
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// v2.6: la alfombra del bombardero (una bomba cada 40 px, 3 por segundo por avión)
+
+const impactos = (fx, evs) => {
+  for (const e of evs) fx.consume(e, mundoVacio());
+};
+
+test('bombImpact sin unidades dañadas (hits 0): estallido pequeño y sin cráter; con hits > 0: mediano y con cráter', () => {
+  const fx = createFx({ seed: 'efectos:alfombra', motion: normalMotion() });
+  impactos(fx, [{ type: 'bombImpact', x: 300, y: 300, side: 0, hits: 0 }]);
+  assert.equal(fx.booms.filter((b) => b.a).length, 1);
+  assert.equal(fx.booms.find((b) => b.a).R, 5, 'small');
+  assert.equal(fx.craters.length, 0, 'sin cráter');
+  const fx2 = createFx({ seed: 'efectos:alfombra', motion: normalMotion() });
+  impactos(fx2, [{ type: 'bombImpact', x: 300, y: 300, side: 0, hits: 2 }]);
+  assert.equal(fx2.booms.find((b) => b.a).R, 11, 'med');
+  assert.equal(fx2.craters.length, 1, 'con cráter');
+  // un evento viejo sin `hits` no cava cráter ni sube a mediano (dato ausente = ninguna unidad)
+  const fx3 = createFx({ seed: 'efectos:alfombra', motion: normalMotion() });
+  impactos(fx3, [{ type: 'bombImpact', x: 300, y: 300, side: 0 }]);
+  assert.equal(fx3.booms.find((b) => b.a).R, 5);
+  assert.equal(fx3.craters.length, 0);
+});
+
+test('alfombra con 4 aviones a la vez en k = 6: nunca más de 3 destellos grandes por segundo, y el resto se degrada', () => {
+  const fx = createFx({ seed: 'efectos:alfombra4', motion: normalMotion() });
+  fx.setView({ W: VISTA.W, H: VISTA.H, s: s6 });
+  const w = mundoVacio();
+  const fases = [0, 3, 5, 8]; // cuatro aviones desfasados: 12 impactos por segundo en total
+  const concedidos = [];
+  let max = 0;
+  let total = 0;
+  for (let paso = 0; paso < 150; paso++) {
+    for (const f of fases) {
+      if (paso % 10 === f) {
+        const antes = fx.stats.largeGranted;
+        // los impactos de la alfombra con unidades debajo son 'med'; para estresar el límite también 'large'
+        fx.consume({ type: 'bombImpact', x: 300 + paso * 4, y: 300 + f * 20, side: 0, hits: 1 }, w);
+        fx.boom(300 + paso * 4, 500 + f * 10, 'huge', 0); // un pesado muerto en la misma pasada
+        total++;
+        if (fx.stats.largeGranted > antes) concedidos.push(fx.now);
+      }
+    }
+    fx.update(1 / 30, w);
+    max = Math.max(max, fx.recentLarge());
+    assert.ok(fx.recentLarge() <= 3, `paso ${paso}: ${fx.recentLarge()} destellos grandes en el último segundo`);
+  }
+  for (const t of concedidos) {
+    assert.ok(concedidos.filter((u) => u > t - 1 + 1e-9 && u <= t + 1e-9).length <= 3, `ventana de 1 s en t = ${t}`);
+  }
+  assert.ok(total >= 60, 'hubo carga de verdad');
+  assert.ok(fx.stats.degraded > 0, 'el exceso se degradó a humo y escombro');
+  assert.ok(max === 3, `el límite se tocó (${max})`);
+});
+
+test('alfombra con 4 aviones en k = 1: 12 estallidos por segundo no degradan nada y los pools no se desbordan', () => {
+  const fx = createFx({ seed: 'efectos:alfombra1', motion: normalMotion() });
+  fx.setView({ W: VISTA.W, H: VISTA.H, s: s1 });
+  const w = mundoVacio();
+  for (let paso = 0; paso < 300; paso++) {
+    for (const f of [0, 3, 5, 8]) {
+      if (paso % 10 === f) {
+        fx.consume(
+          { type: 'bombImpact', x: 200 + (paso % 90) * 12, y: 300 + f * 30, side: 0, hits: paso % 20 === 0 ? 0 : 2 },
+          w,
+        );
+      }
+    }
+    fx.update(1 / 30, w);
+    assert.ok(fx.booms.length <= 40 && fx.craters.length <= 60);
+  }
+  assert.equal(fx.stats.degraded, 0);
+  assert.equal(fx.recentLarge(), 0);
 });

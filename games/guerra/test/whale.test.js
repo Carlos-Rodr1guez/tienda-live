@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mulberry32 } from '@tienda/kit/sim/rng.js';
-import { createWorld, seedSquad, stepWorld } from '../public/js/sim/world.js';
+import { createWorld, seedUnits, stepWorld } from '../public/js/sim/world.js';
 import { damageTurret, requestBaseDamage } from '../public/js/sim/base.js';
 import { launchPlane } from '../public/js/sim/plane.js';
 import { fireEnergy } from '../public/js/sim/energy.js';
@@ -95,17 +95,17 @@ function corre(game, escenario) {
   return w;
 }
 
-/** Tropas del lado 0 ya junto a la base enemiga, sin nadie que las pare. */
+/** Tropas del lado 0 ya junto a la base enemiga (en grupos de 10 soldados, 4 jeeps, 2 tanques o 1 pesado), sin nadie que las pare. */
 function alFrente(w, n, kind) {
   for (let i = 0; i < n; i++) {
-    seedSquad(w, {
+    seedUnits(w, {
       side: 0,
       kind,
-      count: w.cfg.squads.size[kind],
-      state: 'holding',
-      corridor: i % 3,
-      lane: i % 3,
+      count: { soldado: 10, jeep: 4, tanque: 2, pesado: 1 }[kind],
+      y: 242 + (i % 3) * 206,
+      dy: 16,
       x: 1270 + (i % 5) * 8,
+      pinned: true,
     });
   }
 }

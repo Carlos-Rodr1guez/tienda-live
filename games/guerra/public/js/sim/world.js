@@ -3,16 +3,17 @@
 // paso numera los pasos del diseño; el partido (lote 4d) fija `phase`, `round`, `roundStart` y `paused`.
 
 import { GROUND_KINDS, resolveConfig } from './defaults.js';
-import { ATTACK_LANES, corridorOf, createField, laneY } from './field.js';
+import { createField } from './field.js';
 import { createGrid } from './grid.js';
-import { unitStats } from './units.js';
+import { addUnit, targetLane, unitStats } from './units.js';
 import { createTeamCounters } from '@tienda/kit/sim/counters.js';
 import { createBases, decideTurrets, refillBuckets, resetBase, settleBases } from './base.js';
-import { commanderTick, createCommanderState, stepAssembly } from './commander.js';
 import { decideUnits, fireAll, processHits, reapUnits } from './combat.js';
 import { createCredit, retireRound } from './credit.js';
 import { flushStrikes, requestStrike } from './energy.js';
+import { stepMarch } from './march.js';
 import { launchPlane, stepPlanes } from './plane.js';
+import { maxSpacing } from './spacing.js';
 import {
   createQueues,
   deployStep,
@@ -23,19 +24,8 @@ import {
   submitOrder,
   submitSocial,
 } from './queue.js';
-import {
-  addUnit,
-  createSquad,
-  formationExtent,
-  haltDistance,
-  laneChangeTick,
-  placeOffset,
-  stepSquadAnchors,
-  stepUnits,
-} from './squads.js';
 
 const MAX_EVENTS = 4096;
-const COMMANDER_TICK = 15; // 2 Hz
 
 /**
  * Crea un mundo vacío.
@@ -47,25 +37,19 @@ export function createWorld(game = {}, opts = {}) {
   const cfg = resolveConfig(game);
   const field = createField(cfg);
   const stats = {};
-  const fondoFull = {};
-  const halt = {};
-  for (const k of GROUND_KINDS) {
-    stats[k] = unitStats(cfg, k);
-    fondoFull[k] = formationExtent(cfg, k, cfg.squads.size[k]).fondo;
-    halt[k] = haltDistance(cfg, k);
-  }
+  for (const k of GROUND_KINDS) stats[k] = unitStats(cfg, k);
   const world = {
     cfg,
     field,
     stats,
-    fondoFull,
-    halt,
+    /** Radio de consulta de la separación (el mayor espaciado). */
+    maxSpacing: maxSpacing(cfg),
     step: 0,
     nextId: 0,
-    nextSquadId: 0,
     nextHitId: 0,
+    /** Contador de salidas por lado: elige la ranura de la puerta y la altura de destino (determinista). */
+    doorN: [0, 0],
     units: [],
-    squads: [],
     hits: [],
     bombs: [],
     planes: [],
@@ -84,9 +68,8 @@ export function createWorld(game = {}, opts = {}) {
     round: 1,
     roundStart: 0,
     queues: createQueues(),
-    queueStats: { overflow: 0 },
+    queueStats: { overflow: 0, forced: 0, waitMax: 0 },
     credit: createCredit(),
-    cmd: [createCommanderState(), createCommanderState()],
     counters: createTeamCounters(2, cfg.social),
     lastLaunch: [-1e9, -1e9],
     /** Golpes de energía pedidos durante una pausa: salen al reanudar. */
@@ -113,7 +96,7 @@ export function createWorld(game = {}, opts = {}) {
 const SCRATCH = [[], []];
 
 /** Paso 4: copia de posiciones previas (para interpolar) y reconstrucción de la grilla de cada lado. */
-function snapshotAndGrid(world) {
+export function snapshotAndGrid(world) {
   SCRATCH[0].length = 0;
   SCRATCH[1].length = 0;
   for (const u of world.units) {
@@ -132,36 +115,28 @@ function snapshotAndGrid(world) {
 export function stepWorld(world) {
   if (world.over !== null || world.paused) return;
   flushStrikes(world);
-  // 1. tick del comandante (2 Hz): H, Z, cuota, rebalanceo, puestos, intercepciones y cambios de calle
-  if (world.step % COMMANDER_TICK === 0) {
-    commanderTick(world);
-    laneChangeTick(world);
-  }
-  // 2. calendario de refuerzos base y 3. despliegue desde las colas
+  // 1. calendario de refuerzos base y 2. despliegue desde las colas (por la puerta)
   stepBaseline(world);
   deployStep(world);
-  // 4. posiciones previas y grilla
+  // 3. posiciones previas y grilla
   snapshotAndGrid(world);
-  // 5. golpes que vencen
+  // 4. golpes que vencen
   processHits(world);
-  // 6. cubo de la base
+  // 5. cubo de la base
   refillBuckets(world);
-  // 7. bajas, bases y torretas
+  // 6. bajas, bases y torretas
   reapUnits(world);
   settleBases(world);
-  // 8. decisión con el estado congelado
+  // 7. decisión por alcance con el estado congelado
   decideUnits(world);
   decideTurrets(world);
-  // 9. disparos
+  // 8. disparos
   fireAll(world);
-  // 10. aviones
+  // 9. aviones
   stepPlanes(world);
-  // 11. grupos y 12. unidades
-  stepSquadAnchors(world);
-  stepUnits(world);
-  // 13. reunión: llegadas, cierres y salidas
-  stepAssembly(world);
-  // 14. fin de ronda
+  // 10. marcha: visión escalonada, velocidad deseada, separación e integración
+  stepMarch(world);
+  // 11. fin de ronda
   const a = world.bases[0].hp <= 0;
   const b = world.bases[1].hp <= 0;
   if (a || b) world.over = { step: world.step, winner: a && b ? null : a ? 1 : 0, both: a && b };
@@ -169,13 +144,12 @@ export function stepWorld(world) {
 }
 
 /**
- * Empieza una ronda: el valor de lo que sigue en el campo pasa a retirado, y campo, grupos, golpes, bombas, aviones,
+ * Empieza una ronda: el valor de lo que sigue en el campo pasa a retirado, y campo, golpes, bombas, aviones,
  * contadores, cubo y torretas quedan como nuevos. Las colas siguen (sobreviven entre rondas).
  */
 export function resetRound(world) {
   retireRound(world);
   world.units.length = 0;
-  world.squads.length = 0;
   world.hits.length = 0;
   world.bombs.length = 0;
   world.planes.length = 0;
@@ -186,7 +160,7 @@ export function resetRound(world) {
   }
   world.credit.teamValue = [0, 0];
   world.credit.teamCoins = [0, 0];
-  world.cmd = [createCommanderState(), createCommanderState()];
+  world.doorN = [0, 0];
   world.counters.resetRound();
   world.lastLaunch = [-1e9, -1e9];
   world.pendingStrikes = [0, 0];
@@ -196,15 +170,15 @@ export function resetRound(world) {
 
 /**
  * Comandos del mundo, para el log de repetición (`payload` de una entrada `{step, kind, payload}`): `gift` (regalo
- * ya enrutado), `order`, `chat`, `likes`, `follow`, `share`, `strike`, y el andamiaje `seedSquad` y `launchPlane`.
+ * ya enrutado), `order`, `chat`, `likes`, `follow`, `share`, `strike`, y el andamiaje `seedUnits` y `launchPlane`.
  * Cualquier otro devuelve `{ok:false}` sin cambiar el estado.
  * @param {any} world
  * @param {{type:string, [k:string]: any}} p
  */
 export function applyEvent(world, p) {
   switch (p.type) {
-    case 'seedSquad':
-      return seedSquad(world, p);
+    case 'seedUnits':
+      return seedUnits(world, p);
     case 'launchPlane':
       return launchPlane(world, p.side, p.owner ?? null, p.value ?? 0);
     case 'order':
@@ -223,37 +197,40 @@ export function applyEvent(world, p) {
       return { ok: true, deferred: r.target === 'deferred', ...r };
     }
     default:
-      // `spawn`, `damage`, `setScore`, `setRole`, `assignSquad`, `vote`...: el sim no los acepta (NM-2, CB-21)
+      // `spawn`, `damage`, `setScore`, `setScore`, `vote`...: el sim no los acepta (NM-2, CB-21; ya no existen grupos ni roles)
       return { ok: false, reason: 'unknown' };
   }
 }
 
 /**
- * Crea un grupo con sus unidades ya en sus lugares.
+ * Andamiaje (pruebas y repeticiones): crea `count` unidades ya en el campo, la i-ésima en (x + i·dx, y + i·dy). Por
+ * defecto salen de la puerta del lado, en fase 'march' hacia su propia altura. Cada una gasta un número de salida del
+ * lado (altura de destino) solo si no se pasa `yg`.
  * @param {any} world
- * @param {{side:0|1, kind:string, count?:number, role?:string, state?:string, corridor?:number, lane?:number, x?:number, y?:number}} p
+ * @param {{side:0|1, kind:string, count?:number, x?:number, y?:number, dx?:number, dy?:number, yg?:number, yoff?:number,
+ *   phase?:'leg'|'march', owner?:string|null, value?:number, pinned?:boolean}} p
+ * @returns {{ok:true, units:any[]}}
  */
-export function seedSquad(world, p) {
-  const side = world.field.sides[p.side];
-  const corridor = p.corridor ?? corridorOf(world.field, p.y ?? side.gates[1]);
-  const lane = p.lane ?? ATTACK_LANES.centro;
-  const x = p.x ?? side.exitX + side.dir * 40;
-  const y = p.y ?? laneY(world.field, corridor, lane);
-  const sq = createSquad(world, {
-    side: p.side,
-    kind: p.kind,
-    role: p.role,
-    state: p.state,
-    corridor,
-    lane,
-    x,
-    y,
-    pinned: p.pinned ?? true,
-  });
-  const n = p.count ?? world.cfg.squads.size[p.kind];
+export function seedUnits(world, p) {
+  const door = world.field.sides[p.side].door;
+  const x = p.x ?? door.x;
+  const y = p.y ?? door.y;
+  const n = p.count ?? 1;
+  const units = [];
   for (let i = 0; i < n; i++) {
-    const off = placeOffset(world.cfg, p.kind, i, side.dir);
-    addUnit(world, sq, x + off.x, y + off.y);
+    const yi = y + i * (p.dy ?? 0);
+    const lane = p.yg === undefined && p.y === undefined ? targetLane(world, world.doorN[p.side]++) : null;
+    const yg = p.yg ?? (lane === null ? yi : lane.yg);
+    units.push(
+      addUnit(world, p.side, p.kind, x + i * (p.dx ?? 0), yi, {
+        owner: p.owner ?? null,
+        value: p.value ?? 0,
+        yg,
+        yoff: p.yoff ?? (lane === null ? 0 : lane.off),
+        phase: p.phase ?? 'march',
+        pinned: p.pinned === true,
+      }),
+    );
   }
-  return { ok: true, squad: sq };
+  return { ok: true, units };
 }

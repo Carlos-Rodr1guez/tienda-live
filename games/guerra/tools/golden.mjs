@@ -14,7 +14,7 @@ import { PAISES } from '../public/js/data/paises.js';
 import { hashMatch } from '../public/js/sim/hash.js';
 import { replayMatch } from '../public/js/sim/replay.js';
 
-const VERSION = 2;
+const VERSION = 5; // v2.8b: cuatro tipos nuevos (francotirador, blindado, lanzacohetes y lobo) y tabla de precios por monedas
 const STEPS = 10400;
 /**
  * Rondas de 150 s con intro y resultados de 2 s. Las bases y las torretas son más frágiles que las de producción para
@@ -31,12 +31,18 @@ const add = (step, kind, payload) => log.push({ step, kind, payload });
 const cmd = (step, type, extra = {}) => add(step, 'cmd', { type, ...extra });
 
 // Valor por unidad (el mismo que el router da con la config por defecto): lo pagado es count × unitValue.
+// [tipo, valor, peso en %, tope por orden]; los pesos suman 100. El lobo (héroe) sale en el 4 %: con uno vivo, el siguiente se
+// vuelve pesados y así el log ejercita también esa conversión.
 const KINDS = [
-  ['soldado', 1, 50, 20],
-  ['jeep', 10, 25, 6],
-  ['tanque', 100, 15, 3],
-  ['pesado', 1000, 5, 1],
+  ['soldado', 1, 38, 20],
+  ['francotirador', 5, 12, 4],
+  ['jeep', 10, 14, 6],
+  ['blindado', 30, 8, 3],
+  ['tanque', 100, 10, 3],
+  ['lanzacohetes', 300, 5, 2],
+  ['pesado', 1000, 4, 1],
   ['avion', 500, 5, 2],
+  ['lobo', 3000, 4, 1],
 ];
 const pickKind = () => {
   let r = int(1, 100);

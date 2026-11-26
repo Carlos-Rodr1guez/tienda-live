@@ -1,102 +1,54 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveConfig } from '../public/js/sim/defaults.js';
-import { ATTACK_LANES, corridorOf, createField, laneY, sideDir } from '../public/js/sim/field.js';
+import { createField, doorOffsets, inDoorZone, sideDir } from '../public/js/sim/field.js';
 
-// CB-15, CB-3: geometría del campo con las medidas del prototipo v3 aprobado por el dueño.
+// CB-15, CB-3: geometría del campo con las medidas del prototipo v3 aprobado por el dueño; desde v2.6 una sola puerta
+// de salida por lado con sus cinco ranuras (D30). Sin corredores, calles, puestos, sectores ni zona de defensa.
 
 const cfg = resolveConfig();
 const f = createField(cfg);
 const [L, R] = f.sides;
 
-test('descriptor 16:9 sin campo lanes y con las calles declaradas', () => {
+test('descriptor 16:9 con la puerta y sus ranuras, y sin las estructuras de la v2.5', () => {
   assert.equal(f.aspect, '16:9');
   assert.equal(f.w, 1440);
   assert.equal(f.h, 810);
   assert.ok(!('lanes' in f));
+  assert.equal(f.corridors, undefined);
   for (const s of f.sides) {
-    assert.deepEqual(s.subLanes, [0, -40, 40]);
-    assert.deepEqual(s.postLanes, { A: -80, B: 80 });
+    assert.deepEqual(s.door.slots, [0, 1, -1, 2, -2]);
+    assert.equal(s.door.slotMin, 9);
+    assert.equal(s.door.slotStep, 0.5);
+    assert.equal(s.door.freeFactor, 0.9);
+    assert.equal(s.door.y, 448);
+    for (const viejo of ['gates', 'gateX', 'subLanes', 'postLanes', 'defenseZone', 'sectors']) {
+      assert.equal(s[viejo], undefined, `s.${viejo} ya no existe`);
+    }
   }
   assert.ok(Object.isFrozen(f));
 });
 
-test('frentes, salidas, corredores y suelo del v3', () => {
-  assert.deepEqual([L.frontX, R.frontX], [108, 1332]);
+test('frentes, puertas y suelo del v3', () => {
+  assert.deepEqual([L.frontX, R.frontX], [90, 1350], 'v2.8: el frente es la cara del hangar');
   assert.deepEqual([L.exitX, R.exitX], [124, 1316]);
+  assert.deepEqual([L.door.x, R.door.x], [124, 1316]);
   assert.deepEqual(f.ground, [138, 758]);
-  assert.deepEqual(f.corridors, [
-    [138, 345],
-    [345, 551.5],
-    [551.5, 758],
-  ]);
-  assert.deepEqual(L.gates, [242, 448, 655]);
-  assert.deepEqual(R.gates, [242, 448, 655]);
   assert.equal(f.midX, 720);
 });
 
-test('corridorOf usa los bordes en los puntos medios entre centros', () => {
-  assert.equal(corridorOf(f, 138), 0);
-  assert.equal(corridorOf(f, 344.9), 0);
-  assert.equal(corridorOf(f, 345), 1);
-  assert.equal(corridorOf(f, 551.4), 1);
-  assert.equal(corridorOf(f, 551.5), 2);
-  assert.equal(corridorOf(f, 758), 2);
-  assert.equal(corridorOf(f, 10), 0); // fuera del suelo: el corredor más cercano
-  assert.equal(corridorOf(f, 800), 2);
-});
-
-test('la zona de defensa es el 30 % de la distancia entre los frentes leídos del descriptor', () => {
-  const zona = (R.frontX - L.frontX) * 0.3; // 367,2
-  assert.ok(Math.abs(L.defenseZone[1] - L.defenseZone[0] - zona) <= 1);
-  assert.ok(Math.abs(R.defenseZone[1] - R.defenseZone[0] - zona) <= 1);
-  assert.deepEqual(L.defenseZone, [108, 475]);
-  assert.deepEqual(R.defenseZone, [965, 1332]);
-});
-
-test('puertas por tipo', () => {
-  assert.deepEqual(L.gateX, { soldado: 168, jeep: 182, tanque: 186, pesado: 190 });
-  assert.deepEqual(R.gateX, { soldado: 1272, jeep: 1258, tanque: 1254, pesado: 1250 });
-});
-
-test('puestos de defensa: x 374/328/282/236 y 1066/1112/1158/1204, 4 por calle y por sector', () => {
-  assert.equal(L.sectors.length, 3);
-  for (let g = 0; g < 3; g++) {
-    const s = L.sectors[g];
-    assert.equal(s.y, L.gates[g]);
-    assert.deepEqual(
-      s.posts.A.map((p) => p.x),
-      [374, 328, 282, 236],
-    );
-    assert.deepEqual(
-      s.posts.B.map((p) => p.x),
-      [374, 328, 282, 236],
-    );
-    assert.ok(s.posts.A.every((p) => p.y === s.y - 80));
-    assert.ok(s.posts.B.every((p) => p.y === s.y + 80));
-    assert.deepEqual(
-      R.sectors[g].posts.A.map((p) => p.x),
-      [1066, 1112, 1158, 1204],
-    );
-  }
-});
-
-test('las calles de ataque y las de puestos son distintas', () => {
-  const ataque = new Set(L.subLanes);
-  for (const d of Object.values(L.postLanes)) assert.ok(!ataque.has(d));
-  assert.deepEqual(ATTACK_LANES, { centro: 0, jeep: 1, bajo: 2 });
-  assert.equal(laneY(f, 1, ATTACK_LANES.jeep), 408);
-  assert.equal(laneY(f, 0, ATTACK_LANES.bajo), 282);
-  assert.equal(laneY(f, 2, ATTACK_LANES.centro), 655);
-});
-
-test('la última fila de cada formación llena en su puerta queda delante del frente propio', () => {
-  const huellaX = { soldado: 6, jeep: 18, tanque: 24, pesado: 34 };
-  const fondo = { soldado: 12, jeep: 26, tanque: 0, pesado: 0 };
-  for (const k of Object.keys(huellaX)) {
-    assert.ok(L.gateX[k] - fondo[k] - huellaX[k] / 2 > L.frontX, k);
-    assert.ok(R.gateX[k] + fondo[k] + huellaX[k] / 2 < R.frontX, k);
-  }
+test('la puerta sale de la config (movement.door) y la puerta queda delante del frente propio', () => {
+  const g = createField(resolveConfig({ movement: { door: { y: 400, slotMin: 12 } } }));
+  assert.equal(g.sides[0].door.y, 400);
+  assert.equal(g.sides[1].door.slotMin, 12);
+  assert.deepEqual(doorOffsets(g.sides[1].door, 9), [0, 12, -12, 24, -24]);
+  assert.ok(L.door.x > L.frontX && R.door.x < R.frontX);
+  // y las cinco ranuras de cada tipo (hasta ±38 px) caen dentro del suelo
+  for (const s of f.sides)
+    for (const sp of [9, 20, 28, 38])
+      for (const dy of doorOffsets(s.door, sp)) {
+        assert.ok(s.door.y + dy >= f.ground[0] && s.door.y + dy <= f.ground[1]);
+      }
 });
 
 test('dos bases con ids de arte distintos, direcciones y torretas', () => {
@@ -124,19 +76,17 @@ test('dos bases con ids de arte distintos, direcciones y torretas', () => {
 });
 
 test('estrés de 5 min: nadie sale del suelo ni del mundo y los aviones solo salen en su ruta', async () => {
-  const { createWorld, seedSquad, stepWorld } = await import('../public/js/sim/world.js');
+  const { createWorld, seedUnits, stepWorld } = await import('../public/js/sim/world.js');
   const { launchPlane } = await import('../public/js/sim/plane.js');
   const w = createWorld();
   const g = w.field;
   let lote = 0;
   for (let paso = 0; paso < 9000; paso++) {
-    // cada 6 s entra un lote de grupos de los cuatro tipos por lado
+    // cada 6 s entra un lote de unidades de los cuatro tipos por lado
     if (paso % 180 === 0) {
       const tipos = ['soldado', 'jeep', 'tanque', 'pesado', 'soldado'];
-      for (const side of [0, 1]) {
-        const kind = tipos[lote % tipos.length];
-        seedSquad(w, { side, kind, corridor: (lote + side) % 3, lane: lote % 3 });
-      }
+      for (const side of [0, 1])
+        seedUnits(w, { side, kind: tipos[lote % tipos.length], count: 5, dy: 20, y: 200 + ((lote * 70) % 400) });
       lote++;
     }
     if (paso % 400 === 100) {
@@ -154,4 +104,32 @@ test('estrés de 5 min: nadie sale del suelo ni del mundo y los aviones solo sal
     if (w.over !== null) break;
   }
   assert.ok(w.step > 1000);
+});
+
+test('umbral de la puerta: la zona donde un amigo todavía taparía una ranura de cualquier tipo', () => {
+  const door = L.door;
+  const M = 38;
+  // soldado: x ≤ 0,9 × (9 + 38) / 2 = 21,15 ; y ≤ 2 × 19 + 1,2 × 23,5 = 66,2
+  assert.ok(inDoorZone(door, 1, 9, M, door.x + 21, door.y + 66));
+  assert.ok(!inDoorZone(door, 1, 9, M, door.x + 21.2, door.y));
+  assert.ok(!inDoorZone(door, 1, 9, M, door.x, door.y + 66.3));
+  // pesado: x ≤ 0,9 × 38 = 34,2 ; y ≤ 38 + 1,2 × 38 = 83,6
+  assert.ok(inDoorZone(door, 1, 38, M, door.x + 34, door.y - 83));
+  assert.ok(!inDoorZone(door, 1, 38, M, door.x + 34.3, door.y));
+  // el lado derecho es el espejo
+  assert.ok(inDoorZone(R.door, -1, 9, M, R.door.x - 21, R.door.y));
+  assert.ok(!inDoorZone(R.door, -1, 9, M, R.door.x - 21.2, R.door.y));
+  // un amigo fuera del umbral no tapa ninguna ranura de ningún tipo por distancia libre (criterio de queue.js)
+  for (const sp of [9, 20, 28, 38]) {
+    const par = (sp + M) / 2;
+    for (const dy of doorOffsets(door, M)) {
+      for (let x = 0; x <= 40; x += 0.5) {
+        for (let y = -100; y <= 100; y += 0.5) {
+          const tapa = Math.hypot(x, y - dy) < door.freeFactor * par;
+          if (tapa)
+            assert.ok(inDoorZone(door, 1, sp, M, door.x + x, door.y + y), `sp ${sp}: (${x}, ${y}) tapa y queda fuera`);
+        }
+      }
+    }
+  }
 });

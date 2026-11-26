@@ -6,7 +6,7 @@ import { f2Model } from '../public/js/render/f2.js';
 import { createFakeCtx } from './support/fake-canvas.js';
 
 // La capa de dibujo de las etiquetas (CB-16, D22, §10.3): caché de texto medido, fundido de 120 ms, posición idéntica
-// a la del sprite, tamaño fijo en px virtuales, nada por encima de la banda del HUD y nada pisando un ícono.
+// a la del sprite, tamaño fijo en px virtuales, nada por encima de la banda del HUD y nada pisando el HUD.
 // Todo con un contexto 2D falso que registra llamadas: sin DOM.
 
 const AY = { soldado: SPRITES.soldado.ay, jeep: SPRITES.jeep.ay, tanque: SPRITES.tanque.ay, pesado: SPRITES.pesado.ay };
@@ -58,7 +58,6 @@ const frame = (o = {}) => ({
   now: 0,
   spotlight: null,
   onlyRank: false,
-  icons: { descs: [], count: 0 },
   ...o,
 });
 /** Corre `seg` segundos de reloj de vista a 60 cuadros por segundo; devuelve el último contexto de dibujo. */
@@ -278,22 +277,6 @@ test('invalidate() vacía la caché de texto medido: la misma etiqueta se vuelve
   assert.equal(layer.stats.measures, antes + 1);
 });
 
-test('ninguna etiqueta pisa el rectángulo proyectado de un ícono', () => {
-  const ctx = createFakeCtx({ record: false });
-  const reg = registro({ a: { name: 'a', xp: 3 }, b: { name: 'b', xp: 2 }, c: { name: 'c', xp: 1 } });
-  const units = [unit(0, 'a', 5, 300, 200), unit(0, 'b', 5, 305, 200), unit(1, 'c', 5, 310, 200)];
-  const descs = [{ x: 296, y: 170, w: 10, h: 8 }];
-  const layer = crear({ registry: reg });
-  correr(layer, ctx, frame({ units, icons: { descs, count: 1 } }), 0.3);
-  const s = 4;
-  const ic = { x: Math.round(296 * s) - 100, y: Math.round(170 * s) - 50, w: 10 * s, h: 8 * s };
-  assert.ok(layer.rects.length >= 1);
-  for (const r of layer.rects) {
-    const pisa = r.x < ic.x + ic.w && ic.x < r.x + r.w && r.y < ic.y + ic.h && ic.y < r.y + r.h;
-    assert.equal(pisa, false, r.key);
-  }
-});
-
 test('el ranking se refresca a 5 Hz del reloj de vista; entre refrescos la XP guardada manda', () => {
   const usuarios = { a: { name: 'a', xp: 10 }, b: { name: 'b', xp: 5 } };
   const reg = registro(usuarios);
@@ -357,16 +340,14 @@ test('estadísticas para F2: seleccionadas, dibujadas y descartadas por el layou
       devicePass: false,
       canvasesAllocated: 2,
     },
-    counts: { units: 0, squads: 0, planes: 0, hits: 0 },
+    counts: { units: 0, planes: 0, hits: 0 },
     bakeCount: 0,
     hash: '',
     labels: { drawn: 5, dropped: 2, selected: 7 },
-    icons: { drawn: 11 },
   });
   const v = (key) => modelo.lines.find((l) => l.key === key)?.value;
   assert.equal(v('labels.drawn'), '5');
   assert.equal(v('labels.dropped'), '2');
-  assert.equal(v('icons.drawn'), '11');
 });
 
 test('sin registro (?golden) no dibuja ni lanza; y la fuente usa la pila del diseño con la pixel primero', () => {

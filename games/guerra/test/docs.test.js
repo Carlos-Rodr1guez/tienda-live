@@ -319,11 +319,29 @@ test('README: lo que pide 6.13, en español neutro y sin las palabras prohibidas
     [/view\.idleSeconds/, 'idleSeconds'],
     [/view\.auto\.maxK/, 'maxK'],
     [/view\.auto\.minHalf/, 'minHalf'],
-    [/punto de reunión/i, 'despliegue'],
-    [/escuadras/i, 'escuadras'],
-    [/DEFENSA/, 'rol defensa'],
-    [/ATAQUE/, 'rol ataque'],
-    [/comandante/i, 'comandante'],
+    [/puerta/i, 'despliegue: la puerta única'],
+    [/abanico/i, 'despliegue: el abanico'],
+    [/visión/i, 'despliegue: la visión'],
+    [/base enemiga/i, 'despliegue: todas van a la base enemiga'],
+    [/separación/i, 'despliegue: la separación'],
+    [/alfombra/i, 'bombardero: alfombra de bombas'],
+    [/tres caminos/i, 'despliegue (v2.7): los tres caminos'],
+    [/una sola pasada/i, 'bombardero (v2.7): una sola pasada'],
+    [/centro de la base/i, 'despliegue (v2.7): se ataca solo el centro de la base'],
+    [/hangar/i, 'v2.8: la base es un hangar'],
+    [/una intervención/i, 'v2.8: un regalo = una intervención'],
+    [/soldado 63 px/, 'v2.8: alcance ×1,5'],
+    [/tanques del mismo valor/i, 'v2.8: un avión sin lugar se vuelve tanques'],
+    [/en campo/i, 'HUD: «en campo»'],
+    [/francotirador/i, 'v2.8b: tipo nuevo, el francotirador'],
+    [/blindado/i, 'v2.8b: tipo nuevo, el blindado'],
+    [/lanzacohetes/i, 'v2.8b: tipo nuevo, el lanzacohetes'],
+    [/Hombre lobo/, 'v2.8b: el héroe, el Hombre lobo'],
+    [/Tabla de regalos/, 'v2.8b: la tabla de regalos por monedas'],
+    [/Balance de los tipos nuevos/, 'v2.8b: la tabla de balance de igual valor'],
+    [/maxWolvesPerTeam/, 'v2.8b: un lobo por lado'],
+    [/loboConverted/, 'v2.8b: el evento de conversión del lobo'],
+    [/3000 monedas/, 'v2.8b: el tramo del héroe'],
     [/sin votos/i, 'sin votos'],
     [/arrastre/i, 'arrastre'],
     [/rueda/i, 'rueda'],
@@ -358,6 +376,10 @@ test('README: lo que pide 6.13, en español neutro y sin las palabras prohibidas
   ];
   for (const [re, que] of debe) assert.match(t, re, que);
   assert.deepEqual(findForbidden(t), []);
+  // DOC-2 (v2.6): ya no hay escuadras, comandante, roles ni punto de reunión
+  for (const re of [/escuadra/i, /comandante/i, /DEFENSA/, /ATAQUE/, /punto de reunión/i, /\bH26\b/, /\broles?\b/i]) {
+    assert.doesNotMatch(t, re, `README ya no describe ${re}`);
+  }
   assert.doesNotMatch(t, new RegExp('pares? bloque' + 'ados?', 'i'), 'no menciona una lista de pares vetados');
   assert.doesNotMatch(t, /\busted(es)?\b/i, 'tuteo, no "usted"');
 });
@@ -419,7 +441,10 @@ test('C32: el README trae el ejemplo de PowerShell, desde qué carpeta corre cad
     [/raíz del repositorio/, 'start:batalla en la raíz'],
     [/node tools\/check-seed\.mjs.* dentro de la carpeta del juego/, 'check-seed en la carpeta del juego'],
     [/\?rapido=4. da 4 pasos del sim por cuadro/, '?rapido'],
-    [/`soldado`, `jeep`, `tanque`, `avion` y `pesado`/, 'unidades válidas'],
+    [
+      /`soldado`, `francotirador`, `jeep`, `blindado`, `tanque`, `lanzacohetes`, `avion`, `pesado` y `lobo`/,
+      'unidades válidas',
+    ],
     [/allow: \["malabares"\]/, 'ejemplo de allow'],
   ])
     assert.match(t, re, que);

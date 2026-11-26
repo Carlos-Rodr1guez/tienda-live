@@ -1,13 +1,13 @@
 // Banderín de la base (diseño D21 punto 11; Q3 (a), CB-2). Un mástil con un banderín LISO de un solo color, el del
 // equipo: sin patrón, sin franjas, sin emblema ni forma de bandera. Ondea con el tiempo de la vista (quieto con
-// movimiento reducido). La geometría es la de `drawFlag` del prototipo v3: a 30 px del borde exterior y de y 388 a 434.
+// movimiento reducido). La geometría es la de `drawFlag` del prototipo v3: a 30 px del borde exterior y de y 388 a 434, o sea sobre el techo del hangar.
 
 import { PALETA } from '../data/paleta.js';
 
 const INK = PALETA.ink;
 const MASTIL = '#9DA9BF';
 const REMATE = '#FFD84A';
-const BASE_Y = 434; // `HQY + 12`
+const BASE_Y = 434; // sobre el techo del hangar (y 348–548)
 const ALTO = 46;
 const COLUMNAS = 12;
 

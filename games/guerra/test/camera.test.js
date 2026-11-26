@@ -818,7 +818,7 @@ test('F2 muestra la cámara: k (objetivo y mostrado), modo, segundos sin entrada
       devicePass: true,
       canvasesAllocated: 3,
     },
-    counts: { units: 0, squads: 0, planes: 0, hits: 0 },
+    counts: { units: 0, planes: 0, hits: 0 },
     bakeCount: 2,
     hash: 'abc',
     camera,
@@ -840,19 +840,18 @@ test('F2 muestra la cámara: k (objetivo y mostrado), modo, segundos sin entrada
   assert.equal(valor(f2Model(entrada(undefined)), 'cam.k'), undefined, 'sin cámara no hay líneas de cámara');
 });
 
-test('dibujo del minimapa: un punto por grupo con el color de su equipo, el marco de la vista y ninguna unidad suelta', () => {
+test('dibujo del minimapa: un punto por unidad con el color de su equipo y el marco de la vista (v2.6: sin grupos)', () => {
   const ctx = createFakeCtx({ record: true });
   const rect = minimapRect(1920, 1080);
   const c = mk();
   c.zoomToLevel(2);
   settle(c);
-  const squads = [
-    { side: 0, anchor: { x: 300, y: 400 }, members: [{}, {}] },
-    { side: 0, anchor: { x: 500, y: 200 }, members: [{}] },
-    { side: 1, anchor: { x: 1100, y: 600 }, members: [{}, {}, {}] },
-    { side: 1, anchor: { x: 1200, y: 100 }, members: [] }, // un grupo vacío no se dibuja
+  const units = [
+    { side: 0, x: 300, y: 400 },
+    { side: 0, x: 500, y: 200 },
+    { side: 1, x: 1100, y: 600 },
   ];
-  drawMinimap(ctx, rect, { view: c.viewRect(), squads, teamHex: ['#E5484D', '#5BC8F5'], u: 4 });
+  drawMinimap(ctx, rect, { view: c.viewRect(), units, teamHex: ['#E5484D', '#5BC8F5'], u: 4 });
   const rellenos = [];
   let color = '';
   for (const [name, a, b, w, h] of ctx.calls) {
@@ -862,15 +861,15 @@ test('dibujo del minimapa: un punto por grupo con el color de su equipo, el marc
   const bases = rellenos.filter((r) => r.h > rect.h * 0.5 && r.color !== 'rgba(11,15,23,0.78)');
   assert.equal(bases.length, 2, 'las dos bases, altas y en los extremos');
   const puntos = (hex) => rellenos.filter((r) => r.color === hex && r.h < rect.h * 0.5);
-  assert.equal(puntos('#E5484D').length, 2, 'un punto por grupo izquierdo');
-  assert.equal(puntos('#5BC8F5').length, 1, 'y uno por grupo derecho con miembros');
+  assert.equal(puntos('#E5484D').length, 2, 'un punto por unidad izquierda');
+  assert.equal(puntos('#5BC8F5').length, 1, 'y uno por unidad derecha');
   for (const p of rellenos) {
     if (p.color !== '#E5484D' && p.color !== '#5BC8F5') continue;
     assert.ok(
       p.x >= rect.x - 1 && p.x + p.w <= rect.x + rect.w + 1 && p.y >= rect.y - 1 && p.y + p.h <= rect.y + rect.h + 1,
     );
   }
-  // el punto del grupo en (300, 400) cae en 300/1440 del ancho del minimapa
+  // el punto de la unidad en (300, 400) cae en 300/1440 del ancho del minimapa
   const p0 = puntos('#E5484D')[0];
   assert.ok(Math.abs(p0.x + p0.w / 2 - (rect.x + (300 / 1440) * rect.w)) <= 1);
   // el marco de lo que se ve: un strokeRect dentro del minimapa

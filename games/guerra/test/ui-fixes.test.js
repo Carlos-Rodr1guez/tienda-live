@@ -14,6 +14,7 @@ import { cameraButtonsGrid, cameraControls, layoutFor } from '../public/js/ui/la
 import { createScreenCache, matchEndModel, matchupModel, roundEndModel, screenFor } from '../public/js/ui/screens.js';
 import { entrance, rowHeight } from '../public/js/ui/screens-draw.js';
 import { S } from '../public/js/ui/strings.js';
+import { seedUnits } from '../public/js/sim/world.js';
 import { createPainter } from '../public/js/ui/paint.js';
 import { clearWidths, drawTabular } from '../public/js/ui/text.js';
 import {
@@ -324,6 +325,20 @@ test('C6 y C14: el CSS no fija familia de fuente (hereda la pila única), sus co
   assert.doesNotMatch(css, /rgb\(40 52 80/);
 });
 
+test('el lienzo mide exactamente la ventana: la grilla de #app tiene pistas fijas y no crece con el buffer del lienzo', () => {
+  // Con una fila implícita `auto`, el alto de la pista salía del alto intrínseco del canvas (el de su buffer anterior):
+  // con Chrome maximizado (1920×960) el lienzo quedaba en 1920×1080 y la banda inferior fuera de pantalla, y al pasar de
+  // vertical a horizontal quedaba en 1280×2276 mostrando el cielo. Con pistas del 100 % el 100 % del lienzo es la ventana.
+  const css = fs.readFileSync(`${GP}public/css/style.css`, 'utf8');
+  const app = css.match(/#app\s*\{([^}]*)\}/);
+  assert.ok(app, 'hay regla para #app');
+  assert.match(app[1], /grid-template-rows:\s*100%/);
+  assert.match(app[1], /grid-template-columns:\s*100%/);
+  const game = css.match(/#game\s*\{([^}]*)\}/);
+  assert.match(game[1], /width:\s*100%/);
+  assert.match(game[1], /height:\s*100%/);
+});
+
 // ---------------------------------------------------------------------------------------------------------------
 // C7: títulos de resultados sin pisar otro texto
 
@@ -608,7 +623,7 @@ test('C12: el velo de la pausa tarda 200 ms exactos y con movimiento reducido ap
 // ---------------------------------------------------------------------------------------------------------------
 // C13 y C14
 
-test('C13: el contador de grupos ("99+") lleva su ancho máximo y nunca pisa "Defensa" ni "Ataque", a todas las escalas', () => {
+test('C13: el contador «en campo» ("99+") lleva su ancho máximo y nunca pisa el rótulo, a todas las escalas', () => {
   for (const [W, H] of [
     [640, 360],
     [1280, 720],
@@ -617,7 +632,7 @@ test('C13: el contador de grupos ("99+") lleva su ancho máximo y nunca pisa "De
   ]) {
     const { match, registry } = partido();
     match.state = 'battle';
-    match.world.cmd[0].hud = { ...match.world.cmd[0].hud, defensa: 1234, ataque: 999 };
+    seedUnits(match.world, { side: 0, kind: 'soldado', count: 150, x: 300, y: 300, dy: 3 });
     const hud = hudModel({ match, registry, camera: CAMARA, net: null });
     const ui = interfaz();
     const ctx = createFakeCtx({ record: true, fontScale: 0.62 });
@@ -627,16 +642,12 @@ test('C13: el contador de grupos ("99+") lleva su ancho máximo y nunca pisa "De
         b.y0 < layoutFor(W, H).panelL.y + layoutFor(W, H).panelL.h &&
         b.x1 <= layoutFor(W, H).panelL.x + layoutFor(W, H).panelL.w,
     );
-    const defensa = bx.find((b) => b.text === 'Defensa');
-    const ataque = bx.find((b) => b.text === 'Ataque');
+    const rotulo = bx.find((b) => b.text === S.hud.inField);
     const cifras = bx.filter(
       (b) => /^[0-9+]$/.test(b.text) && b.y0 > layoutFor(W, H).panelL.y + 18 * layoutFor(W, H).u,
     );
-    assert.ok(defensa && ataque && cifras.length > 0, `${W}×${H}`);
-    for (const c of cifras) {
-      assert.ok(!cruza(c, defensa), `${W}×${H}: "${c.text}" pisa Defensa`);
-      assert.ok(!cruza(c, ataque), `${W}×${H}: "${c.text}" pisa Ataque`);
-    }
+    assert.ok(rotulo && cifras.length > 0, `${W}×${H}`);
+    for (const c of cifras) assert.ok(!cruza(c, rotulo), `${W}×${H}: "${c.text}" pisa el rótulo`);
   }
 });
 

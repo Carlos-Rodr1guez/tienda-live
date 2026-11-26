@@ -736,7 +736,7 @@ test('f2Model suma las líneas de la sesión y no suma nada si no hay sesión (?
       devicePass: true,
       canvasesAllocated: 0,
     },
-    counts: { units: 0, squads: 0, planes: 0, hits: 0 },
+    counts: { units: 0, planes: 0, hits: 0 },
     bakeCount: 0,
     hash: 'h',
   };

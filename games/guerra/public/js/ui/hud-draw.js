@@ -1,7 +1,7 @@
 // Dibujo del HUD (CB-17, diseño §10.1): los dos paneles de equipo, los rieles, el centro, el feed, el banner, el marco
 // del narrador y los avisos de conexión. Solo dibuja lo que dice el modelo (`ui/hud.js`, `ui/banners.js`); medidas en px
 // virtuales por la escala entera `u`. Sin identidad por color solo: cada equipo lleva chip con el nombre, punto con
-// forma (círculo / rombo) y su ícono de rol. Los números van en celdas fijas (no bailan) y los nombres recortados.
+// forma (círculo / rombo) y su conteo en campo. Los números van en celdas fijas (no bailan) y los nombres recortados.
 
 import { drawUiIcon } from '../render/icons.js';
 import { freeY } from './placement.js';
@@ -11,7 +11,7 @@ import { COLORS, TYPE } from './theme.js';
 const V = (u, n) => Math.round(n * u);
 const cap99 = (n) => (n > 99 ? '99+' : String(Math.max(0, Math.trunc(Number(n)) || 0)));
 
-/** Un panel de equipo (150×34 virtuales): chip, % de la base, barra, puntos de ronda y grupos salidos. */
+/** Un panel de equipo (150×34 virtuales): chip, % de la base, barra, puntos de ronda y unidades en campo. */
 function teamPanel(P, r, p, shown, icons) {
   const u = P.u;
   const ctx = P.ctx;
@@ -34,8 +34,7 @@ function teamPanel(P, r, p, shown, icons) {
     P.num(cap99(count), r.x + V(u, numX), cy, { color: COLORS.text, maxW: V(u, 14) });
     P.text(label, r.x + V(u, labelX), cy, { color: COLORS.muted, maxW: V(u, labelW) });
   };
-  grupo('shield', 22, 5, 33, 48, 31, p.departed.defensa, S.legend.defensa);
-  grupo('arrow', 81, 4, 92, 107, 40, p.departed.ataque, S.legend.ataque);
+  grupo('arrow', 22, 4, 33, 48, 70, p.inField, S.hud.inField);
   P.touch();
 }
 

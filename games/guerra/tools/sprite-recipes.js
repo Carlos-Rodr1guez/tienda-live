@@ -8,9 +8,9 @@
 // claro, s piel, k negro, g gris oscuro, l gris claro, m metal, b casi negro, w blanco, y amarillo, r rojo, f naranja,
 // a vidrio, c cromo. '.' es transparente. Los sprites miran al este (+x); el espejo se hornea al cargar.
 
-/** Pintor de filas de texto indexadas por paleta. */
-function pg(w, h) {
-  const g = Array.from({ length: h }, () => Array(w).fill('.'));
+/** Pintor de filas de texto indexadas por paleta. Con `init` (filas ya pintadas) sigue pintando sobre ellas. */
+function pg(w, h, init) {
+  const g = init ? init.map((r) => r.split('')) : Array.from({ length: h }, () => Array(w).fill('.'));
   const o = {
     p(c, x, y) {
       if (x >= 0 && y >= 0 && x < w && y < h) g[y][x] = c;
@@ -192,6 +192,10 @@ const orugas = (c, ph) => {
     P.e('g', wx, wy, wr, wr);
     P.p('l', wx, wy);
   }
+  if (c.rack) {
+    bastidor(P, c, c.fl ?? 0);
+    return P.ol().rows();
+  }
   P.e('d', c.tx, c.ty + 1, c.rx, c.ry)
     .e('t', c.tx, c.ty, c.rx, c.ry)
     .e('h', c.tx - 1, c.ty - 1, c.rx - 3, c.ry - 2);
@@ -200,6 +204,29 @@ const orugas = (c, ph) => {
   if (c.two) P.e('k', c.tx + 2, c.ty + 2, 1, 0);
   return P.ol().rows();
 };
+
+/**
+ * Lanzacohetes (v2.8): en lugar de la torreta, un bastidor con tres tubos paralelos sobre el casco. Cada tubo lleva una
+ * banda del color del equipo y un cohete (punta roja) asomando por la boca; con `fl` sale la llamarada y el humo.
+ */
+function bastidor(P, c, fl) {
+  const x0 = c.tx - 7;
+  const x1 = c.tx + 8;
+  P.r('g', x0 - 1, c.hy - 1, x1 - x0 + 3, 2).r('k', x0 - 1, c.hy, x1 - x0 + 3, 1);
+  for (const y of [c.hy - 7, c.hy - 5, c.hy - 3]) {
+    P.r('l', x0, y, x1 - x0 + 1, 1).r('m', x0, y + 1, x1 - x0 + 1, 1);
+    P.r('t', c.tx - 3, y, 2, 2).p('h', c.tx - 3, y);
+    P.r('k', x1, y, 1, 2)
+      .p('r', x1 + 1, y)
+      .p('y', x1 + 1, y + 1);
+    if (fl)
+      P.p('w', x1 + 2, y)
+        .p('y', x1 + 3, y)
+        .p('f', x1 + 2, y + 1)
+        .p('f', x1 + 4, y + 1);
+  }
+  P.r('g', x0, c.hy - 7, 1, 7).r('g', x1 - 1, c.hy - 7, 1, 7);
+}
 const barra = (L) => [rep('o', L), 'og' + rep('m', L - 4) + 'ko', rep('o', L)];
 const TKP = {
   W: 28,
@@ -238,6 +265,183 @@ const HVP = {
   ry: 5,
   two: 1,
 };
+
+/** Casco del lanzacohetes (v2.8): el del tanque, más largo, con el bastidor de tubos (`rack`) en vez de torreta. */
+const LCP = {
+  W: 32,
+  H: 22,
+  x0: 2,
+  x1: 27,
+  fy: 5,
+  fh: 3,
+  hy: 8,
+  hh: 6,
+  sh: 2,
+  nh: 5,
+  ws: 2,
+  wp: 4,
+  tx: 14,
+  ty: 8,
+  rx: 0,
+  ry: 0,
+  rack: 1,
+};
+
+// ---------------------------------------------------------------------------------------------------------------
+// Tipos nuevos de la v2.8 (francotirador, blindado y lobo). Mismas reglas que el resto: miran al este, el color del equipo
+// va en t/h/d y el espejo se hornea al cargar.
+
+/**
+ * Francotirador 15x13: el soldado con casco de camuflaje, rifle largo con mira telescópica y bípode. `l`/`r`: largo de cada
+ * pierna; `fl`: fogonazo en la boca del cañón (14, 6).
+ */
+const francotirador = (l, r, fl) => {
+  const P = pg(15, 13);
+  P.r('t', 2, 1, 3, 2).p('g', 3, 1).p('g', 2, 2).p('d', 2, 3).r('s', 3, 3, 2, 1);
+  P.r('t', 1, 4, 5, 3).r('h', 2, 4, 2, 1).r('d', 1, 7, 5, 2).r('k', 1, 7, 5, 1);
+  P.p('s', 5, 6).p('k', 6, 6).p('g', 7, 6).r('m', 8, 6, 6, 1);
+  P.r('k', 7, 5, 4, 1).p('a', 10, 5).p('l', 8, 5);
+  P.p('g', 11, 7).p('g', 12, 8);
+  const lg = (x, n) => {
+    P.r('d', x, 9, 2, n - 1).r('k', x, 8 + n, 2, 1);
+  };
+  lg(1, l);
+  lg(4, r);
+  P.ol();
+  if (fl) P.p('w', 14, 6).p('y', 14, 5).p('y', 14, 7);
+  return P.rows();
+};
+
+/** Caídas del francotirador: las del soldado ensanchadas a 15 columnas y, la última, con el rifle en el suelo. */
+const caidaLarga = (rows, rifle) => {
+  const P = pg(
+    15,
+    13,
+    rows.map((r) => r + '......'),
+  );
+  if (rifle) P.r('m', 7, 10, 6, 1).p('k', 13, 10).p('a', 9, 9).ol();
+  return P.rows();
+};
+
+/**
+ * Blindado 26x18: autoblindado de cuatro ruedas, casco de equipo con planchas, parabrisas, escotilla con ametralladora
+ * pesada en la torreta. `ph` gira los tornillos de las ruedas; `fl` es el fogonazo en la boca (25, 4).
+ */
+const blindado = (ph, fl) => {
+  const P = pg(26, 18);
+  P.r('k', 1, 11, 24, 2);
+  P.r('d', 2, 10, 22, 2).r('t', 2, 6, 22, 4).r('h', 2, 6, 22, 1).r('h', 17, 7, 6, 2);
+  P.r('t', 24, 7, 1, 3).p('d', 24, 10);
+  for (const x of [7, 13]) P.r('g', x, 7, 1, 3);
+  P.r('k', 3, 8, 3, 1).r('a', 19, 7, 3, 1).r('k', 19, 8, 3, 1);
+  P.r('g', 0, 8, 2, 1).p('k', 0, 7);
+  P.e('d', 11, 5, 3, 2).e('t', 11, 4, 3, 2).e('h', 10, 3, 1, 1);
+  P.e('k', 9, 4, 1, 1).p('l', 9, 4);
+  P.r('g', 13, 3, 2, 3).r('m', 15, 4, 9, 1).r('l', 15, 3, 3, 1).p('k', 24, 4);
+  for (const cx of [5, 10, 16, 21]) {
+    P.e('k', cx, 14, 2, 2).e('g', cx, 14, 1, 1);
+    if (ph === 0) P.p('l', cx, 14);
+    else if (ph === 1) P.p('l', cx - 1, 14).p('l', cx + 1, 14);
+    else P.p('l', cx, 13).p('l', cx, 15);
+  }
+  P.ol();
+  if (fl) P.p('w', 25, 4).p('y', 25, 3).p('y', 25, 5);
+  return P.rows();
+};
+
+/**
+ * Lobo 24x28: el héroe. Hombre lobo bípedo y encorvado visto de lado: lomo con cresta, cabeza de hocico largo con
+ * colmillos, arnés y hombrera del equipo, brazos largos con garras. `l`/`r`: paso de cada pierna (0 a 2 px) y `sw`
+ * (0 nada, 1 brazo alzado, 2 zarpazo: tres arcos blancos delante).
+ */
+const lobo = (l, r, sw) => {
+  const P = pg(24, 28);
+  const alto = sw >= 1;
+  // cola y lomo encorvado: la joroba queda más alta que la cabeza
+  P.r('g', 2, 16, 4, 2).p('g', 1, 17).p('b', 0, 18).p('b', 1, 18);
+  P.e('b', 8, 8, 4, 3).e('g', 10, 14, 5, 5).e('b', 7, 13, 3, 4);
+  P.p('k', 5, 5).p('k', 7, 4).p('k', 9, 4).p('k', 11, 5);
+  // pecho claro y arnés cruzado con hombrera del equipo
+  P.r('l', 14, 12, 2, 5);
+  for (let y = 9; y <= 19; y++) P.r('t', 12 - ((y - 9) >> 2), y, 2, 1).p('d', 14 - ((y - 9) >> 2), y);
+  P.r('h', 11, 7, 4, 1).r('t', 10, 8, 5, 2).r('d', 10, 10, 5, 1);
+  // taparrabos
+  P.r('k', 7, 19, 8, 1).r('d', 7, 20, 8, 2).r('t', 9, 21, 4, 1);
+  // cabeza: cuello, cráneo, orejas, hocico largo, ojo y colmillos
+  P.r('g', 14, 7, 3, 4).e('g', 18, 7, 3, 3);
+  P.p('k', 16, 2).r('g', 16, 3, 2, 2).p('k', 19, 2).r('g', 19, 3, 2, 2);
+  P.r('g', 20, 6, 3, 2).r('l', 20, 8, 4, 2).p('k', 23, 6).p('k', 23, 7);
+  P.p('y', 19, 6).p('r', 20, 6);
+  P.p('w', 21, 10).p('w', 23, 10).r('b', 20, 10, 3, 1);
+  // piernas digitigradas: muslo, tobillo hacia atrás y pie con garras
+  const pierna = (x, paso) => {
+    P.r('g', x, 22, 4, 2)
+      .r('b', x - 1, 24, 2, 2)
+      .r('g', x + 1 + paso, 24, 2, 2);
+    P.r('k', x - 1 + paso, 26, 5, 1).p('w', x + 4 + paso, 26);
+  };
+  pierna(6, l);
+  pierna(11, r);
+  // brazos largos: el cercano baja hacia delante con garras; con `sw` se alza
+  const dy = alto ? -7 : 0;
+  P.r('g', 13, 11 + dy, 2, 3)
+    .r('g', 15, 13 + dy, 2, 3)
+    .r('g', 17, 14 + dy, 2, 2)
+    .r('b', 18, 16 + dy, 2, 2);
+  P.p('w', 20, 16 + dy)
+    .p('w', 21, 17 + dy)
+    .p('w', 20, 18 + dy);
+  P.ol();
+  if (sw === 2) {
+    // zarpazo: tres arcos delante del brazo alzado
+    for (const [x, y] of [
+      [20, 7],
+      [21, 8],
+      [21, 9],
+      [22, 10],
+      [21, 11],
+      [22, 12],
+      [20, 13],
+      [21, 14],
+    ])
+      P.p(y % 2 ? 'w' : 'y', x, y);
+  }
+  return P.rows();
+};
+
+/** Caídas del lobo: derribado hacia delante, de lado y tendido (24x28, el cuerpo en la mitad de abajo). */
+const caidaLobo = [
+  pg(24, 28)
+    .e('g', 10, 18, 7, 5)
+    .r('t', 9, 14, 3, 8)
+    .e('g', 18, 14, 3, 3)
+    .r('l', 20, 14, 3, 2)
+    .r('g', 8, 23, 3, 3)
+    .r('k', 7, 26, 4, 1)
+    .p('y', 18, 13)
+    .ol()
+    .rows(),
+  pg(24, 28)
+    .e('g', 10, 21, 8, 4)
+    .r('t', 9, 18, 3, 6)
+    .e('g', 19, 20, 3, 2)
+    .r('l', 21, 20, 2, 2)
+    .r('g', 2, 21, 4, 2)
+    .r('k', 0, 24, 5, 1)
+    .p('w', 22, 23)
+    .ol()
+    .rows(),
+  pg(24, 28)
+    .e('g', 10, 24, 9, 3)
+    .r('t', 9, 22, 3, 5)
+    .r('g', 19, 24, 3, 2)
+    .r('l', 21, 24, 2, 2)
+    .r('g', 1, 24, 4, 2)
+    .r('b', 3, 22, 1, 1)
+    .p('w', 22, 26)
+    .ol()
+    .rows(),
+];
 
 // ---------------------------------------------------------------------------------------------------------------
 // Bombardero bimotor 44x34 visto desde arriba (vuela hacia +x): alas rectas con dos góndolas, nariz vidriada, cabina,
@@ -392,6 +596,58 @@ export function buildSprites() {
       mz2: [39, 14],
       barra: { rows: barra(18), dx: 22, dy: 9, dy2: 13 },
       anims: { idle: [hv(0)], walk: [hv(0), hv(1), hv(2)], shoot: [hv(0)], wreck: [quemar(hv(0))] },
+    },
+    francotirador: {
+      w: 15,
+      h: 13,
+      ax: 3,
+      ay: 11,
+      mz: [14, 6],
+      anims: {
+        idle: [francotirador(3, 3)],
+        walk: [francotirador(3, 2), francotirador(3, 3), francotirador(2, 3), francotirador(3, 3)],
+        shoot: [francotirador(3, 3), francotirador(3, 3, 1)],
+        death: [caidaLarga(muerte[0]), caidaLarga(muerte[1]), caidaLarga(muerte[2], true)],
+      },
+    },
+    blindado: {
+      w: 26,
+      h: 18,
+      ax: 12,
+      ay: 16,
+      mz: [25, 4],
+      anims: {
+        idle: [blindado(0)],
+        walk: [blindado(0), blindado(1), blindado(2)],
+        shoot: [blindado(0), blindado(0, 1)],
+        wreck: [quemar(blindado(0))],
+      },
+    },
+    lanzacohetes: {
+      w: 32,
+      h: 22,
+      ax: 14,
+      ay: 20,
+      mz: [26, 4],
+      anims: {
+        idle: [orugas(LCP, 0)],
+        walk: [orugas(LCP, 0), orugas(LCP, 1), orugas(LCP, 2)],
+        shoot: [orugas(LCP, 0), orugas({ ...LCP, fl: 1 }, 0)],
+        wreck: [quemar(orugas(LCP, 0))],
+      },
+    },
+    lobo: {
+      w: 24,
+      h: 28,
+      ax: 10,
+      ay: 26,
+      mz: [22, 14],
+      anims: {
+        idle: [lobo(0, 0, 0)],
+        walk: [lobo(0, 2, 0), lobo(1, 1, 0), lobo(2, 0, 0), lobo(1, 1, 0)],
+        shoot: [lobo(0, 0, 1), lobo(0, 0, 2)],
+        death: caidaLobo,
+      },
     },
     avion: {
       w: AW,

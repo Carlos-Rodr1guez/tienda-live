@@ -19,15 +19,7 @@ test('CB-17: en batalla se ve el HUD completo con los textos de S, y ya no el te
   return e.then((main) => {
     main.cuadros(4);
     const t = main.textos();
-    for (const esperado of [
-      'Perú',
-      'México',
-      'Ronda 1/3',
-      S.camera.manual,
-      S.legend.defensa,
-      S.legend.ataque,
-      S.frame,
-    ]) {
+    for (const esperado of ['Perú', 'México', 'Ronda 1/3', S.camera.manual, S.hud.inField, S.frame]) {
       assert.ok(t.includes(esperado), `falta "${esperado}"`);
     }
     assert.ok(!t.some((x) => x.includes('Enter: siguiente')), 'el texto provisional ya no está');
@@ -158,7 +150,7 @@ test('CB-13 y CB-17: con ?golden la interfaz dibuja el HUD y no pide ni muestra 
   const e = await arrancar('?golden&rapido=8');
   e.cuadros(10);
   assert.ok(hay(e, /^Ronda \d\/3$/));
-  assert.ok(e.textos().includes(S.legend.defensa));
+  assert.ok(e.textos().includes(S.hud.inField));
   assert.ok(PAISES.length > 0);
 });
 

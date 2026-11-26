@@ -13,6 +13,8 @@ export function createBases(cfg, field) {
   return field.sides.map((s, side) => ({
     side,
     frontX: s.frontX,
+    // el hangar (v2.8): el rectángulo que es la base; `frontX` es su cara frontal
+    hangar: s.hangar,
     hp: cfg.hq.hp,
     maxHp: cfg.hq.hp,
     fell: false,

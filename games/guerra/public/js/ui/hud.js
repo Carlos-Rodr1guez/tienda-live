@@ -3,7 +3,7 @@
 // recorre a los usuarios (usa `teamSizes()`), así que 5000 donantes cuestan lo mismo que ninguno. El estado de la red
 // llega inyectado (`net`): en 6a la página pasa `null` ("sin fuente") y el chip no se muestra; el lote 6b lo conecta.
 
-import { departedCounts } from '../render/icons.js';
+import { inFieldCounts } from '../render/icons.js';
 import { SIM_HZ } from '../sim/defaults.js';
 import { cameraControls } from './layout.js';
 import { S } from './strings.js';
@@ -77,7 +77,6 @@ export function hudModel({ match, registry, camera, net }) {
     visible: false,
     panels: [],
     rails: [],
-    legend: S.legend,
     controls,
     chip: netChip(net),
     alert: bridgeAlert(net),
@@ -89,7 +88,7 @@ export function hudModel({ match, registry, camera, net }) {
   const w = match.world;
   const cfg = w.cfg.round;
   const total = 2 * cfg.winsToMatch - 1;
-  const departed = departedCounts(w);
+  const inField = inFieldCounts(w);
   const sizes = registry ? registry.teamSizes() : [0, 0];
   const elapsed = CLOCK_STATES.has(match.state) ? Math.max(0, (w.step - w.roundStart) / SIM_HZ) : 0;
   const remaining = Math.max(0, cfg.seconds - elapsed);
@@ -107,7 +106,7 @@ export function hudModel({ match, registry, camera, net }) {
         filled: i < match.wins[side],
         shape: side === 0 ? 'circle' : 'diamond',
       })),
-      departed: departed[side],
+      inField: inField[side],
     };
   });
   const rails = match.pair.teams.map((team, side) => ({

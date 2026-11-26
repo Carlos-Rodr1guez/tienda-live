@@ -6,7 +6,7 @@ import { PAISES } from '../public/js/data/paises.js';
 import { createMatch, decideRound } from '../public/js/sim/match.js';
 import { hashMatch, hashWorld } from '../public/js/sim/hash.js';
 import { ledger } from '../public/js/sim/credit.js';
-import { seedSquad } from '../public/js/sim/world.js';
+import { seedUnits } from '../public/js/sim/world.js';
 
 // CB-5 (desempate), CB-6 (mejor de 3), NM-1, NM-2 (comandos y `newLive`), NM-9 (pausa) y CB-13 (determinismo del partido).
 
@@ -52,7 +52,7 @@ function porTiempo(m, preparar) {
 test('comandos exactos: los 7 del narrador y nada más; los otros devuelven {ok:false} sin cambiar el estado', () => {
   const m = partido();
   aBatalla(m);
-  seedSquad(m.world, { side: 0, kind: 'soldado' });
+  seedUnits(m.world, { side: 0, kind: 'soldado' });
   run(m, 5);
   const antes = hashMatch(m);
   const estado = m.state;
@@ -60,10 +60,8 @@ test('comandos exactos: los 7 del narrador y nada más; los otros devuelven {ok:
     'spawn',
     'damage',
     'setScore',
-    'setRole',
-    'assignSquad',
     'vote',
-    'seedSquad',
+    'seedUnits',
     'launchPlane',
     'setHp',
     'toString',
@@ -246,9 +244,9 @@ test('startRound solo vale en waitingNextRound y deja campo, grupos, contadores 
   assert.equal(m.state, 'battle');
   assert.equal(m.command({ type: 'startRound' }).ok, false, 'battle');
   const w = m.world;
-  // ensucia la ronda: grupos, golpe de torreta, cubo, contadores y una orden en la cola de cada lado
-  seedSquad(w, { side: 0, kind: 'soldado' });
-  seedSquad(w, { side: 1, kind: 'jeep' });
+  // ensucia la ronda: unidades, golpe de torreta, cubo, contadores y una orden en la cola de cada lado
+  seedUnits(w, { side: 0, kind: 'soldado' });
+  seedUnits(w, { side: 1, kind: 'jeep' });
   run(m, 120);
   w.bases[1].turrets[0].hp = 10;
   w.bases[0].bucket = 500;
@@ -272,7 +270,6 @@ test('startRound solo vale en waitingNextRound y deja campo, grupos, contadores 
   assert.equal(m.command({ type: 'startRound' }).ok, true);
   assert.equal(m.state, 'intro');
   assert.equal(w.units.length, 0);
-  assert.equal(w.squads.length, 0);
   assert.equal(w.hits.length + w.bombs.length + w.planes.length, 0);
   assert.equal(w.over, null);
   assert.deepEqual(
@@ -629,7 +626,7 @@ test('pausa: solo existe mientras hay partido en marcha (de lobby a la espera de
 test('a 300 s + 120 s de pared el reloj sigue en 300 s y no se creó ningún refuerzo ni cambió nada', () => {
   const m = partido({ round: { seconds: 600, introSeconds: 1, resultsSeconds: 1 } });
   aBatalla(m);
-  seedSquad(m.world, { side: 0, kind: 'soldado', count: 3, state: 'forming' });
+  seedUnits(m.world, { side: 0, kind: 'soldado', count: 3 });
   run(m, 300 * 30);
   const w = m.world;
   assert.equal(w.time, 300);
@@ -637,7 +634,7 @@ test('a 300 s + 120 s de pared el reloj sigue en 300 s y no se creó ningún ref
   const hash = hashWorld(w);
   const unidades = w.units.length;
   const colas = JSON.stringify(w.queues);
-  const grupos = w.squads.map((s) => [s.id, s.state, s.role, s.members.length]);
+  const marcha = w.units.map((u) => [u.id, u.phase, u.x, u.y]);
   const eventos = w.events.length;
   run(m, 120 * 30); // 120 s de pared
   assert.equal(w.time, 300);
@@ -645,8 +642,8 @@ test('a 300 s + 120 s de pared el reloj sigue en 300 s y no se creó ningún ref
   assert.equal(w.units.length, unidades);
   assert.equal(JSON.stringify(w.queues), colas);
   assert.deepEqual(
-    w.squads.map((s) => [s.id, s.state, s.role, s.members.length]),
-    grupos,
+    w.units.map((u) => [u.id, u.phase, u.x, u.y]),
+    marcha,
   );
   assert.equal(w.events.length, eventos);
   assert.equal(m.tick > 300 * 30 + 120 * 30, true, 'el reloj del log sigue');
@@ -766,29 +763,31 @@ test('el ronda siguiente cuenta para el soldado gratis: unirse en la espera da e
   assert.equal(r2.join, null);
 });
 
-test('NM-9 y CB-21: los temporizadores de ensamblaje del comandante no avanzan en pausa (salida a los 6 s del juego)', () => {
+test('NM-9 y CB-21: en pausa la cola no drena ni nadie se mueve; al reanudar la salida sigue con el ritmo normal', () => {
   const m = partido({ round: { seconds: 600, introSeconds: 1, resultsSeconds: 1 } });
   aBatalla(m);
   m.command({
     type: 'order',
-    order: { kind: 'soldado', team: 1, owner: null, count: 2, unitValue: 0, source: 'gift' },
+    order: { kind: 'soldado', team: 1, owner: null, count: 60, unitValue: 0, source: 'gift' },
   });
   const w = m.world;
-  const sq = () => w.squads.find((s) => s.side === 0 && s.kind === 'soldado');
-  let guardas = 0;
-  while ((sq()?.firstArrivalStep ?? -1) < 0 && guardas++ < 3000) m.step();
-  const llegada = sq().firstArrivalStep;
-  assert.ok(llegada >= 0);
-  run(m, 60); // 2 s de juego desde la primera llegada
+  run(m, 60);
+  const salidos = w.units.filter((u) => u.side === 0).length;
+  assert.ok(salidos >= 8 && salidos <= 20, `${salidos} salidos en 2 s`);
   m.command({ type: 'pause' });
-  run(m, 20 * 30); // 20 s de pared en pausa: más de los 6 s de la salida
-  assert.equal(sq().state, 'forming');
-  assert.equal(sq().firstArrivalStep, llegada);
+  const pos = w.units.map((u) => [u.id, u.x, u.y]);
+  const enCola = w.queues[0].groundUnits;
+  run(m, 20 * 30); // 20 s de pared en pausa
+  assert.deepEqual(
+    w.units.map((u) => [u.id, u.x, u.y]),
+    pos,
+    'nadie se movió',
+  );
+  assert.equal(w.queues[0].groundUnits, enCola, 'la cola no drenó');
   m.command({ type: 'resume' });
-  guardas = 0;
-  while (sq()?.state === 'forming' && guardas++ < 1000) m.step();
-  assert.ok(w.step - llegada >= 6 * 30, `salió a los ${w.step - llegada} pasos de juego`);
-  assert.ok(w.step - llegada <= 6 * 30 + 2);
+  run(m, 30);
+  const despues = w.units.filter((u) => u.side === 0).length;
+  assert.ok(despues - salidos >= 7 && despues - salidos <= 9, `salieron ${despues - salidos} en 1 s tras reanudar`);
 });
 
 test('pickPair solo vale en matchup y en lobby (cambiar de par antes de empezar); durante el partido se rechaza', () => {

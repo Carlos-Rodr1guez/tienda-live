@@ -2,16 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveConfig } from '../public/js/sim/defaults.js';
 import { ANIMATION_STATES, UNIT_TYPES, initialCooldown, unitStats } from '../public/js/sim/units.js';
-import { applyEvent, createWorld, seedSquad, stepWorld } from '../public/js/sim/world.js';
+import { applyEvent, createWorld, seedUnits, stepWorld } from '../public/js/sim/world.js';
 import { damageUnit, scheduleHit } from '../public/js/sim/combat.js';
-import {
-  FALL_STEPS,
-  bombPosition,
-  bombZ,
-  canLaunchPlane,
-  launchPlane,
-  planeTargetSquad,
-} from '../public/js/sim/plane.js';
+import { FALL_STEPS, bombPosition, bombZ, canLaunchPlane, launchPlane } from '../public/js/sim/plane.js';
 
 // CB-9: roster y regla de stats (#327). hp = 60·c·bonoHP, dps = 6·c·bonoDPS, daño = dps × cadencia.
 
@@ -22,7 +15,7 @@ test('hp y dps salen de la regla y daño / cadencia = dps en cada tipo', () => {
     soldado: { hp: 60, dps: 6, damage: 6 },
     jeep: { hp: 600, dps: 60, damage: 42 },
     tanque: { hp: 7500, dps: 750, damage: 937.5 },
-    pesado: { hp: 90000, dps: 3000, damage: 4500 },
+    pesado: { hp: 60000, dps: 3000, damage: 4500 }, // v2.7: bonoHP 1,5 → 1 (−33 %)
   };
   for (const [kind, e] of Object.entries(esperado)) {
     const s = unitStats(cfg, kind);
@@ -37,7 +30,8 @@ test('hp y dps salen de la regla y daño / cadencia = dps en cada tipo', () => {
 });
 
 test('alcance, velocidad, salpicadura y velocidad del proyectil de cada tipo', () => {
-  assert.equal(unitStats(cfg, 'soldado').range, 28);
+  assert.equal(unitStats(cfg, 'soldado').range, 63); // v2.7 y v2.8: alcance ×1,5 dos veces (28 → 42 → 63)
+  assert.equal(unitStats(cfg, 'pesado').range, 117);
   assert.equal(unitStats(cfg, 'jeep').speed, 64);
   assert.equal(unitStats(cfg, 'tanque').splash, 12.8);
   assert.equal(unitStats(cfg, 'pesado').splash, 19.2);
@@ -49,11 +43,31 @@ test('alcance, velocidad, salpicadura y velocidad del proyectil de cada tipo', (
   assert.equal(unitStats(cfg, 'soldado').cdSteps, 30);
 });
 
-test('el registro de tipos tiene los cinco con ids de ataque distintos y estados de animación', () => {
-  assert.deepEqual(Object.keys(UNIT_TYPES), ['soldado', 'jeep', 'tanque', 'pesado', 'avion']);
+test('el registro de tipos tiene los nueve con ids de ataque distintos y estados de animación', () => {
+  assert.deepEqual(Object.keys(UNIT_TYPES), [
+    'soldado',
+    'francotirador',
+    'jeep',
+    'blindado',
+    'tanque',
+    'lanzacohetes',
+    'pesado',
+    'lobo',
+    'avion',
+  ]);
   const ataques = Object.values(UNIT_TYPES).map((t) => t.attack);
-  assert.deepEqual(ataques, ['fusil', 'ametralladora', 'canon', 'canon-doble', 'bombas']);
-  assert.equal(new Set(ataques).size, 5);
+  assert.deepEqual(ataques, [
+    'fusil',
+    'rifle-largo',
+    'ametralladora',
+    'ametralladora-pesada',
+    'canon',
+    'cohetes',
+    'canon-doble',
+    'zarpazo',
+    'bombas',
+  ]);
+  assert.equal(new Set(ataques).size, 9);
   for (const k of Object.keys(UNIT_TYPES)) {
     assert.ok(Array.isArray(ANIMATION_STATES[k]) && ANIMATION_STATES[k].length > 0, k);
   }
@@ -79,29 +93,28 @@ test('el cooldown inicial es floor(frac(id·0,618034)·cdSteps), sin azar', () =
 
 // ------------------------------------------------------------------------------------ el mundo en combate
 
-const hold = (w, side, kind, x, y, count = 1) => {
-  const { squad } = seedSquad(w, { side, kind, count, x, y, state: 'holding' });
-  squad.postPos = { x, y };
-  return squad;
-};
+/** `count` unidades quietas en (x, y): el andamiaje de estas pruebas (no marchan, miran y disparan). */
+const hold = (w, side, kind, x, y, count = 1) => ({
+  members: seedUnits(w, { side, kind, count, x, y, yg: y, pinned: true }).units,
+});
 const run = (w, n) => {
   for (let i = 0; i < n; i++) stepWorld(w);
 };
 
-test('cada unidad de tierra es una entidad propia: 40 de daño a un soldado de un grupo de 5 solo cambia su HP', () => {
+test('cada unidad de tierra es una entidad propia: 40 de daño a un soldado de 5 juntos solo cambia su HP', () => {
   const w = createWorld();
-  const { squad } = seedSquad(w, { side: 0, kind: 'soldado', count: 5, x: 300, y: 448 });
-  const antes = squad.members.map((u) => u.hp);
-  damageUnit(w, squad.members[2], 40, { side: 1 });
+  const { members: quietos } = hold(w, 0, 'soldado', 300, 448, 5);
+  const antes = quietos.map((u) => u.hp);
+  damageUnit(w, quietos[2], 40, { side: 1 });
   assert.deepEqual(
-    squad.members.map((u) => u.hp),
+    quietos.map((u) => u.hp),
     antes.map((h, i) => (i === 2 ? 20 : h)),
   );
-  assert.ok(squad.members.every((u) => u.alive));
-  damageUnit(w, squad.members[2], 1000, { side: 1 }); // sin sobredaño: aplica solo lo que queda
-  assert.equal(squad.members[2].hp, 0);
-  assert.equal(squad.members[2].alive, false);
-  assert.equal(damageUnit(w, squad.members[2], 5, { side: 1 }), 0);
+  assert.ok(quietos.every((u) => u.alive));
+  damageUnit(w, quietos[2], 1000, { side: 1 }); // sin sobredaño: aplica solo lo que queda
+  assert.equal(quietos[2].hp, 0);
+  assert.equal(quietos[2].alive, false);
+  assert.equal(damageUnit(w, quietos[2], 5, { side: 1 }), 0);
 });
 
 test('el blanco es la unidad enemiga más cercana; el empate de distancia lo gana el id menor', () => {
@@ -122,12 +135,10 @@ test('el blanco es la unidad enemiga más cercana; el empate de distancia lo gan
   assert.equal(yo.tgt, a);
 });
 
-test('prioridad: unidad > torreta > base, y la base solo es blanco en ataque', () => {
+test('prioridad: unidad > torreta > base, y la base es blanco de TODA unidad (sin roles)', () => {
   const w = createWorld();
   const t = w.bases[1].turrets[1]; // (1340, 448)
-  const atk = hold(w, 0, 'soldado', 1330, 448);
-  atk.role = 'ataque';
-  const u = atk.members[0];
+  const u = hold(w, 0, 'soldado', 1330, 448).members[0];
   run(w, 1);
   assert.equal(u.tgtKind, 'turret');
   assert.equal(u.tgt, t);
@@ -135,25 +146,25 @@ test('prioridad: unidad > torreta > base, y la base solo es blanco en ataque', (
   const enemigo = hold(w, 1, 'soldado', 1320, 448).members[0];
   run(w, 1);
   assert.equal(u.tgt, enemigo);
-  // sin torreta ni unidad, la base (a ≤ alcance de su frente en x) si el grupo es de ataque
+  // sin torreta ni unidad, la base (a ≤ alcance de su frente en x): cualquier unidad la ataca, sin condición de rol
   const w2 = createWorld();
   w2.bases[1].turrets.forEach((x) => {
     x.hp = 0;
     x.on = false;
   });
-  const sq = hold(w2, 0, 'soldado', 1320, 448);
-  sq.role = 'ataque';
+  const v = hold(w2, 0, 'soldado', 1320, 448).members[0];
   run(w2, 1);
-  assert.equal(sq.members[0].tgtKind, 'base');
+  assert.equal(v.tgtKind, 'base');
+  assert.equal(v.tgt, w2.bases[1]);
+  // y no a más de su alcance (63) de la cara del hangar: a 64 px no hay blanco
   const w3 = createWorld();
   w3.bases[1].turrets.forEach((x) => {
     x.hp = 0;
     x.on = false;
   });
-  const def = hold(w3, 0, 'soldado', 1320, 448);
-  def.role = 'defensa';
+  const lejos = hold(w3, 0, 'soldado', 1350 - 64, 448).members[0];
   run(w3, 1);
-  assert.equal(def.members[0].tgt, null);
+  assert.equal(lejos.tgt, null);
 });
 
 test('el disparo es un golpe programado en step + max(1, ceil(dist/velocidad·30))', () => {
@@ -257,10 +268,10 @@ test('nadie dispara sin mirar a su blanco: gira 9 pasos y recién entonces dispa
 test('mismo estado, mismo resultado, sin RNG: dos corridas iguales y Math.random reemplazado por una función que lanza', () => {
   const armar = () => {
     const w = createWorld();
-    seedSquad(w, { side: 0, kind: 'soldado', count: 10, x: 200 });
-    seedSquad(w, { side: 0, kind: 'jeep', count: 4, x: 160, lane: 1 });
-    seedSquad(w, { side: 1, kind: 'tanque', count: 2, x: 700, lane: 2, corridor: 1 });
-    seedSquad(w, { side: 1, kind: 'soldado', count: 10, x: 1200 });
+    seedUnits(w, { side: 0, kind: 'soldado', count: 10, x: 200, y: 300, dy: 25 });
+    seedUnits(w, { side: 0, kind: 'jeep', count: 4, x: 160, y: 350, dy: 90 });
+    seedUnits(w, { side: 1, kind: 'tanque', count: 2, x: 700, y: 500, dy: 60 });
+    seedUnits(w, { side: 1, kind: 'soldado', count: 10, x: 1200, y: 300, dy: 25 });
     return w;
   };
   const a = armar();
@@ -286,59 +297,36 @@ test('mismo estado, mismo resultado, sin RNG: dos corridas iguales y Math.random
 
 // ------------------------------------------------------------------------------------------------- avión
 
-test('lanzamiento: ≤ 2 vivos por lado, ≥ 1,5 s entre lanzamientos, entra en x -44 o 1484 a z 48 con vx ±120', () => {
+test('lanzamiento: 1 vivo por lado, ≥ 8 s entre lanzamientos, entra en x -44 o 1484 a z 48 con vx ±120', () => {
   const w = createWorld();
   const r1 = launchPlane(w, 0);
   assert.ok(r1.ok);
   assert.equal(r1.plane.x, -44);
   assert.equal(r1.plane.vx, 120);
   assert.equal(r1.plane.z, 48);
-  assert.deepEqual(launchPlane(w, 0), { ok: false, reason: 'gap' });
-  run(w, 44);
-  assert.equal(canLaunchPlane(w, 0).ok, false);
-  run(w, 1);
-  assert.ok(launchPlane(w, 0).ok);
-  run(w, 45);
-  assert.deepEqual(launchPlane(w, 0), { ok: false, reason: 'cap' });
+  assert.deepEqual(launchPlane(w, 0), { ok: false, reason: 'cap' }, 'un solo avión por lado en el aire');
+  // el intervalo, solo: con 2 vivos permitidos, el segundo espera 8 s (240 pasos)
+  const g = createWorld({ limits: { maxPlanesPerTeam: 2 } });
+  assert.ok(launchPlane(g, 0).ok);
+  assert.deepEqual(launchPlane(g, 0), { ok: false, reason: 'gap' });
+  run(g, 239);
+  assert.equal(canLaunchPlane(g, 0).ok, false);
+  run(g, 1);
+  assert.ok(launchPlane(g, 0).ok);
+  run(g, 100); // el primero sigue en el aire (vuela 382 pasos): dos vivos = tope
+  assert.deepEqual(launchPlane(g, 0), { ok: false, reason: 'cap' });
   const d = launchPlane(w, 1).plane;
   assert.equal(d.x, 1484);
   assert.equal(d.vx, -120);
 });
 
-test('blanco del avión: grupo enemigo salido de mayor fuerza en la mitad lejana; si no hay, el de mayor fuerza; empate por id', () => {
+test('bombas: una entidad por bomba desde la suelta hasta el impacto (14 pasos); bombsLeft baja de N a 0 y el daño es de 300', () => {
   const w = createWorld();
-  const cerca = hold(w, 1, 'pesado', 1000, 448); // en la mitad lejana de un avión izquierdo
-  const lejos = hold(w, 1, 'soldado', 800, 300, 10);
-  hold(w, 0, 'pesado', 900, 448); // propio: nunca cuenta
-  const p = launchPlane(w, 0).plane;
-  assert.equal(planeTargetSquad(w, p), cerca);
-  cerca.members[0].hp = 1; // casi sin fuerza: gana el grupo de soldados
-  assert.equal(planeTargetSquad(w, p), lejos);
-  // sin nadie en la mitad lejana: el de mayor fuerza
-  const w2 = createWorld();
-  const a = hold(w2, 1, 'jeep', 500, 300, 4);
-  hold(w2, 1, 'soldado', 600, 448, 10);
-  assert.equal(planeTargetSquad(w2, launchPlane(w2, 0).plane), a);
-  // sin grupos: nada (apunta a la base)
-  const w5 = createWorld();
-  assert.equal(planeTargetSquad(w5, launchPlane(w5, 0).plane), null);
-  // un grupo en formación no cuenta como salido
-  const w3 = createWorld();
-  hold(w3, 1, 'pesado', 1000, 448).state = 'forming';
-  assert.equal(planeTargetSquad(w3, launchPlane(w3, 0).plane), null);
-  // empate de fuerza: el id menor
-  const w4 = createWorld();
-  const p1 = hold(w4, 1, 'soldado', 1000, 300, 5);
-  hold(w4, 1, 'soldado', 1000, 600, 5);
-  assert.equal(planeTargetSquad(w4, launchPlane(w4, 0).plane), p1);
-});
-
-test('bombas: 5 llevadas, una entidad por paso desde la suelta hasta el impacto (14 pasos), 900 a ≤ 24 px', () => {
-  const w = createWorld();
-  const objetivo = hold(w, 1, 'tanque', 900, 448, 2);
+  const objetivo = hold(w, 1, 'tanque', 628, 450, 2); // en la línea (banda 426 a 474) y sobre el impacto 14
   objetivo.members.forEach((u) => (u.hp = u.maxHp = 50000));
   const p = launchPlane(w, 0).plane;
-  assert.equal(p.bombsLeft, 5);
+  assert.equal(p.bombsLeft, p.bombsTotal);
+  assert.equal(p.bombsTotal, 34);
   const existencia = new Map(); // id de bomba -> pasos en que existió
   let primera = -1;
   for (let i = 0; i < 900 && w.planes.length > 0; i++) {
@@ -346,20 +334,21 @@ test('bombas: 5 llevadas, una entidad por paso desde la suelta hasta el impacto 
     for (const b of w.bombs) existencia.set(b.id, (existencia.get(b.id) ?? 0) + 1);
     if (primera < 0 && w.bombs.length > 0) {
       primera = i;
-      assert.equal(p.bombsLeft, 4, 'al soltar la primera quedan 4');
+      assert.equal(p.bombsLeft, 33, 'al soltar la primera queda una menos');
     }
   }
-  assert.equal(existencia.size, 5);
+  assert.equal(existencia.size, 34);
   for (const n of existencia.values()) assert.equal(n, FALL_STEPS);
   assert.equal(FALL_STEPS, 14);
+  assert.equal(p.bombsLeft, 0);
   run(w, 20);
   assert.equal(w.bombs.length, 0);
-  // los tanques recibieron golpes de 900 (a ≤ 24 px del punto de impacto)
+  // los tanques recibieron golpes de 300 (a ≤ 24 px del punto de impacto)
   const total = objetivo.members.reduce((s, u) => s + (50000 - u.hp), 0);
-  assert.ok(total > 0 && total % 900 === 0, `daño total ${total}`);
+  assert.ok(total > 0 && total % 300 === 0, `daño total ${total}`);
 });
 
-test('una bomba daña a la torreta enemiga a ≤ 24 px y a la base si |x - frente| ≤ 24, y nunca a su equipo', () => {
+test('una bomba daña a la torreta enemiga a ≤ 24 px y al hangar si el círculo toca su rectángulo, y nunca a su equipo', () => {
   const w = createWorld();
   const propio = hold(w, 0, 'soldado', 1332, 448).members[0];
   const enemigo = hold(w, 1, 'soldado', 1340, 460).members[0];
@@ -367,15 +356,15 @@ test('una bomba daña a la torreta enemiga a ≤ 24 px y a la base si |x - frent
   enemigo.hp = enemigo.maxHp = 5000;
   propio.cd = 99;
   enemigo.cd = 99;
-  w.bombs.push({ id: 99, side: 0, owner: null, x0: 1332, y0: 448, tx: 1332, ty: 448, dropStep: 0, impactStep: w.step });
+  w.bombs.push({ id: 99, side: 0, owner: null, x0: 1350, y0: 448, tx: 1350, ty: 448, dropStep: 0, impactStep: w.step });
   w.bases[1].bucket = 1e9; // este test no mide el cubo (CB-12 está en whale.test.js)
   const hp0 = w.bases[1].hp;
   const t0 = w.bases[1].turrets[1].hp;
   run(w, 1);
-  assert.equal(enemigo.hp, 5000 - 900);
+  assert.equal(enemigo.hp, 5000 - 300);
   assert.equal(propio.hp, 5000, 'una bomba nunca daña al propio equipo');
-  assert.equal(w.bases[1].hp, hp0 - 900);
-  assert.equal(w.bases[1].turrets[1].hp, t0 - 900);
+  assert.equal(w.bases[1].hp, hp0 - 300);
+  assert.equal(w.bases[1].turrets[1].hp, t0 - 300);
   assert.equal(w.bases[0].turrets[1].hp, w.cfg.turret.hp);
 });
 
@@ -421,7 +410,7 @@ test('posición y altura de una bomba son funciones puras del estado y llegan al
 // ---------------------------------------------------------------------------------------------------- energía (4c.11)
 // CB-14, KIT-19 `strike`, CB-11 (energía sin atribuir).
 
-test('barra llena con grupos de distinta fuerza: 3 golpes de 160, radio 20, sobre el más fuerte, en los pasos +0, +8 y +16', async () => {
+test('barra llena con racimos de distinta fuerza: 3 golpes de 160, radio 20, sobre el más fuerte, en los pasos +0, +8 y +16', async () => {
   const { createRegistry } = await import('@tienda/kit/sim/registry.js');
   const PE = { id: 'pe', name: 'Perú', iso: 'PE', aliases: ['peru'] };
   const MX = { id: 'mx', name: 'México', iso: 'MX', aliases: ['mexico'] };
@@ -448,8 +437,8 @@ test('barra llena con grupos de distinta fuerza: 3 golpes de 160, radio 20, sobr
     assert.equal(h.owner, null, 'sin dueño');
     assert.equal(h.side, 0);
     assert.ok(
-      Math.abs(h.tx - fuerte.anchor.x) <= 12 + 1e-9 && Math.abs(h.ty - fuerte.anchor.y) <= 10 + 1e-9,
-      'sobre el grupo más fuerte',
+      Math.abs(h.tx - fuerte.members[0].x) <= 12 + 1e-9 && Math.abs(h.ty - fuerte.members[0].y) <= 10 + 1e-9,
+      'sobre el racimo más fuerte',
     );
   }
   const hp0 = w.bases[1].hp;
@@ -463,12 +452,12 @@ test('barra llena con grupos de distinta fuerza: 3 golpes de 160, radio 20, sobr
   );
   assert.ok(
     fuerte.members.some((u) => u.hp < u.maxHp),
-    'el grupo más fuerte sí',
+    'el racimo más fuerte sí',
   );
   assert.ok(debil.members.every((u) => u.hp === u.maxHp));
 });
 
-test('sin grupos enemigos la base recibe 600 por el cubo', () => {
+test('sin unidades enemigas la base recibe 600 por el cubo', () => {
   const w = createWorld();
   w.bases[1].bucket = 800;
   const r = applyEvent(w, { type: 'strike', side: 0 });
@@ -498,8 +487,7 @@ test('los impactos que caen sobre una torreta la dañan', () => {
   const t = w.bases[1].turrets[1];
   const g = hold(w, 0, 'soldado', t.x - 4, t.y, 3);
   g.members.forEach((u) => (u.cd = 1e9));
-  seedSquad(w, { side: 1, kind: 'soldado', x: t.x - 6, y: t.y, state: 'holding', count: 1 }); // blanco: tiene que ser un grupo del lado 1
-  w.squads[w.squads.length - 1].members.forEach((u) => (u.cd = 1e9));
+  hold(w, 1, 'soldado', t.x - 6, t.y).members.forEach((u) => (u.cd = 1e9)); // el blanco de la energía: una unidad del lado 1
   const hp0 = t.hp;
   applyEvent(w, { type: 'strike', side: 0 });
   run(w, 20);

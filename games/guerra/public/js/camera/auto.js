@@ -8,8 +8,20 @@
 
 import { SHARP_BELOW } from '../render/scale.js';
 
-/** Peso de un miembro en el calor de su grupo: soldado 1, jeep 2, tanque 3, pesado 4 (R6). */
-export const KIND_WEIGHT = Object.freeze({ soldado: 1, jeep: 2, tanque: 3, pesado: 4 });
+/** Peso de un miembro en el calor de su celda (R6): soldado 1, jeep y francotirador 2, blindado y tanque 3, lanzacohetes y pesado 4, lobo 6. */
+export const KIND_WEIGHT = Object.freeze({
+  soldado: 1,
+  francotirador: 2,
+  jeep: 2,
+  blindado: 3,
+  tanque: 3,
+  lanzacohetes: 4,
+  pesado: 4,
+  lobo: 6,
+});
+
+/** Calor de la muerte de un vehículo o héroe (el soldado y el francotirador no calientan). */
+const MUERTE_CALOR = Object.freeze({ jeep: 2, blindado: 3, tanque: 4, lanzacohetes: 5, pesado: 8, lobo: 12 });
 
 /** Duración del calor de un evento, en segundos, y su constante de decaimiento. */
 const HEAT_LIFE = 5;
@@ -17,8 +29,8 @@ const HEAT_TAU = 2.5;
 const SIM_HZ = 30;
 /** Un golpe a la base calienta como mucho una vez cada 0,8 s por base. */
 const BASE_HIT_GAP = Math.round(0.8 * SIM_HZ);
-/** Los eventos de la base van en (60 | 1380, 448), como en el v3. */
-const BASE_X = [60, 1380];
+/** Los eventos de la base van en el centro de su hangar (v2.8): (52 | 1388, 448). */
+const BASE_X = [52, 1388];
 const BASE_Y = 448;
 
 /** Cantidad fija de eventos de calor recordados: un anillo, así no se reserva memoria por evento. */
@@ -53,15 +65,16 @@ export function createHeat() {
       for (let i = 0; i < events.length; i++) {
         const e = events[i];
         switch (e.type) {
-          case 'shot': // obús del tanque (2) o del pesado (4), en su blanco
+          case 'shot': // obús del tanque (2), cohete (3), obús del pesado o zarpazo del lobo (4), en su blanco
             if (e.kind === 'tanque') heat.add(e.tx, e.ty, 2, step);
-            else if (e.kind === 'pesado') heat.add(e.tx, e.ty, 4, step);
+            else if (e.kind === 'lanzacohetes') heat.add(e.tx, e.ty, 3, step);
+            else if (e.kind === 'pesado' || e.kind === 'lobo') heat.add(e.tx, e.ty, 4, step);
             break;
-          case 'bombImpact':
-            heat.add(e.x, e.y, 2, step);
+          case 'bombImpact': // la alfombra suelta 34 por pasada: solo calientan las que dañaron a alguien
+            if (e.hits > 0) heat.add(e.x, e.y, 2, step);
             break;
           case 'death': {
-            const w = e.kind === 'jeep' ? 2 : e.kind === 'tanque' ? 4 : e.kind === 'pesado' ? 8 : 0;
+            const w = MUERTE_CALOR[e.kind] ?? 0;
             if (w > 0) heat.add(e.x, e.y, w, step);
             break;
           }
@@ -98,7 +111,53 @@ export function createHeat() {
   return heat;
 }
 
-const KINDS = ['soldado', 'jeep', 'tanque', 'pesado'];
+// la vista no importa del sim: la lista repite el roster de `GROUND_KINDS` (una prueba las compara)
+const KINDS = ['soldado', 'francotirador', 'jeep', 'blindado', 'tanque', 'lanzacohetes', 'pesado', 'lobo'];
+
+/** Celda de los focos de combate (px de mundo) y tope de celdas (v2.6: ya no hay grupos que fijar). */
+const CELL = 48;
+const MAX_CELLS = 120;
+const cellMap = new Map();
+const cellPool = [];
+
+/**
+ * Los focos de combate: las unidades con blanco por alcance, agrupadas por lado en celdas de 48 px (tope 120). Cada
+ * celda se presenta con la forma que lee `autoTarget` (`locked`, `members`, `anchor`, `side`, `kind`). Orden estable:
+ * el de `world.units`. Los arreglos de las celdas se reutilizan entre llamadas.
+ * @param {any} world
+ * @param {any[]} out se reutiliza
+ */
+export function engagedCells(world, out) {
+  cellMap.clear();
+  let n = 0;
+  for (const u of world.units) {
+    if (!u.alive || u.tgt === null) continue;
+    const key = (u.side * 4096 + Math.floor(u.y / CELL)) * 4096 + Math.floor(u.x / CELL);
+    let c = cellMap.get(key);
+    if (c === undefined) {
+      if (n >= MAX_CELLS) continue;
+      c =
+        cellPool[n] ?? (cellPool[n] = { locked: true, side: 0, kind: 'soldado', anchor: { x: 0, y: 0 }, members: [] });
+      c.side = u.side;
+      c.kind = u.kind;
+      c.anchor.x = 0;
+      c.anchor.y = 0;
+      c.members.length = 0;
+      cellMap.set(key, c);
+      out[n++] = c;
+    }
+    c.members.push(u);
+    c.anchor.x += u.x;
+    c.anchor.y += u.y;
+  }
+  for (let i = 0; i < n; i++) {
+    const c = out[i];
+    c.anchor.x /= c.members.length;
+    c.anchor.y /= c.members.length;
+  }
+  out.length = n;
+  return out;
+}
 
 /**
  * Arma (o actualiza) la vista del sim que lee `autoTarget`: referencias al mundo, sin copiar nada.
@@ -108,7 +167,7 @@ const KINDS = ['soldado', 'jeep', 'tanque', 'pesado'];
  */
 export function simViewOf(world, heat, out = {}) {
   out.step = world.step;
-  out.squads = world.squads;
+  out.cells = engagedCells(world, out.cells ?? []);
   out.planes = world.planes;
   out.dir ??= [1, -1];
   out.dir[0] = world.field.sides[0].dir;
@@ -128,13 +187,13 @@ const FW = new Float64Array(MAX_FOCI);
 /**
  * El encuadre que la cámara automática pide, o `{all: true}` para el mapa entero. Es una función del estado.
  *
- * Focos (nunca por unidad): cada grupo TRABADO aporta un punto en su ancla corrido `dir·alcance/2` hacia el enemigo,
- * con el peso de sus miembros; cada evento reciente, `w·exp(−edad/2,5 s)` hasta los 5 s; cada avión, un punto adelante
+ * Focos (nunca por unidad): cada celda de combate (v2.6: las unidades con blanco de un lado en una celda de 48 px, ver
+ * `engagedCells`) aporta un punto en su centro corrido `dir·alcance/2` hacia el enemigo, con el peso de sus unidades; cada evento reciente, `w·exp(−edad/2,5 s)` hasta los 5 s; cada avión, un punto adelante
  * en su ruta con peso 3. El calor de un foco es la suma de pesos dentro de ±135×±83. Gana el de más calor; el actual se
  * conserva mientras tenga ≥ 80 % del mejor. Si el mejor no llega al 30 % del total, o el total es chico, mapa entero.
  *
  * @param {{
- *   step: number, squads: any[], planes: any[], dir: number[], range: Record<string, number>,
+ *   step: number, cells: any[], planes: any[], dir: number[], range: Record<string, number>,
  *   events: {x: number, y: number, w: number, step: number}[]
  * }} sv
  * @param {{x: number, y: number} | null | undefined} prev foco elegido la vez anterior
@@ -143,7 +202,7 @@ const FW = new Float64Array(MAX_FOCI);
  */
 export function autoTarget(sv, prev, cfg) {
   let n = 0;
-  let groups = 0;
+  let foci = 0;
   let total = 0;
   const add = (x, y, w) => {
     if (n >= MAX_FOCI || !(w > 0)) return;
@@ -153,12 +212,12 @@ export function autoTarget(sv, prev, cfg) {
     total += w;
     n++;
   };
-  for (const sq of sv.squads) {
-    if (!sq.locked || sq.members.length === 0) continue;
+  for (const c of sv.cells) {
+    if (!c.locked || c.members.length === 0) continue;
     let w = 0;
-    for (const m of sq.members) w += KIND_WEIGHT[m.kind] ?? 1;
-    add(sq.anchor.x + (sv.dir[sq.side] * (sv.range[sq.kind] ?? 28)) / 2, sq.anchor.y, w);
-    groups++;
+    for (const m of c.members) w += KIND_WEIGHT[m.kind] ?? 1;
+    add(c.anchor.x + (sv.dir[c.side] * (sv.range[c.kind] ?? 28)) / 2, c.anchor.y, w);
+    foci++;
   }
   for (const e of sv.events) {
     if (!(e.w > 0)) continue;
@@ -168,7 +227,7 @@ export function autoTarget(sv, prev, cfg) {
   }
   for (const p of sv.planes) add(p.x + p.vx * 1.2, p.y - p.z / 2, 3);
 
-  if (n === 0 || total < 1.5 || (total < 3 && groups < 2)) return ALL;
+  if (n === 0 || total < 1.5 || (total < 3 && foci < 2)) return ALL;
 
   const [winX, winY] = cfg.heatBox;
   const heatAt = (x, y) => {
@@ -296,7 +355,8 @@ export function createMoments({ heat, enabled = true, limit = 3, coins = 500 }) 
     /** Un regalo del público: es momento si llega al umbral de monedas o el adaptador dice que es grande (`null` si no). */
     gift(g, ctx) {
       if (!(g.coins >= coins || g.big === true)) return null;
-      return moments.push({ ...g, kind: 'gift' }, ctx);
+      // v2.8: el regalo del héroe (`hero: 'lobo'`) lleva su propio cartel
+      return moments.push({ ...g, kind: g.hero === 'lobo' ? 'wolf' : 'gift' }, ctx);
     },
     /** Momentos con foco todavía vivo. */
     active(step) {

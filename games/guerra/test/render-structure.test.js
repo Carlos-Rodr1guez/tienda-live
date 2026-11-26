@@ -667,7 +667,9 @@ function escena() {
       u(3, 1, 'soldado', 340, 300),
       u(4, 1, 'tanque', 360, 250),
     ],
-    planes: [{ id: 9, side: 0, x: 500, y: 300, px: 496, py: 300, z: 48, vx: 120, vy: 0, bombsLeft: 5 }],
+    planes: [
+      { id: 9, side: 0, x: 500, y: 300, px: 496, py: 300, z: 48, vx: 120, vy: 0, bombsLeft: 34, bombsTotal: 34 },
+    ],
     bombs: [{ id: 10, side: 0, x0: 480, y0: 300, tx: 520, ty: 310, dropStep: 95, impactStep: 109 }],
     wrecks: [{ x: 330, y: 350, kind: 'jeep', side: 0, dir: 1, born: 80 }],
     projectiles: [{ kind: 0, x0: 300, y0: 400, z0: 6, tx: 340, ty: 300, tz: 6, step0: 99, dur: 0.2 }],
@@ -697,7 +699,7 @@ const orden = (s) => {
   return { nombres, main, bank, team, r, factory };
 };
 
-test('orden de capas con s = 1,333 (todo en LOW): terreno, cielo, cráteres, bases, sombras, unidades y restos, proyectiles, sombras de aire, bombas y aviones, efectos, íconos, y al final la copia', () => {
+test('orden de capas con s = 1,333 (todo en LOW): terreno, cielo, cráteres, bases, sombras, unidades y restos, proyectiles, sombras de aire, bombas y aviones, efectos, y al final la copia', () => {
   const { nombres } = orden(1920 / 1440);
   assert.deepEqual(nombres, [
     'terrain',
@@ -710,7 +712,6 @@ test('orden de capas con s = 1,333 (todo en LOW): terreno, cielo, cráteres, bas
     'airShadows',
     'bombsPlanes',
     'effects',
-    'icons',
     'copy',
   ]);
 });
@@ -729,7 +730,6 @@ test('orden de capas con s = 4 (pasada de dispositivo): LOW se copia antes que l
     'airShadows',
     'bombsPlanes',
     'effects',
-    'icons',
   ]);
 });
 
@@ -775,7 +775,7 @@ test('escena: los restos, proyectiles y cráteres nunca superan su tope aunque l
       [
         { type: 'death', id: i, kind: i % 2 ? 'jeep' : 'soldado', side: i % 2, x: i % 1400, y: 300 },
         { type: 'shot', id: i, kind: 'tanque', x: 300, y: 300, tx: 340, ty: 300 },
-        { type: 'bombImpact', x: i % 1400, y: 400, side: 0 },
+        { type: 'bombImpact', x: i % 1400, y: 400, side: 0, hits: 1 },
       ],
       w,
     );
@@ -790,7 +790,7 @@ test('escena: el soldado se quita a los 3,1 s, el vehículo a los 7,5 s y el cr�
     [
       { type: 'death', id: 1, kind: 'soldado', side: 0, x: 10, y: 10 },
       { type: 'death', id: 2, kind: 'tanque', side: 1, x: 20, y: 10 },
-      { type: 'bombImpact', x: 5, y: 5, side: 0 },
+      { type: 'bombImpact', x: 5, y: 5, side: 0, hits: 1 },
     ],
     w,
   );
@@ -1095,7 +1095,7 @@ test('LOD de marcas: cada unidad es un rectángulo del color del equipo (3x2, 6x
   assert.ok(!sprites.includes(bank.frame(team[0], 'soldado', 'idle', 0, false)));
 });
 
-test('LOD de marcas: los aviones no cambian (siguen con su sprite) y los íconos no se tocan', () => {
+test('LOD de marcas: los aviones no cambian (siguen con su sprite)', () => {
   const { low, bank, team } = dibuja(960, 540, 960 / 1440, [unidad(1, 0, 'soldado', 300, 300)]);
   const imgs = low.filter((c) => c[0] === 'drawImage').map((c) => c[1]);
   assert.ok(
@@ -1281,7 +1281,7 @@ const entradaF2 = (extra = {}) => ({
     entities: 410,
     canvasesAllocated: 3,
   },
-  counts: { units: 400, squads: 41, planes: 2, hits: 33 },
+  counts: { units: 400, planes: 2, hits: 33 },
   bakeCount: 2,
   hash: 'a1b2c3d4',
   ...extra,
@@ -1297,7 +1297,6 @@ test('F2: fps, ms por etapa, entidades, partículas, llamadas de dibujo, recorta
   assert.equal(valor(m, 'ms.ui'), '0.90');
   assert.equal(valor(m, 'ms.work'), '4.51');
   assert.equal(valor(m, 'units'), '400');
-  assert.equal(valor(m, 'squads'), '41');
   assert.equal(valor(m, 'planes'), '2');
   assert.equal(valor(m, 'hits'), '33');
   assert.equal(valor(m, 'particles'), '87');

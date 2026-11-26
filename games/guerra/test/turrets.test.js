@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorld, resetRound, seedSquad, stepWorld } from '../public/js/sim/world.js';
+import { createWorld, resetRound, seedUnits, stepWorld } from '../public/js/sim/world.js';
 import { createScene } from '../public/js/render/scene.js';
 import { SPRITES } from '../public/js/data/sprites.js';
 import { scheduleHit } from '../public/js/sim/combat.js';
@@ -12,10 +12,9 @@ const run = (w, n) => {
   for (let i = 0; i < n; i++) stepWorld(w);
 };
 const quieto = (w, side, kind, x, y, count = 1) => {
-  const { squad } = seedSquad(w, { side, kind, count, x, y, state: 'holding' });
-  squad.postPos = { x, y };
-  for (const u of squad.members) u.hp = u.maxHp = 1e9;
-  return squad;
+  const { units } = seedUnits(w, { side, kind, count, x, y, yg: y, pinned: true });
+  for (const u of units) u.hp = u.maxHp = 1e9;
+  return { members: units };
 };
 
 test('tres torretas idénticas por base: mismo conteo y mismos stats con HP', () => {
@@ -66,7 +65,7 @@ test('blanco de la torreta: la unidad de tierra enemiga más cercana, con arco f
   assert.equal(w3.bases[0].turrets[1].tgt, null);
 });
 
-test('dispara 40 de daño cada 10 pasos con alcance 70', () => {
+test('dispara 40 de daño cada 10 pasos con alcance 105', () => {
   const w = createWorld();
   const enemigo = quieto(w, 1, 'soldado', 150, 448).members[0];
   enemigo.cd = 999;
@@ -81,25 +80,29 @@ test('dispara 40 de daño cada 10 pasos con alcance 70', () => {
   assert.equal((1e9 - enemigo.hp) % 40, 0, 'cada golpe es de 40');
   // fuera de alcance no dispara
   const w2 = createWorld();
-  quieto(w2, 1, 'soldado', 175, 448);
+  quieto(w2, 1, 'soldado', 210, 448); // a 110 px de la torreta central (alcance 105)
   run(w2, 30);
   assert.ok(!w2.drain().some((e) => e.type === 'turretShot' && e.k === 1));
 });
 
 test('con HP 0 una torreta deja de disparar y de ser blanco; las demás siguen', () => {
   const w = createWorld();
-  const u = quieto(w, 0, 'soldado', 1300, 448).members[0];
+  const u = quieto(w, 0, 'soldado', 1310, 448).members[0];
   u.dir = 1;
   const t = w.bases[1].turrets[1];
+  run(w, 1);
+  assert.equal(u.tgt, t, 'con la torreta central viva es su blanco');
   t.hp = 0;
   t.on = false;
   run(w, 1);
   assert.notEqual(u.tgt, t);
-  assert.equal(u.tgt, null);
+  assert.equal(u.tgtKind, 'base', 'caída la central, queda la base');
   w.drain();
+  // v2.7: la de arriba nunca es blanco de una unidad, pero sigue disparando a quien le entra en rango
   const otro = quieto(w, 0, 'soldado', 1320, 250).members[0];
   run(w, 1);
-  assert.equal(otro.tgt, w.bases[1].turrets[0]);
+  assert.equal(otro.tgt, null);
+  assert.equal(w.bases[1].turrets[0].tgt, otro);
 });
 
 test('solo daña a las torretas lo enemigo: bombas de 900 a ≤ 24 px, energía de 160 a ≤ 20 px y salpicadura', () => {
@@ -194,8 +197,8 @@ test('el daño efectivo es min(dmg, hp) y se suma por equipo; una torreta destru
     tgtKind: '',
   });
   run(w, 1);
-  // la bomba cae a 8 px del frente de la base: también la daña (900)
-  assert.equal(w.teams[0].structDamage, 300 + 900);
+  // v2.8: la bomba cae en y 655, a 83 px de la franja del hangar (y 348–548): ya no daña la base, solo la torreta
+  assert.equal(w.teams[0].structDamage, 300);
   assert.equal(w.teams[1].structDamage, 0);
   assert.equal(t.hp, 0);
   assert.equal(t.on, false);
@@ -215,7 +218,11 @@ test('el daño efectivo es min(dmg, hp) y se suma por equipo; una torreta destru
     tgtKind: '',
   });
   run(w, 1);
-  assert.equal(w.teams[0].structDamage, 300 + 900 + 900, 'la torreta destruida no suma más; la base sí');
+  assert.equal(
+    w.teams[0].structDamage,
+    300,
+    'la torreta destruida no suma más y la base no está al alcance de la bomba',
+  );
 });
 
 test('daño a la base: efectivo, sin XP; al caer la base las torretas se apagan y la ronda termina en ese paso', () => {
@@ -234,7 +241,7 @@ test('daño a la base: efectivo, sin XP; al caer la base las torretas se apagan 
     dmg: 900,
     splash: 24,
     tx: b.frontX - 24,
-    ty: 600,
+    ty: 540, // dentro de la franja del hangar (y 348–548) y a 24 px de su cara
     tgt: null,
     tgtKind: '',
   });
@@ -344,7 +351,7 @@ test('vista: la ronda ya terminó en el paso en que la base llegó a 0; la secue
     dmg: 900,
     splash: 24,
     tx: b.frontX - 24,
-    ty: 600,
+    ty: 540, // dentro de la franja del hangar (y 348–548) y a 24 px de su cara
     tgt: null,
     tgtKind: '',
   });

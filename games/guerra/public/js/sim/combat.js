@@ -5,8 +5,8 @@
 import { SIM_HZ } from './defaults.js';
 import { damageTurret, requestBaseDamage, turretAlive } from './base.js';
 import { creditHit } from './credit.js';
+import { canAttackHangar, circleHitsHangar, inAssaultZone } from './field.js';
 import { isFacing } from './steer.js';
-import { removeMember, targetX } from './squads.js';
 
 /**
  * Daño a una unidad: efectivo `min(dmg, hp)`, sin sobredaño. Devuelve lo aplicado.
@@ -16,7 +16,7 @@ import { removeMember, targetX } from './squads.js';
  * @param {{side:0|1, owner?:any}} src
  */
 export function damageUnit(world, u, dmg, src) {
-  if (!u.alive || dmg <= 0) return 0;
+  if (!u.alive || dmg <= 0 || world.step < u.shieldUntil) return 0;
   const hpBefore = u.hp;
   const d = Math.min(dmg, hpBefore);
   u.hp -= d;
@@ -30,13 +30,17 @@ export function damageUnit(world, u, dmg, src) {
 }
 
 /**
- * Golpe de área (obús, bomba, energía): todo enemigo a ≤ radio del punto, torretas y base (por su x). El golpe de
- * energía lleva `noBase`: va al grupo, no a la base (CB-14); la base solo recibe los 600 de la energía sin grupos.
+ * Golpe de área (obús, bomba, energía): todo enemigo a ≤ radio del punto, torretas y el hangar (v2.8: solo si el círculo
+ * del golpe toca su rectángulo, no por la x). El golpe de energía lleva `noBase`: va al racimo, no a la base (CB-14); la
+ * base solo recibe los 600 de la energía sin enemigos.
+ * Nunca daña al propio equipo: solo mira la grilla, las torretas y la base del otro lado.
+ * @returns {number} cuántas unidades recibieron daño (la vista dibuja otro estallido si fue 0)
  */
 export function applyArea(world, h) {
   const e = 1 - h.side;
+  let hits = 0;
   world.grids[e].forEachInRadius(h.tx, h.ty, h.splash, (u) => {
-    if (u.alive) damageUnit(world, u, h.dmg, h);
+    if (u.alive && damageUnit(world, u, h.dmg, h) > 0) hits++;
   });
   const r2 = h.splash * h.splash;
   for (const t of world.bases[e].turrets) {
@@ -45,7 +49,8 @@ export function applyArea(world, h) {
     if (turretAlive(t) && dx * dx + dy * dy <= r2) damageTurret(world, t, h.dmg, h);
   }
   const b = world.bases[e];
-  if (b.hp > 0 && !h.noBase && Math.abs(h.tx - b.frontX) <= h.splash) requestBaseDamage(world, e, h.dmg, h);
+  if (b.hp > 0 && !h.noBase && circleHitsHangar(b.hangar, h.tx, h.ty, h.splash)) requestBaseDamage(world, e, h.dmg, h);
+  return hits;
 }
 
 /** Programa un golpe para el paso `due`. */
@@ -94,7 +99,7 @@ export function processHits(world) {
   world.bombs.length = w;
   DUE.sort((a, b) => a.impactStep - b.impactStep || a.id - b.id);
   for (const b of DUE) {
-    applyArea(world, {
+    const hits = applyArea(world, {
       side: b.side,
       owner: b.owner,
       dmg: world.cfg.plane.bombDmg,
@@ -102,14 +107,12 @@ export function processHits(world) {
       tx: b.tx,
       ty: b.ty,
     });
-    world.emit({ type: 'bombImpact', x: b.tx, y: b.ty, side: b.side });
+    world.emit({ type: 'bombImpact', x: b.tx, y: b.ty, side: b.side, hits });
   }
   DUE.length = 0;
 }
 
-/**
- * Paso 7 (parte de unidades): quita las muertas. Cambio por el último en su grupo y limpieza de grupos vacíos.
- */
+/** Paso 6 (parte de unidades): quita las muertas, en el orden estable en que están (por id). */
 export function reapUnits(world) {
   let dead = 0;
   for (const u of world.units) if (!u.alive) dead++;
@@ -120,22 +123,27 @@ export function reapUnits(world) {
     if (u.alive) {
       world.units[w++] = u;
     } else {
-      removeMember(u.squad, u);
       u.tgt = null;
+      u.seek = null;
       world.emit({ type: 'death', id: u.id, kind: u.kind, side: u.side, x: u.x, y: u.y });
     }
   }
   world.units.length = w;
-  let s = 0;
-  for (let i = 0; i < world.squads.length; i++) {
-    const sq = world.squads[i];
-    if (sq.members.length > 0) world.squads[s++] = sq;
-  }
-  world.squads.length = s;
 }
 
-/** Paso 8: el blanco de cada unidad con el estado congelado: unidad > torreta > base (esta, solo en ataque). */
+/** x del blanco por alcance de una unidad: la unidad o torreta, o el frente de la base. */
+export function targetX(u) {
+  return u.tgtKind === 'base' ? u.tgt.frontX : u.tgt.x;
+}
+
+/**
+ * Paso 7: el blanco por alcance de cada unidad, cada paso y con el estado congelado: unidad > torreta > base. Desde v2.7
+ * la base solo se ataca en UN punto, el centro del frente (zona de asalto, `movement.assault.halfY`): la torreta central
+ * y la base. Las torretas de arriba y de abajo no son blanco de nadie (siguen disparando) y la base no se ataca desde
+ * fuera de la zona: quien llega por otra altura sigue hacia el centro.
+ */
 export function decideUnits(world) {
+  const halfY = world.cfg.movement.assault.halfY;
   for (const u of world.units) {
     u.tgt = null;
     u.tgtKind = '';
@@ -149,10 +157,11 @@ export function decideUnits(world) {
       continue;
     }
     const b = world.bases[e];
+    const door = world.field.sides[e].door;
     let best = null;
     let bd = range * range;
     for (const t of b.turrets) {
-      if (!turretAlive(t)) continue;
+      if (!turretAlive(t) || !inAssaultZone(door, halfY, t.y)) continue;
       const dx = t.x - u.x;
       const dy = t.y - u.y;
       const d = dx * dx + dy * dy;
@@ -166,7 +175,7 @@ export function decideUnits(world) {
       u.tgtKind = 'turret';
       continue;
     }
-    if (u.squad.role === 'ataque' && b.hp > 0 && Math.abs(b.frontX - u.x) <= range) {
+    if (b.hp > 0 && canAttackHangar(b.hangar, u.x, u.y, range)) {
       u.tgt = b;
       u.tgtKind = 'base';
     }

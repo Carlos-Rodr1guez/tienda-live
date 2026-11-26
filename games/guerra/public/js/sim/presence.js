@@ -1,7 +1,7 @@
 // Guardia de presencia (diseño D20, NM-7, NM-8, NM-9, KIT-27). Pura: el reloj de pared llega inyectado (ms) y los
 // eventos de entrada los entrega la capa DOM. Si el narrador pasa N minutos sin tocar nada, el partido se pausa; no hay
 // valor, bandera ni tecla que apague la guardia. La guardia está activa desde que arranca el partido (`intro`) hasta
-// `matchEnd`, con las pantallas intermedias incluidas. Los regalos, la cámara automática, el comandante, el puente y el
+// `matchEnd`, con las pantallas intermedias incluidas. Los regalos, la cámara automática, el puente y el
 // simulador llegan como datos, no como eventos del DOM: nunca son entrada, y por eso no hace falta marcarlos.
 
 /** Minutos por defecto y límites (NM-7). */

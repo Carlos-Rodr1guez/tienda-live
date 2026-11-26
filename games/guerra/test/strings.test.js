@@ -118,12 +118,12 @@ test('el error de puente perdido nombra el problema y la salida, y la pausa y el
   assert.match(S.errors.dataExit, /recarga/i);
 });
 
-test('CB-17: la leyenda de los íconos dice Defensa y Ataque sin nombrar las formas (nota 40)', () => {
-  assert.equal(S.legend.defensa, 'Defensa');
-  assert.equal(S.legend.ataque, 'Ataque');
-  // las teclas de la cámara y la ayuda sí nombran las flechas del teclado; la leyenda de los íconos no nombra sus formas
+test('CB-17: «en campo» está en S y el texto de la interfaz no nombra la forma de los íconos ni usa rótulos de rol', () => {
+  assert.equal(S.hud.inField, 'en campo');
+  assert.equal(S.legend, undefined, 'ya no hay leyenda de roles');
+  // las teclas de la cámara y la ayuda sí nombran las flechas del teclado; el resto no nombra formas de íconos
   const todo = JSON.stringify(collectTexts({ ...S, keys: {}, help: {} }, ['a', 1]).map((t) => t.text));
-  assert.doesNotMatch(todo, /escudo|flecha/i);
+  assert.doesNotMatch(todo, /escudo|flecha|defensa|ataque/i);
 });
 
 test('NM-2 v2.3: los textos de Nuevo en vivo dicen la ventana de 2 s y lo que se reinicia', () => {

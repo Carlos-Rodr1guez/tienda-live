@@ -32,11 +32,21 @@ const regalo = (id, coins, extra = {}) => ({
 const gente = (id, text) => ({ type: 'chat', ...usuario(id), text });
 const unirse = (a, id, team) => a.registry.joinFromChat(gente(id, String(team)), 0, 0);
 
-test('el router se arma UNA vez con las cinco unidades del juego y los tiers por defecto', () => {
-  assert.deepEqual(UNIT_KINDS, ['soldado', 'jeep', 'tanque', 'avion', 'pesado']);
+test('el router se arma UNA vez con las nueve unidades del juego y los tiers por defecto', () => {
+  assert.deepEqual(UNIT_KINDS, [
+    'soldado',
+    'francotirador',
+    'jeep',
+    'blindado',
+    'tanque',
+    'lanzacohetes',
+    'avion',
+    'pesado',
+    'lobo',
+  ]);
   const { router, warnings } = buildRouter({});
   assert.deepEqual(warnings, []);
-  assert.equal(router.tiers.length, 5);
+  assert.equal(router.tiers.length, 9);
   assert.throws(() =>
     buildRouter({
       tiers: [
@@ -50,11 +60,11 @@ test('el router se arma UNA vez con las cinco unidades del juego y los tiers por
 test('regalo: el equipo sale del registro y el comando es el de golden.mjs (gift con owner, coins y orders)', () => {
   const { registry, audience } = montar();
   unirse({ registry }, 'u1', 2);
-  const r = audience.translate(regalo('u1', 30));
+  const r = audience.translate(regalo('u1', 29));
   assert.equal(r.cmd.type, 'gift');
   assert.equal(r.cmd.owner, 'u1');
-  assert.equal(r.cmd.coins, 30);
-  assert.deepEqual(r.cmd.orders, [{ kind: 'jeep', team: 2, owner: 'u1', count: 3, unitValue: 10, source: 'gift' }]);
+  assert.equal(r.cmd.coins, 29);
+  assert.deepEqual(r.cmd.orders, [{ kind: 'jeep', team: 2, owner: 'u1', count: 2, unitValue: 14.5, source: 'gift' }]);
   assert.equal(r.meta.kind, 'gift');
   assert.equal(r.meta.team, 2);
   assert.equal(r.meta.giftName, 'Rose');
@@ -68,12 +78,12 @@ test('regalo de alguien sin equipo: el registro le da uno (balance, sin azar) y 
   assert.ok(registry.drain().some((e) => e.type === 'join' && e.auto === true));
 });
 
-test('los tiers: 1 moneda soldado, 30 jeeps, 100 tanque, 500 avión, 1000 pesado; big y trimmed salen del router', () => {
+test('los tiers: 1 moneda soldado, 29 monedas 2 jeeps, 100 tanque, 500 avión, 1000 pesado; big y trimmed salen del router', () => {
   const { audience } = montar();
   const k = (c) => audience.translate(regalo('u', c));
   assert.equal(k(1).cmd.orders[0].kind, 'soldado');
-  const jeeps = k(30).cmd.orders[0];
-  assert.deepEqual([jeeps.kind, jeeps.count], ['jeep', 3], '30 monedas: 3 jeeps');
+  const jeeps = k(29).cmd.orders[0];
+  assert.deepEqual([jeeps.kind, jeeps.count], ['jeep', 2], '29 monedas: 2 jeeps');
   assert.equal(k(100).cmd.orders[0].kind, 'tanque');
   assert.equal(k(100).meta.big, true);
   assert.equal(k(500).cmd.orders[0].kind, 'avion');

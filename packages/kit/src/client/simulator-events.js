@@ -112,12 +112,15 @@ export function panelModel(config) {
   });
   /** @type {Map<string, SimGift>} */
   const gifts = new Map();
-  const add = (name, coins, id) => {
+  const add = (name, coins, id, autoWeight) => {
     const key = normWord(name);
     if (!key || gifts.has(key)) return;
-    gifts.set(key, { name: String(name), coins: Number(coins) >= 1 ? Number(coins) : 1, id: id ? String(id) : '' });
+    const gift = { name: String(name), coins: Number(coins) >= 1 ? Number(coins) : 1, id: id ? String(id) : '' };
+    if (Number.isFinite(autoWeight) && autoWeight > 0) gift.autoWeight = autoWeight;
+    gifts.set(key, gift);
   };
-  for (const g of config?.simulator?.gifts ?? []) if (g && typeof g.name === 'string') add(g.name, g.coins, g.id);
+  for (const g of config?.simulator?.gifts ?? [])
+    if (g && typeof g.name === 'string') add(g.name, g.coins, g.id, Number(g.autoWeight));
   // un override sin nombre ("id:5655") solo vale si un regalo del simulador lleva ese id
   for (const name of Object.keys(config?.giftOverrides ?? {})) if (!name.startsWith('id:')) add(name, 1, '');
   const list = [...gifts.values()].sort((a, b) => a.coins - b.coins);
@@ -171,9 +174,30 @@ export function pickAuto(rng, cfg) {
     gift = gifts[0];
     count = 1 + Math.floor(rng() * 6);
   } else if (kind === 'big') {
-    gift = gifts[gifts.length - 1];
+    // `autoWeight` también reparte entre los dos regalos más caros (solo si alguno lo trae y no es el nivel «max»): un héroe
+    // de 3000 monedas sale poco. Sin pesos en ninguno de los dos, es el más caro de siempre y no se gasta ningún azar de más.
+    const tops = gifts.slice(-2);
+    if (cfg?.level !== 'max' && tops.length === 2 && tops.some((g) => g.autoWeight !== undefined)) {
+      const [a, b] = tops.map((g) => g.autoWeight ?? 1);
+      gift = rng() * (a + b) < a ? tops[0] : tops[1];
+    } else {
+      gift = gifts[gifts.length - 1];
+    }
+  } else if (gifts.length > 2) {
+    const medios = gifts.slice(1, -1);
+    // `autoWeight` (opcional, 1 por defecto) baja la frecuencia de un regalo en el tráfico automático; los botones manuales
+    // no lo usan y el nivel "máximo" tampoco. Sin pesos el reparto es el de siempre (uno por índice).
+    const pesos = cfg?.level === 'max' ? null : medios.map((g) => g.autoWeight ?? 1);
+    if (pesos === null || pesos.every((p) => p === 1)) {
+      gift = medios[Math.floor(rng() * medios.length)];
+    } else {
+      let r = rng() * pesos.reduce((a, b) => a + b, 0);
+      let i = 0;
+      while (i < medios.length - 1 && r >= pesos[i]) r -= pesos[i++];
+      gift = medios[i];
+    }
   } else {
-    gift = gifts.length > 2 ? gifts[1 + Math.floor(rng() * (gifts.length - 2))] : pickFrom(gifts);
+    gift = pickFrom(gifts);
   }
   const out = team ? [buildChat(user, team.word)] : [];
   out.push(buildGift(user, gift, count));

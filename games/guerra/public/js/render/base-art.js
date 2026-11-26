@@ -1,10 +1,13 @@
 // Arte de las bases (diseño D21 punto 11; CB-3, CB-19, CB-2). Dos recetas paramétricas de 110x669 px, de y 112
-// (`SKY_H`) a y 781 (`NEAR_Y` + 6), con 4 estados prerenderizados por lado:
-//   base-fortin    HQ cuadrado y torres cuadradas (la base del prototipo v3 aprobado, lado izquierdo)
-//   base-ciudadela HQ octogonal con cúpula y torres redondas (lado derecho)
-// La silueta distingue a los equipos sin depender del color (CB-3): la ciudadela NO es el espejo del fortín. Los dos
-// estados y la secuencia de destrucción son solo vista: ninguna regla los lee. El arte usa un azar fijo por receta y
-// estado (nunca el de la partida), y el color del equipo entra solo por la paleta del tinte.
+// (`SKY_H`) a y 781 (`NEAR_Y` + 6), con 4 estados prerenderizados por lado. Desde v2.8 NO hay muralla: la base es un
+// HANGAR, el rectángulo de x 14–90 y y 348–548 (lado izquierdo; el derecho es su espejo), con dos portones en la cara y
+// las plataformas de las tres torretas delante. Quedan los depósitos como escenografía.
+//   base-fortin    hangar de techo plano con torre de control cuadrada (lado izquierdo)
+//   base-ciudadela hangar abovedado con costillas y cúpula (lado derecho)
+// La silueta distingue a los equipos sin depender del color (CB-3): la ciudadela NO es el espejo del fortín. Los
+// estados (entero, grietas, techo hundido, ruinas) y la secuencia de destrucción son solo vista: ninguna regla los lee.
+// El arte usa un azar fijo por receta y estado (nunca el de la partida), y el color del equipo entra solo por la paleta
+// del tinte.
 
 import { mulberry32, seedFrom } from '@tienda/kit/sim/rng.js';
 import { PALETA } from '../data/paleta.js';
@@ -16,12 +19,15 @@ export const BASE_W = 110;
 export const BASE_Y0 = 112; // `SKY_H`
 export const BASE_H = 669; // de 112 a 781
 export const NEAR_Y = 775;
-export const WALL_Y0 = BASE_Y0 + 12;
-const WB = NEAR_Y + 1;
 export const MIDY = 448;
-export const HQY = MIDY - 26;
 const TURY = [242, MIDY, 655];
-const DEPY = [205, 325, 545, 665];
+
+/** El hangar (v2.8): x 14–90 y y 348–548 del lado izquierdo (en el derecho, el espejo). Es la zona de asalto. */
+export const HANGAR_ART = Object.freeze({ x0: 14, x1: 90, y0: 348, y1: 548 });
+/** Altura (y de mundo) de cada depósito. Ninguno toca el hangar. */
+export const DEPOT_Y = Object.freeze([196, 286, 586, 676]);
+/** Altura (y de mundo) del centro de cada portón de la cara del hangar. */
+export const DOOR_Y = Object.freeze([400, 496]);
 
 export const BASE_KINDS = Object.freeze(['base-fortin', 'base-ciudadela']);
 
@@ -57,14 +63,10 @@ export function paintBase(g, { kind, hex, state: st }) {
   const tD = shade(hex, 0.35);
   const tL = tint(hex, 0.25);
   const ruin = st === 3;
-  const Y0 = WALL_Y0;
-  const hy = HQY;
   const redonda = kind === 'base-ciudadela';
-  const bag = (x, y) => {
-    R(INK, x, y, 9, 5);
-    R('#B59A6A', x + 1, y + 1, 7, 3);
-    R('#D2BA8A', x + 1, y + 1, 7, 1);
-  };
+  const { x0: HX0, x1: HX1, y0: HY0, y1: HY1 } = HANGAR_ART;
+  const HW = HX1 - HX0; // 76 de fondo
+  const HH = HY1 - HY0; // 200 de alto
   const crate = (x, y) => {
     R(INK, x, y, 8, 8);
     R('#7A6642', x + 1, y + 1, 6, 6);
@@ -80,47 +82,7 @@ export function paintBase(g, { kind, hex, state: st }) {
     R(pick(['#4A5468', '#3B4558', '#6B778D', '#323B4D']), x + 1, y + 1, w, h);
   };
 
-  // muro
-  R(ruin ? '#1A202C' : '#2B3446', 0, Y0, 96, WB - Y0);
-  if (!ruin) {
-    for (let y = Y0 + 14, k = 0; y < WB; y += 24, k++) {
-      R('#232B3A', 0, y, 96, 1);
-      for (let x = (k % 2) * 12; x < 96; x += 24) R('#232B3A', x, y, 1, Math.min(24, WB - y));
-    }
-    for (let i = 0; i < 190; i++) R('#323C50', ri(0, 94), ri(Y0 + 2, WB - 2), 1, 1);
-    for (let y = Y0 + 18; y < WB - 6; y += 14) R(tD, 5, y, 2, 7);
-  } else {
-    for (let i = 0; i < 110; i++)
-      R(rnd() < 0.5 ? '#10151E' : '#232B3A', ri(0, 92), ri(Y0 + 2, WB - 6), ri(3, 9), ri(2, 5));
-  }
-  // columna de muralla del frente
-  R(INK, 93, Y0, 16, WB - Y0);
-  R('#4A5468', 94, Y0 + 1, 14, WB - Y0 - 2);
-  R('#6B778D', 95, Y0 + 1, 12, WB - Y0 - 2);
-  R('#8794AB', 95, Y0 + 1, 1, WB - Y0 - 2);
-  R('#3B4558', 107, Y0 + 1, 1, WB - Y0 - 2);
-  for (let yy = Y0 + 2, k = 0; yy < WB - 6; yy += 16, k++) {
-    const skip = ruin ? k % 3 !== 0 : st >= 2 ? (k * 7) % 10 < 3 : st >= 1 ? (k * 7) % 10 < 1 : false;
-    if (skip) {
-      if (ruin) rub(94 + ri(0, 6), yy + ri(0, 4), ri(4, 8), ri(3, 5));
-      else R('#141A26', 95, yy + 2, 12, 6);
-      continue;
-    }
-    const hh = ruin ? 5 : 11;
-    R(INK, 92, yy, 18, hh + 1);
-    R('#6B778D', 93, yy + 1, 16, ruin ? 3 : 6);
-    R('#8794AB', 93, yy + 1, 16, 1);
-    if (!ruin) {
-      R('#4A5468', 93, yy + 7, 16, 4);
-      R('#3B4558', 93, yy + 10, 16, 1);
-      if (k % 3 === 1) {
-        R(hex, 95, yy + 2, 12, 3);
-        R(tL, 95, yy + 2, 12, 1);
-        R(tD, 95, yy + 8, 12, 2);
-      }
-    }
-  }
-  // plataformas de las torretas
+  // plataformas de las torretas (delante de la cara del hangar)
   for (const ty of TURY) {
     g.fillStyle = INK;
     disc(g, 100, ty + 2, 10);
@@ -135,207 +97,191 @@ export function paintBase(g, { kind, hex, state: st }) {
       disc(g, 100, ty, 6);
     }
   }
+
+  // depósitos: escenografía, ninguno toca el hangar
+  const depot = (y0) => {
+    R(INK, 19, y0, 40, 26);
+    R(tD, 20, y0 + 1, 38, 15);
+    R(hex, 20, y0 + 1, 38, 13);
+    R(tL, 20, y0 + 1, 38, 1);
+    R(tD, 20, y0 + 7, 38, 2);
+    R('#4A5468', 20, y0 + 16, 38, 9);
+    R('#6B778D', 20, y0 + 16, 38, 1);
+    R('#141A26', 34, y0 + 18, 10, 7);
+  };
   if (!ruin) {
-    for (let y = Y0 + 22, k = 0; y < WB - 16; y += 30, k++) {
-      if (TURY.some((t) => Math.abs(y - t) < 22)) continue;
-      if (st >= 2 && k % 2) continue;
-      bag(80 + (k % 2) * 4, y);
-      bag(80 + (k % 2) * 4, y + 5);
-      if (st < 2) bag(84 + (k % 2) * 4, y - 4);
-    }
-    for (const ty of TURY) {
-      bag(78, ty - 26);
-      bag(78, ty + 22);
-    }
-    // torres de las esquinas: cuadradas en el fortín, redondas en la ciudadela
-    const torre = (y0) => {
-      if (!redonda) {
-        R(INK, 71, y0, 39, 37);
-        R('#6B778D', 72, y0 + 1, 37, 25);
-        R('#8794AB', 72, y0 + 1, 37, 1);
-        R('#8794AB', 72, y0 + 1, 1, 25);
-        R(INK, 77, y0 + 5, 27, 16);
-        R(tD, 78, y0 + 6, 25, 14);
-        R(hex, 78, y0 + 6, 25, 11);
-        R(tL, 78, y0 + 6, 25, 1);
-        R('#4A5468', 72, y0 + 26, 37, 10);
-        R('#3B4558', 72, y0 + 34, 37, 2);
-        for (const x of [78, 90, 102]) R('#141A26', x, y0 + 29, 3, 5);
-        if (st >= 2) {
-          R('#141A26', 84, y0 + 8, 10, 8);
-          crack([
-            [96, y0 + 6],
-            [94, y0 + 12],
-            [98, y0 + 18],
-          ]);
-        }
-      } else {
-        g.fillStyle = INK;
-        disc(g, 90, y0 + 19, 18);
-        g.fillStyle = '#4A5468';
-        disc(g, 90, y0 + 20, 17);
-        g.fillStyle = '#6B778D';
-        disc(g, 90, y0 + 17, 17);
-        g.fillStyle = '#8794AB';
-        R('#8794AB', 80, y0 + 3, 12, 1);
-        g.fillStyle = INK;
-        disc(g, 90, y0 + 15, 12);
-        g.fillStyle = tD;
-        disc(g, 90, y0 + 16, 11);
-        g.fillStyle = hex;
-        disc(g, 90, y0 + 14, 11);
-        g.fillStyle = tL;
-        disc(g, 88, y0 + 10, 5);
-        for (const x of [82, 90, 98]) R('#141A26', x, y0 + 29, 3, 5);
-        if (st >= 2) {
-          g.fillStyle = '#141A26';
-          disc(g, 94, y0 + 14, 4);
-          crack([
-            [96, y0 + 6],
-            [94, y0 + 12],
-            [98, y0 + 18],
-          ]);
-        }
-      }
-    };
-    torre(Y0);
-    torre(WB - 36);
-    // depósitos
-    const depot = (y0) => {
-      R(INK, 19, y0, 40, 26);
-      R(tD, 20, y0 + 1, 38, 15);
-      R(hex, 20, y0 + 1, 38, 13);
-      R(tL, 20, y0 + 1, 38, 1);
-      R(tD, 20, y0 + 7, 38, 2);
-      R('#4A5468', 20, y0 + 16, 38, 9);
-      R('#6B778D', 20, y0 + 16, 38, 1);
-      R('#141A26', 34, y0 + 18, 10, 7);
-    };
-    for (const y of DEPY) depot(y);
-    crate(76, hy - 4);
-    crate(76, hy + 6);
-    crate(66, hy + 56);
-    crate(76, hy + 54);
-    for (const y of DEPY) crate(64, y + 5);
-    // cuartel general
-    if (!redonda) {
-      R(INK, 13, hy, 58, 52);
-      R(tD, 14, hy + 1, 56, 32);
-      R(hex, 14, hy + 1, 56, 30);
-      for (let yy = hy + 6; yy < hy + 32; yy += 8) R(tD, 14, yy, 56, 2);
-      R(tL, 14, hy + 1, 56, 2);
-      R('#8794AB', 14, hy + 33, 56, 1);
-      R(INK, 34, hy + 10, 16, 12);
-      R('#323B4D', 35, hy + 11, 14, 10);
-      R(hex, 37, hy + 13, 10, 6);
-      R(tL, 37, hy + 13, 10, 1);
-      R(INK, 17, hy + 4, 7, 6);
-      R('#5A667C', 18, hy + 5, 5, 4);
-    } else {
-      // octógono con cúpula: esquinas cortadas en escalera y un domo central
-      for (let r = 0; r < 52; r++) {
-        const corte = r < 10 ? 10 - r : r > 41 ? r - 41 : 0;
-        const c = Math.floor(corte * 0.8);
-        R(INK, 13 + c, hy + r, 58 - 2 * c, 1);
-      }
-      for (let r = 1; r < 51; r++) {
-        const corte = r < 10 ? 10 - r : r > 41 ? r - 41 : 0;
-        const c = Math.floor(corte * 0.8);
-        R(r < 33 ? hex : '#4A5468', 14 + c, hy + r, 56 - 2 * c, 1);
-      }
-      for (let yy = hy + 12; yy < hy + 32; yy += 8) R(tD, 20, yy, 44, 2);
-      R(tL, 20, hy + 1, 44, 2);
-      R('#8794AB', 17, hy + 33, 50, 1);
-      g.fillStyle = INK;
-      ell(g, 42, hy + 14, 17, 10);
-      g.fillStyle = tD;
-      ell(g, 42, hy + 15, 16, 9);
-      g.fillStyle = hex;
-      ell(g, 42, hy + 13, 15, 8);
-      g.fillStyle = tL;
-      ell(g, 38, hy + 9, 6, 3);
-      R(INK, 41, hy - 6, 3, 8);
-      R('#FFD84A', 41, hy - 6, 3, 2);
-      R(INK, 34, hy + 22, 16, 10);
-      R('#323B4D', 35, hy + 23, 14, 8);
-      R(hex, 37, hy + 25, 10, 4);
-    }
-    R('#4A5468', 14, hy + 34, 56, 16);
-    R('#6B778D', 14, hy + 34, 56, 1);
-    R('#3B4558', 14, hy + 48, 56, 2);
-    for (let x = 18; x < 70; x += 12) R('#3B4558', x, hy + 36, 1, 12);
-    R(INK, 34, hy + 37, 16, 14);
-    R('#141A26', 35, hy + 38, 14, 13);
-    R(hex, 35, hy + 38, 14, 2);
-    R(tL, 35, hy + 38, 14, 1);
-    R('#141A26', 18, hy + 39, 7, 4);
-    R('#141A26', 59, hy + 39, 7, 4);
-    if (st >= 1) {
-      crack([
-        [22, hy + 1],
-        [24, hy + 7],
-        [22, hy + 13],
-        [27, hy + 19],
-      ]);
-      crack([
-        [56, hy + 1],
-        [54, hy + 8],
-        [58, hy + 15],
-      ]);
-      crack([
-        [97, TURY[0] + 38],
-        [100, TURY[0] + 44],
-        [98, TURY[0] + 50],
-        [101, TURY[0] + 58],
-      ]);
-      R('#141A26', 50, hy + 24, 5, 4);
-      g.globalAlpha = 0.35;
-      R('#000', 44, hy + 34, 40, 2);
-      g.fillStyle = '#000';
-      ell(g, 100, TURY[1], 12, 7);
-      ell(g, 44, hy + 40, 20, 6);
-      g.globalAlpha = 1;
-    }
-    if (st >= 2) {
-      R(INK, 26, hy + 6, 24, 16);
-      R('#141A26', 27, hy + 7, 22, 14);
-      crack([
-        [27, hy + 7],
-        [31, hy + 11],
-        [28, hy + 17],
-        [34, hy + 21],
-      ]);
-      rub(30, hy + 12, 6, 4);
-      rub(40, hy + 16, 5, 3);
-      crack([
-        [96, TURY[1] + 58],
-        [99, TURY[1] + 64],
-        [97, TURY[1] + 70],
-      ]);
-      g.globalAlpha = 0.4;
-      g.fillStyle = '#000';
-      ell(g, 100, TURY[0], 14, 9);
-      ell(g, 100, TURY[2], 14, 9);
-      ell(g, 34, DEPY[0], 18, 8);
-      g.globalAlpha = 1;
+    for (const y of DEPOT_Y) {
+      depot(y);
+      crate(64, y + 5);
     }
   } else {
-    for (let i = 0; i < 56; i++) rub(ri(14, 66), ri(hy + 2, hy + 48), ri(3, 9), ri(2, 5));
-    for (let i = 0; i < 9; i++) {
-      const x = ri(14, 60);
-      const y = ri(hy + 4, hy + 44);
+    for (const y0 of DEPOT_Y) for (let i = 0; i < 10; i++) rub(ri(19, 56), y0 + ri(0, 22), ri(4, 8), ri(3, 5));
+  }
+
+  // ---------------------------------------------------------------- el hangar
+  // contorno y cimientos: todo el rectángulo queda pintado (un píxel sin pintar dejaría ver el suelo dentro del edificio)
+  R(INK, HX0 - 1, HY0 - 1, HW + 2, HH + 3);
+  if (ruin) {
+    R('#1A202C', HX0, HY0, HW, HH + 1);
+    for (let i = 0; i < 160; i++)
+      R(rnd() < 0.5 ? '#10151E' : '#232B3A', ri(HX0, HX1 - 8), ri(HY0, HY1 - 4), ri(3, 9), ri(2, 5));
+    // el esqueleto del techo, caído y retorcido, y cascotes con el color del equipo
+    for (let i = 0; i < 4; i++) {
+      const x = ri(HX0 + 4, HX1 - 34); // la viga llega a x + 30: no se sale del hangar
+      const y = ri(HY0 + 8, HY1 - 14);
+      crack([
+        [x, y],
+        [x + ri(8, 18), y + ri(-6, 6)],
+        [x + ri(20, 30), y + ri(-4, 10)],
+      ]);
+    }
+    for (let i = 0; i < 70; i++) rub(ri(HX0 + 1, HX1 - 12), ri(HY0 + 2, HY1 - 8), ri(3, 9), ri(2, 5));
+    for (let i = 0; i < 12; i++) {
+      const x = ri(HX0 + 2, HX1 - 14);
+      const y = ri(HY0 + 6, HY1 - 10);
       R(INK, x, y, 9, 5);
       R(hex, x + 1, y + 1, 7, 3);
     }
-    R(INK, 13, hy + 32, 58, 6);
-    R('#3B4558', 14, hy + 33, 56, 4);
-    for (const y0 of [Y0, WB - 36]) for (let i = 0; i < 16; i++) rub(ri(72, 104), y0 + ri(0, 30), ri(4, 9), ri(3, 6));
-    for (const y0 of DEPY) for (let i = 0; i < 10; i++) rub(ri(19, 56), y0 + ri(0, 22), ri(4, 8), ri(3, 5));
-    for (let y = Y0 + 18; y < WB - 16; y += 38) bag(ri(70, 86), y + ri(0, 12));
+    // portones caídos en la cara
+    for (const dy of DOOR_Y) {
+      R(INK, HX1 - 9, dy - 12, 10, 24);
+      R('#141A26', HX1 - 8, dy - 11, 9, 22);
+      rub(HX1 - 7, dy - 6 + ri(0, 4), ri(4, 6), ri(3, 5));
+    }
     g.globalAlpha = 0.45;
     g.fillStyle = '#000';
-    ell(g, 42, hy + 24, 34, 24);
+    ell(g, 52, MIDY, 36, 90);
     for (const t of TURY) ell(g, 100, t, 10, 6);
+    g.globalAlpha = 1;
+    return;
+  }
+
+  // techo
+  if (!redonda) {
+    // fortín: techo plano de planchas con costuras, franja del equipo en la cara y dos marcas de equipo
+    R('#6B778D', HX0, HY0, HW, HH + 1);
+    R('#5A667C', HX0, HY0, 6, HH + 1); // el fondo, en sombra
+    for (let y = HY0 + 18, k = 0; y < HY1; y += 20, k++) {
+      R('#4A5468', HX0, y, HW, 1);
+      R('#8794AB', HX0, y + 1, HW, 1);
+      for (let x = HX0 + 10 + (k % 2) * 12; x < HX1 - 12; x += 24) R('#4A5468', x, y + 2, 1, Math.min(18, HY1 - y - 1));
+    }
+    R('#8794AB', HX0, HY0, HW, 1);
+    for (const y of [HY0 + 30, HY1 - 50]) {
+      R(INK, 30, y, 28, 22);
+      R(tD, 31, y + 1, 26, 20);
+      R(hex, 31, y + 1, 26, 17);
+      R(tL, 31, y + 1, 26, 1);
+    }
+    // torre de control cuadrada sobre el centro
+    R(INK, 28, MIDY - 20, 30, 38);
+    R('#8794AB', 29, MIDY - 19, 28, 26);
+    R('#6B778D', 30, MIDY - 18, 26, 24);
+    R(INK, 33, MIDY - 14, 20, 12);
+    R('#323B4D', 34, MIDY - 13, 18, 10);
+    R(hex, 36, MIDY - 11, 14, 6);
+    R(tL, 36, MIDY - 11, 14, 1);
+    R('#4A5468', 29, MIDY + 7, 28, 10);
+    R('#3B4558', 29, MIDY + 15, 28, 2);
+    for (const x of [33, 41, 49]) R('#141A26', x, MIDY + 9, 3, 4);
+  } else {
+    // ciudadela: techo abovedado (más claro en la cresta, por filas), costillas y cúpula con aguja
+    const tonos = ['#4A5468', '#5A667C', '#6B778D', '#7C89A0', '#8794AB'];
+    for (let y = HY0; y <= HY1; y++) {
+      const t = 1 - Math.abs(y - MIDY) / (HH / 2);
+      R(tonos[Math.min(4, Math.floor(t * 5))], HX0, y, HW, 1);
+    }
+    for (let x = HX0 + 8; x < HX1 - 6; x += 12) {
+      R('#3B4558', x, HY0, 1, HH + 1);
+      R('#9DA9BF', x + 1, HY0, 1, HH + 1);
+    }
+    R('#8794AB', HX0, HY0, HW, 1);
+    for (const y of [HY0 + 22, HY1 - 40]) {
+      R(INK, 22, y, 44, 6);
+      R(hex, 23, y + 1, 42, 4);
+      R(tL, 23, y + 1, 42, 1);
+    }
+    g.fillStyle = INK;
+    ell(g, 42, MIDY, 18, 26);
+    g.fillStyle = tD;
+    ell(g, 42, MIDY + 1, 17, 25);
+    g.fillStyle = hex;
+    ell(g, 42, MIDY - 1, 15, 23);
+    g.fillStyle = tL;
+    ell(g, 37, MIDY - 9, 6, 8);
+    R(INK, 41, MIDY - 34, 3, 9);
+    R('#FFD84A', 41, MIDY - 34, 3, 2);
+  }
+  // cara del hangar: parapeto con la franja del equipo y dos portones
+  R('#4A5468', HX1 - 10, HY0, 10, HH + 1);
+  R('#6B778D', HX1 - 10, HY0, 1, HH + 1);
+  R(hex, HX1 - 8, HY0 + 2, 6, HH - 3);
+  R(tL, HX1 - 8, HY0 + 2, 6, 1);
+  R(tD, HX1 - 3, HY0 + 2, 1, HH - 3);
+  for (const dy of DOOR_Y) {
+    R(INK, HX1 - 9, dy - 12, 10, 24);
+    R('#141A26', HX1 - 8, dy - 11, 9, 22);
+    R(hex, HX1 - 8, dy - 11, 9, 2);
+    R(tL, HX1 - 8, dy - 11, 9, 1);
+    for (let y = dy - 8; y < dy + 11; y += 5) R('#232B3A', HX1 - 8, y, 9, 1);
+  }
+
+  // estado 1: grietas en el techo, hollín y un panel de la cara rajado
+  if (st >= 1) {
+    crack([
+      [26, HY0 + 3],
+      [30, HY0 + 14],
+      [27, HY0 + 26],
+      [33, HY0 + 38],
+    ]);
+    crack([
+      [62, HY1 - 4],
+      [58, HY1 - 16],
+      [63, HY1 - 28],
+    ]);
+    crack([
+      [HX1 - 10, DOOR_Y[0] + 14],
+      [HX1 - 6, DOOR_Y[0] + 22],
+      [HX1 - 9, DOOR_Y[0] + 30],
+    ]);
+    R('#141A26', 50, HY0 + 24, 5, 4);
+    g.globalAlpha = 0.35;
+    g.fillStyle = '#000';
+    ell(g, 40, HY0 + 60, 18, 10);
+    ell(g, 56, HY1 - 40, 16, 9);
+    g.globalAlpha = 1;
+  }
+  // estado 2: el techo se hunde (agujero con vigas), escombros sobre el techo y un portón reventado
+  if (st >= 2) {
+    R(INK, 24, MIDY - 40, 36, 30);
+    R('#141A26', 25, MIDY - 39, 34, 28);
+    for (const x of [30, 38, 46, 54]) R('#3B4558', x, MIDY - 39, 2, 28);
+    crack([
+      [25, MIDY - 39],
+      [31, MIDY - 33],
+      [28, MIDY - 26],
+      [37, MIDY - 20],
+    ]);
+    R(INK, 28, MIDY + 22, 40, 22);
+    R('#141A26', 29, MIDY + 23, 38, 20);
+    for (const x of [34, 44, 54]) R('#3B4558', x, MIDY + 23, 2, 20);
+    rub(30, MIDY - 6, 6, 4);
+    rub(46, MIDY + 4, 5, 3);
+    rub(60, HY0 + 12, 7, 4);
+    rub(26, HY1 - 18, 8, 5);
+    R(INK, HX1 - 9, DOOR_Y[1] - 12, 10, 24);
+    R('#0B0F17', HX1 - 8, DOOR_Y[1] - 11, 9, 22);
+    rub(HX1 - 7, DOOR_Y[1] - 4, 5, 3);
+    crack([
+      [HX1 - 10, DOOR_Y[1] - 22],
+      [HX1 - 5, DOOR_Y[1] - 28],
+      [HX1 - 8, DOOR_Y[1] - 36],
+    ]);
+    g.globalAlpha = 0.4;
+    g.fillStyle = '#000';
+    ell(g, 100, TURY[0], 14, 9);
+    ell(g, 100, TURY[2], 14, 9);
+    ell(g, 34, DEPOT_Y[0], 18, 8);
     g.globalAlpha = 1;
   }
 }

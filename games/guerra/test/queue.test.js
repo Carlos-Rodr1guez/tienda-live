@@ -1,13 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRegistry } from '@tienda/kit/sim/registry.js';
-import { applyEvent, createWorld, resetRound, stepWorld } from '../public/js/sim/world.js';
-import { addUnit, createSquad, placeOffset } from '../public/js/sim/squads.js';
-import { createFromPlan, submitGift, submitOrder } from '../public/js/sim/queue.js';
-import { planAlta } from '../public/js/sim/commander.js';
+import { applyEvent, createWorld, resetRound, seedUnits, stepWorld } from '../public/js/sim/world.js';
+import { submitGift, submitOrder } from '../public/js/sim/queue.js';
 import { ledger } from '../public/js/sim/credit.js';
 
-// CB-7, CB-8, CB-10, CB-14 (órdenes), CB-21 (alta, grupos abiertos y cerrados): todo entra por la cola.
+// CB-7, CB-8, CB-10, CB-14 (órdenes), CB-21 (puerta única y ranuras): todo entra por la cola.
 
 const PE = { id: 'pe', name: 'Perú', iso: 'PE', aliases: ['peru'] };
 const MX = { id: 'mx', name: 'México', iso: 'MX', aliases: ['mexico'] };
@@ -160,26 +158,22 @@ test('un regalo de 10 con el lado en el tope se encola con monedas y XP ya acred
   assert.ok(Math.abs(l.sum - l.paid) < 1e-6);
 });
 
-test('punto de aparición libre: un amigo de otro grupo encima lo bloquea y sin él la cabeza sale', () => {
+test('la puerta no espera a nadie: con amigos encima del punto de salida la cabeza sale igual en el primer paso con ficha', () => {
   const w = mundo();
   const s = w.field.sides[0];
-  const otro = createSquad(w, {
+  // CB-10 (v2.6): se quitó el punto de aparición libre; la separación se encarga de abrirlos
+  const amigos = seedUnits(w, {
     side: 0,
-    kind: 'soldado',
-    role: 'ataque',
-    state: 'holding',
-    x: 600,
-    y: 600,
+    kind: 'tanque',
+    count: 5,
+    x: s.door.x,
+    y: s.door.y,
+    yg: s.door.y,
     pinned: true,
-  });
-  const amigos = s.gates.map((y) => addUnit(w, otro, s.exitX + 2, y, {}));
-  for (const a of amigos) a.cd = 1e9;
+  }).units;
   submitOrder(w, orden('soldado', 1, 1, 0));
-  run(w, 5);
-  assert.equal(vivos(w, 0), 3, 'bloqueado: solo están los amigos (cualquier corredor que elija el comandante)');
-  for (const a of amigos) a.x = 600; // se van
-  run(w, 5);
-  assert.equal(vivos(w, 0), 4, 'sin los amigos la cabeza sale');
+  run(w, 1);
+  assert.equal(vivos(w, 0), amigos.length + 1, 'la cabeza salió aunque hubiera cinco tanques encima');
 });
 
 test('posición de aparición sin azar: con poblaciones iguales siempre el mismo lugar', () => {
@@ -232,14 +226,25 @@ test('60 s sin eventos: ambos lados reciben las mismas unidades por tipo (refuer
   );
 });
 
-test('los refuerzos base forman grupos y salen 6 s después de la primera llegada', () => {
+test('los refuerzos base salen por la puerta y marchan: ninguno espera ni forma grupo', () => {
   const w = mundo({}, { phase: 'battle' });
-  run(w, 90 + 600);
-  const g = w.squads.filter((s) => s.side === 0)[0];
-  assert.equal(g.members.length, 4);
-  assert.ok(g.firstArrivalStep > 90);
-  assert.equal(g.departStep - g.firstArrivalStep, 180, 'sale 6 s después de la primera llegada');
-  assert.notEqual(g.state, 'forming');
+  const xs = [];
+  for (let i = 0; i < 90 + 600; i++) {
+    stepWorld(w);
+    for (const e of w.drain()) if (e.type === 'spawn' && e.side === 0) xs.push([e.x, e.y]);
+  }
+  assert.equal(xs.length, 8, '2 refuerzos de 4 soldados en ~23 s (t = 3 y 15)');
+  for (const [x, y] of xs) {
+    assert.equal(x, w.field.sides[0].door.x);
+    assert.ok(Math.abs(y - 448) <= 18 && [0, 9, 18].includes(Math.abs(y - 448)), 'ranura de soldado (d = 9)');
+  }
+  const mios = w.units.filter((u) => u.side === 0);
+  assert.ok(mios.every((u) => u.phase === 'march' || u.phase === 'leg'));
+  assert.ok(
+    mios.every((u) => u.x > 200),
+    'ya se fueron de la puerta',
+  );
+  assert.equal(w.squads, undefined, 'no hay grupos');
 });
 
 test('unión: re-enviar "1" cinco veces deja exactamente un soldado; la ronda siguiente puede ganar otro', () => {
@@ -285,17 +290,21 @@ test('likes (4 soldados), follow (1 jeep) y share (3 soldados) entran por la col
   assert.ok(o.every((x) => x.unitValue === 0));
 });
 
-test('cola de aire (≤ 20): ≤ 2 aviones vivos, ≥ 1,5 s entre lanzamientos y no cuenta para el tope de tierra', () => {
+test('cola de aire (≤ 5): 1 avión vivo por lado, ≥ 8 s entre lanzamientos y no cuenta para el tope de tierra', () => {
   const w = mundo({ limits: { maxAlivePerSide: 40 } });
   submitOrder(w, orden('soldado', 1, 60, 1, 'A'));
   run(w, 400);
   assert.equal(vivos(w, 0), 40, 'la tierra está en su tope');
-  submitOrder(w, orden('avion', 1, 25, 500, 'P'));
-  assert.equal(w.queues[0].airUnits, 20, 'la cola de aire admite 20');
-  assert.equal(w.credit.overflow[0], 5 * 500);
+  submitOrder(w, orden('avion', 1, 8, 500, 'P'));
+  assert.equal(w.queues[0].airUnits, 5, 'la cola de aire admite 5');
+  assert.equal(w.credit.overflow[0], 0, 'los 3 de más no se pierden: son 15 tanques');
+  assert.equal(
+    w.queues[0].ground.filter((o) => o.kind === 'tanque').reduce((a, o) => a + o.remaining, 0),
+    15,
+  );
   const lanzamientos = [];
   let maxVivos = 0;
-  for (let i = 0; i < 1500; i++) {
+  for (let i = 0; i < 3000; i++) {
     const n = w.planes.length;
     stepWorld(w);
     maxVivos = Math.max(maxVivos, w.planes.filter((p) => p.side === 0).length);
@@ -304,206 +313,8 @@ test('cola de aire (≤ 20): ≤ 2 aviones vivos, ≥ 1,5 s entre lanzamientos y
     }
   }
   assert.ok(lanzamientos.length >= 4, 'los aviones salieron aunque la tierra estaba al tope');
-  assert.ok(maxVivos <= 2);
-  for (let i = 1; i < lanzamientos.length; i++) assert.ok(lanzamientos[i] - lanzamientos[i - 1] >= 45);
-});
-
-// ---------------------------------------------------------------------------------------------------- 4c.8
-
-/** Pone un grupo formando con `n` unidades ya en su lugar de espera. */
-function formando(w, side, kind, n, plan) {
-  const sq = createFromPlan(w, side, kind, plan);
-  const dir = w.field.sides[side].dir;
-  for (let i = 0; i < n; i++) {
-    const off = placeOffset(w.cfg, kind, i, dir);
-    addUnit(w, sq, plan.x + off.x, plan.y + off.y, {});
-  }
-  return sq;
-}
-
-test('tamaños 10/4/2/1 sin mezclar tipos: 25 soldados, 5 jeeps, 3 tanques y 1 pesado', () => {
-  const w = mundo();
-  submitOrder(w, orden('soldado', 1, 25, 0));
-  submitOrder(w, orden('jeep', 1, 5, 0));
-  submitOrder(w, orden('tanque', 1, 3, 0));
-  submitOrder(w, orden('pesado', 1, 1, 0));
-  run(w, 500);
-  const tam = (kind) =>
-    w.squads
-      .filter((s) => s.kind === kind)
-      .map((s) => s.members.length)
-      .sort((a, b) => b - a);
-  assert.deepEqual(tam('soldado'), [10, 10, 5]);
-  assert.deepEqual(tam('jeep'), [4, 1]);
-  assert.deepEqual(tam('tanque'), [2, 1]);
-  assert.deepEqual(tam('pesado'), [1]);
-  for (const s of w.squads) assert.ok(s.members.every((u) => u.kind === s.kind));
-});
-
-test('a lo sumo un grupo abierto por tipo y lado, y se cierra lleno o con < 2 s para salir por tiempo', () => {
-  const w = mundo({ limits: { spawnsPerSecond: 3 } });
-  submitOrder(w, orden('soldado', 1, 30, 0));
-  submitOrder(w, orden('jeep', 1, 8, 0));
-  for (let i = 0; i < 900; i++) {
-    stepWorld(w);
-    for (const side of [0, 1]) {
-      for (const kind of ['soldado', 'jeep', 'tanque', 'pesado']) {
-        const abiertos = w.squads.filter((s) => s.side === side && s.kind === kind && s.open);
-        assert.ok(abiertos.length <= 1, `paso ${i}: ${abiertos.length} abiertos de ${kind}`);
-      }
-    }
-    for (const s of w.squads) {
-      if (s.state === 'forming' && s.firstArrivalStep >= 0 && w.step - s.firstArrivalStep >= 120) {
-        assert.equal(s.open, false, 'con menos de 2 s para salir, cerrado');
-      }
-      if (s.members.length >= w.cfg.squads.size[s.kind]) assert.equal(s.open, false);
-    }
-  }
-});
-
-test('llegadas lentas: el grupo lleno sale al llegar el décimo y el soldado 11 abre un grupo nuevo', () => {
-  const w = mundo({ limits: { spawnsPerSecond: 5 } });
-  submitOrder(w, orden('soldado', 1, 11, 0));
-  const salida = [];
-  for (let i = 0; i < 300; i++) {
-    stepWorld(w);
-    for (const e of w.drain()) if (e.type === 'squadDepart') salida.push([e.id, e.n, w.step - 1]);
-  }
-  const uno = w.squads.find((s) => s.id === 1);
-  assert.equal(uno.members.length, 10);
-  assert.ok(uno.members.every((u) => u.arrived));
-  assert.equal(salida[0][1], 10);
-  assert.ok(salida[0][2] < uno.firstArrivalStep + 180, 'salió por estar lleno, no por tiempo');
-  const dos = w.squads.find((s) => s.id === 2);
-  assert.equal(dos.members.length, 1, 'el soldado 11 abre otro grupo');
-});
-
-test('alta en 0 con llegadas en 2, 3 y 4 s: el grupo de 3 sale en 8 s, no antes', () => {
-  const w = mundo();
-  const plan = planAlta(w, 0, 'soldado');
-  const sq = createFromPlan(w, 0, 'soldado', plan);
-  const dir = 1;
-  const llega = (paso) => {
-    while (w.step < paso) stepWorld(w);
-    const n = sq.members.length + 1;
-    const off = placeOffset(w.cfg, 'soldado', n - 1, dir);
-    addUnit(w, sq, plan.x + off.x, plan.y + off.y, {});
-  };
-  llega(60); // 2 s
-  llega(90);
-  llega(120);
-  while (w.step < 239) stepWorld(w);
-  assert.equal(sq.state, 'forming', 'aún no, a 7,97 s');
-  stepWorld(w);
-  stepWorld(w);
-  assert.notEqual(sq.state, 'forming');
-  assert.equal(sq.departStep, 240, 'sale en 8 s (6 s desde la primera llegada)');
-  assert.equal(sq.members.length, 3);
-});
-
-test('grupo de 3 con la primera llegada en 0 y un soldado que sale de la cola en 4,5 s: queda cerrado y el nuevo abre otro', () => {
-  const w = mundo();
-  const plan = planAlta(w, 0, 'soldado');
-  const sq = formando(w, 0, 'soldado', 3, plan);
-  run(w, 1); // primera llegada en el paso 0
-  assert.equal(sq.firstArrivalStep, 0);
-  while (w.step < 135) stepWorld(w); // 4,5 s
-  assert.equal(sq.open, false, 'le quedan 1,5 s: cerrado');
-  submitOrder(w, orden('soldado', 1, 1, 0));
-  stepWorld(w);
-  assert.equal(sq.members.length, 3, 'conserva sus 3');
-  const nuevo = w.squads.find((s) => s.id !== sq.id && s.side === 0);
-  assert.ok(nuevo, 'el nuevo abre otro grupo');
-  assert.ok(nuevo.assembly.y !== sq.anchor.y || nuevo.assembly.x !== sq.anchor.x, 'en un lugar libre');
-  while (w.step < 181) stepWorld(w);
-  assert.equal(sq.departStep, 180, 'sale en 6 s');
-});
-
-test('el pesado sale en su llegada', () => {
-  const w = mundo();
-  submitOrder(w, orden('pesado', 1, 1, 0));
-  run(w, 400);
-  const g = w.squads[0];
-  assert.equal(g.members.length, 1);
-  assert.equal(g.departStep, g.firstArrivalStep, 'sale en el mismo paso en que llega');
-});
-
-test('rol, corredor y calle quedan fijos en el alta, antes de cualquier llegada', () => {
-  const w = mundo();
-  submitOrder(w, orden('soldado', 1, 10, 0));
-  run(w, 2);
-  const g = w.squads[0];
-  assert.equal(g.state, 'forming');
-  assert.equal(g.firstArrivalStep, -1, 'todavía sin llegadas');
-  const foto = [g.role, g.corridor, g.lane, g.sector, g.post];
-  assert.ok(g.assembly && g.assembly.x === w.field.sides[0].gateX.soldado);
-  run(w, 400);
-  assert.deepEqual([g.role, g.corridor, g.lane, g.sector, g.post], foto);
-});
-
-test('la cabeza espera SOLO con todos los lugares ocupados: el pesado ve 9 cajas, los soldados 9 + 3 de DEFENSA', () => {
-  const w = mundo({ commander: { bias: 100 } });
-  // 9 cajas de ATAQUE ocupadas con pesados que todavía no llegan (grupos de 1: cerrados)
-  for (let i = 0; i < 9; i++) {
-    const plan = planAlta(w, 0, 'pesado');
-    assert.ok(plan, `caja ${i}`);
-    const sq = createFromPlan(w, 0, 'pesado', plan);
-    addUnit(w, sq, w.field.sides[0].exitX, plan.y, {});
-  }
-  assert.equal(planAlta(w, 0, 'pesado'), null, 'los pesados no tienen dónde: la cabeza espera');
-  const plan = planAlta(w, 0, 'soldado');
-  assert.ok(plan, 'los soldados todavía tienen los lugares de DEFENSA libres');
-  submitOrder(w, orden('pesado', 1, 1, 0));
-  run(w, 30);
-  assert.equal(w.units.filter((u) => u.kind === 'pesado').length, 9, 'el décimo pesado no salió');
-  // un lugar libre y sale en el primer paso
-  const libre = w.squads[0];
-  libre.members[0].alive = false;
-  stepWorld(w); // el paso reap quita al miembro y el grupo vacío libera la caja
-  stepWorld(w);
-  assert.equal(w.units.filter((u) => u.kind === 'pesado' && u.alive).length, 9, 'ocupó el lugar libre');
-  assert.equal(enCola(w, 0), 0);
-});
-
-test('saturación: la cabeza espera y el soldado que viene detrás NO se adelanta aunque tenga lugar de DEFENSA', () => {
-  const w = mundo({ commander: { bias: 100 } });
-  for (let i = 0; i < 9; i++) {
-    const plan = planAlta(w, 0, 'pesado');
-    const sq = createFromPlan(w, 0, 'pesado', plan);
-    addUnit(w, sq, w.field.sides[0].exitX, plan.y, {});
-  }
-  assert.ok(planAlta(w, 0, 'soldado'), 'el soldado sí tendría lugar');
-  submitOrder(w, orden('pesado', 1, 1, 0));
-  submitOrder(w, orden('soldado', 1, 1, 0));
-  run(w, 60);
-  assert.equal(w.units.filter((u) => u.kind === 'soldado').length, 0, 'el soldado esperó su turno detrás del pesado');
-  assert.equal(enCola(w, 0), 2, 'las dos unidades siguen en la cola');
-  assert.equal(w.queues[0].ground[0].kind, 'pesado', 'el orden de llegada se conserva');
-});
-
-test('los grupos que forman cuentan en S y D, no se convierten ni entran al HUD de salidos', () => {
-  const w = mundo({ commander: { bias: 100 } });
-  const plan = planAlta(w, 0, 'soldado');
-  const g = formando(w, 0, 'soldado', 10, plan);
-  g.firstArrivalStep = -1;
-  for (const u of g.members) u.arrived = false;
-  run(w, 14);
-  stepWorld(w); // paso 15: tick del comandante
-  assert.equal(w.cmd[0].hud.forming, 1);
-  assert.equal(w.cmd[0].hud.ataque + w.cmd[0].hud.defensa, 0);
-});
-
-test('los ids de grupo crecen por orden de creación', () => {
-  const w = mundo();
-  submitOrder(w, orden('soldado', 1, 30, 0));
-  submitOrder(w, orden('soldado', 2, 30, 0));
-  run(w, 400);
-  const ids = w.squads.map((s) => s.id);
-  assert.deepEqual(
-    ids,
-    [...ids].sort((a, b) => a - b),
-  );
-  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(maxVivos <= 1);
+  for (let i = 1; i < lanzamientos.length; i++) assert.ok(lanzamientos[i] - lanzamientos[i - 1] >= 240);
 });
 
 // ---------------------------------------------------------------------------------------------------- 4c.12

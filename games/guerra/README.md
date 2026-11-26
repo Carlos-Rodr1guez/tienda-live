@@ -23,18 +23,77 @@ Pulsa `F1` y se abre el panel **Simulador de público**: envía los mismos event
 
 Todo tiene un valor por defecto; solo escribes lo que quieres cambiar.
 
-- **`tiers`**: cuánto poder da un regalo según sus monedas. Por defecto: 1 moneda da un soldado, 10 a 99 dan jeeps (una cada 10), 100 a 499 dan un tanque por cada 100, 500 a 999 lanzan un bombardeo y desde 1000 sale una unidad pesada. Cada tramo tiene `minCoins`, `unit`, `coinsPerUnit` y `maxPerGift`. Las unidades válidas (en `tiers` y en `giftOverrides`) son `soldado`, `jeep`, `tanque`, `avion` y `pesado`; un override con otra unidad se ignora y F2 lo avisa.
+- **`tiers`**: cuánto poder da un regalo según sus monedas. Por defecto hay nueve tramos, de 1 moneda (soldado) a 3000 monedas o más (el héroe Hombre lobo); la tabla completa está en «Tabla de regalos y tipos de unidad». Un combo ×5 de aviones son 5 aviones, que salen de a uno. Cada tramo tiene `minCoins`, `unit`, `coinsPerUnit` y `maxPerGift`. Las unidades válidas (en `tiers` y en `giftOverrides`) son `soldado`, `francotirador`, `jeep`, `blindado`, `tanque`, `lanzacohetes`, `avion`, `pesado` y `lobo`; un override con otra unidad se ignora y F2 lo avisa.
 - **Overrides por regalo** (`giftOverrides`): "Rosa = 2 tanques" se escribe `{ "Rose": { "unit": "tanque", "count": 2 } }`. La clave es el nombre real del regalo en TikTok (`"Rose"`) o su id (`"id:5655"`).
-- **Topes**: `maxPerEvent` y `eventCaps` limitan cuántas unidades da UN evento. Lo que se recorta no se pierde: su valor queda en las unidades que sí salen, y el feed lo dice ("máx. por regalo").
+- **Topes**: `maxPerEvent` y `eventCaps` limitan cuántas unidades da UN evento. Lo que se recorta no se pierde: su valor queda en las unidades que sí salen, y el feed lo dice ("máx. por regalo"). En el tráfico automático del simulador F1 (niveles medio y alto) el regalo de avión pesa 0,2, el de 300 monedas 0,6, Galaxy 0,4 y el de 3000 monedas 0,05 (`autoWeight` en `simulator.gifts`): salen menos, pero siguen en su botón manual. El panel F1 trae un botón por tramo, de 1 a 3000 monedas; los de 10, 300 y 3000 monedas tienen nombres neutros porque no hay un regalo con ese precio confirmado.
 - **Tope por lado**: 200 por lado como máximo en el campo (`limits.maxAlivePerSide`, se recorta a [40, 300]). Los presupuestos de rendimiento (8 ms por cuadro) están medidos para 200 por lado.
 - **Presencia** (`presence.minutes`): si pasan de 2 a 10 min sin que toques nada, el partido se pausa solo; 5 por defecto y no hay forma de apagarlo.
 - **Escalera de rangos** (XP de LIVE): Recluta 0, Soldado 1, Cabo 25, Sargento 75, Teniente 200, Capitán 500, Mayor 1200, Coronel 3000 y General 7500. Los banners salen desde Sargento.
 - **Movimiento reducido** (`graphics.reducedMotion`): `"auto"` sigue al sistema, `true` lo fuerza y `false` lo ignora. La tecla `R` lo alterna en pleno LIVE.
 - **Cámara**: `view.idleSeconds` (7 s sin tocar la cámara antes de que tome el control la automática), `view.auto.maxK` y `view.auto.minHalf` (qué tan cerca llega la cámara automática; revísalos tras tu primer LIVE).
 
+## Tabla de regalos y tipos de unidad
+
+Cada tramo se decide por las monedas de **un solo regalo** (un combo ×N repite el regalo N veces). Cuanto más caro el tramo, más fuerte la unidad, y el poder es proporcional a lo que se paga.
+
+| Monedas de un regalo | Unidad              | Monedas por unidad | Máx. por regalo |
+| -------------------- | ------------------- | ------------------ | --------------- |
+| 1 a 4                | soldado             | 1                  | 4               |
+| 5 a 9                | francotirador       | 5                  | 1               |
+| 10 a 29              | jeep                | 10                 | 2               |
+| 30 a 99              | blindado            | 30                 | 3               |
+| 100 a 299            | tanque              | 100                | 2               |
+| 300 a 499            | lanzacohetes        | 300                | 1               |
+| 500 a 999            | avión (bombardeo)   | 500                | 1               |
+| 1000 a 2999          | pesado              | 1000               | 2               |
+| 3000 monedas o más   | Hombre lobo (héroe) | 3000               | 1               |
+
+Un regalo único nunca se recorta: el valor pagado siempre queda en las unidades que salen. Si pasa de los topes del evento (`eventCaps`: soldado 40, francotirador 10, jeep 8, blindado 6, tanque 6, lanzacohetes 3, avión 5, pesado 3, lobo 2) el feed avisa "máx. por regalo" y el valor se reparte en las que sí salen. Las unidades sobrantes dentro de un tramo (por ejemplo 299 monedas = 2 tanques) suman XP y valor, pero no más poder.
+
+| Unidad        | Vida    | Daño por segundo | Alcance (px)         | Salpicadura | Notas                                                                 |
+| ------------- | ------- | ---------------- | -------------------- | ----------- | --------------------------------------------------------------------- |
+| soldado       | 60      | 6                | 63                   | no          |                                                                       |
+| francotirador | 180     | 30               | 170                  | no          | un disparo de 75 cada 2,5 s con trazador largo y fino; lento y frágil |
+| jeep          | 600     | 60               | 81                   | no          |                                                                       |
+| blindado      | 2700    | 144              | 90                   | no          | ametralladora pesada, ruedas                                          |
+| tanque        | 7500    | 750              | 99                   | 12,8        |                                                                       |
+| lanzacohetes  | 9000    | 1800             | 190                  | 26          | cohetes con estela cada 2,5 s; muy frágil para su costo               |
+| pesado        | 60 000  | 3000             | 117                  | 19,2        |                                                                       |
+| Hombre lobo   | 144 000 | 16 200           | 24 (cuerpo a cuerpo) | 22          | rápido; el zarpazo golpea en área                                     |
+
+La visión de cada tipo debe ser al menos 1,3 veces su alcance (200 px el soldado, 230 el francotirador, 240 el jeep, el blindado, el tanque y el lobo, 260 el pesado y 280 el lanzacohetes), y la separación entre amigos va de 9 px (soldado) a 38 (pesado), con 12 el francotirador, 24 el blindado, 28 el lobo y 32 el lanzacohetes. Todo se cambia en `game.units` y `game.movement` de `config.json`; la config valida la visión y la regla de poder (vida = 60 × monedas × `bonoHP`, daño por segundo = 6 × monedas × `bonoDPS`).
+
+### El héroe: Hombre lobo
+
+El lobo cuesta 3000 monedas y es el único tipo con tope por lado: **como máximo un lobo vivo (o en cola) por lado** (`limits.maxWolvesPerTeam`). Si llega otro con uno vivo, se convierte en **pesados del mismo valor** (3000 monedas = 3 pesados) y el sim lo avisa con el evento `loboConverted` (lado, dueño, lobos, pesados y valor); el feed dice "el lobo ya está en campo". Al aparecer sale el cartel grande con el nombre del donante ("X invocó al Hombre lobo"), el mismo de los regalos grandes.
+
+### Balance de los tipos nuevos
+
+Se midió con duelos de **igual valor en monedas**: cada lado reparte su valor en 10 tandas (el mismo ritmo de donación), 240 s, bases inmortales. La tabla es el valor que le queda a cada lado (el nuevo contra el rival):
+
+| Nuevo         | Soldados            | Jeeps                       | Tanques         | Pesados         |
+| ------------- | ------------------- | --------------------------- | --------------- | --------------- |
+| francotirador | 70 % contra 0 %     | 86 % contra 0 %             | 0 % contra 15 % | 71 % contra 0 % |
+| blindado      | 92 % contra 0 %     | 47 % contra 0 %             | 0 % contra 83 % | 0 % contra 86 % |
+| lanzacohetes  | 49 % contra 1 %     | 71 % contra 0 %             | 42 % contra 0 % | 0 % contra 25 % |
+| Hombre lobo   | no se puede igualar | 0 % contra 26 % (300 jeeps) | 17 % contra 0 % | 39 % contra 0 % |
+
+La regla es una escalera: cada tipo gana a lo de abajo y pierde con lo de arriba, y ninguno gana a todo. El francotirador se rebajó de 120 de vida y 60 de daño (ganaba incluso a tanques) a 180 y 30. Una prueba (`balance-tipos.test.js`) deja fijada esta escalera.
+
+**Muertes al salir de la puerta.** Los francotiradores y los lanzacohetes plantados cerca de la base enemiga alcanzan la puerta. Se midió qué parte de las unidades que salen muere en los primeros 2 s: 0 % en el simétrico de 200 contra 200 (con o sin los tipos nuevos) y, en el asedio asimétrico (cinco atacantes por defensor), 9,7 % sin los tipos nuevos y 10,8 % con ellos. Se decidió **no agregar protección de salida**: probada la invulnerabilidad de 1,5 s (`movement.spawnShield`) solo baja ese 10,8 % a 10,0 %, porque la zona sigue siendo un tiro al blanco apenas termina, y cambiaría todos los combates. Si en un LIVE el asedio resulta demasiado cruel con los defensores, ese es el ajuste.
+
 ## Cómo se despliega el ejército
 
-Las unidades no van sueltas: se juntan en el **punto de reunión** de su lado, forman **escuadras** (grupos) y salen en bloque. Cada grupo tiene un rol, **DEFENSA** (escudo) o **ATAQUE** (flecha); el HUD cuenta cuántos grupos de cada rol ya salieron. Quien reparte los roles y manda a los grupos es el **comandante**, una regla del juego, sin votos del público y sin botones de voto. El público solo invoca tropas; el comandante decide a dónde van.
+Cada unidad se mueve y decide **por su cuenta**: no hay grupos ni quien las mande. El público solo invoca tropas; lo demás lo resuelve el juego, sin votos del público y sin botones de voto.
+
+- **Puerta única**: todas las unidades de un lado salen por **una sola puerta** de su base, en orden de llegada y con el tope de 200 por lado. Cada salida usa una de 5 ranuras pegadas a la puerta, más separadas cuanto más grande es la unidad (hasta ±38 px para el pesado), y siempre una libre. Los soldados salen a 8 por segundo; los tanques y los pesados, más despacio, porque cada uno espera a que el anterior se aleje. La puerta nunca se tapa: aunque haya enemigos al alcance, la unidad primero sale de la zona de la puerta (disparando si puede) y recién fuera se frena a disparar, y nadie espera más de 1 segundo en la puerta (pasado ese plazo sale por la ranura con más holgura).
+- **Abanico y tres caminos**: las oleadas se reparten en **tres caminos** (arriba, medio y abajo) y cada salida toma el siguiente en rotación, sin azar. Al salir de la puerta la unidad se abre en **abanico** durante sus primeros 300 px hasta su camino y marcha por él con unos ±40 px de dispersión, así que no es una fila india. Cerca de la base enemiga (en el último cuarto del ancho del mapa) los tres caminos se cierran hacia un mismo punto.
+- **Visión**: cada unidad ve a su alrededor (de 200 a 280 px según el tipo, mucho más que su alcance de disparo). Si ve a un enemigo, **va hacia él**, se detiene a su alcance, dispara y, cuando cae, retoma su camino.
+- **Todas van a la base enemiga, a un solo punto**: no hay unidades de defensa. Cada una avanza hacia la **base enemiga** y pelea con lo que encuentra, en este orden: unidades, torretas y base. La base ya no tiene muralla: es un **hangar** (un rectángulo de 76 × 200 px pegado al borde, con dos portones en su cara) y ese es el objetivo final. Solo se ataca por **el centro de la base**: allí convergen todas, a la altura de la torreta central, y forman un frente de asalto de unos 200 px de ancho, justo el alto del hangar; la cara del hangar es el frente y nadie pasa de ella. Las torretas de arriba y de abajo no son blanco de nadie y esas zonas quedan libres, aunque siguen disparando a quien les entre en rango. El daño de área (bombas, obuses) solo daña el hangar si el impacto cae dentro de su rectángulo (o a menos de su radio): una bomba que pasa por arriba o por abajo no le hace nada. El hangar se ve más dañado según pierde vida (grietas, techo hundido, ruinas) y echa chispas y humo en la cara. El alcance de las unidades es 1,5 veces el de la versión anterior (soldado 63 px, jeep 81, tanque 99 y pesado 117; las torretas, 105) y la visión debe ser al menos 1,3 veces el alcance (la config lo valida). La unidad pesada tiene un tercio menos de vida (60 000). La defensa son las 3 torretas y las tropas recién salidas.
+- **Separación sin bloqueo**: las unidades del mismo lado se mantienen a una distancia mínima según su tipo (el soldado la menor, el pesado la mayor), pero la separación nunca las frena: solo las desvía hacia los lados. Por eso no se traban en el camino ni en la puerta.
+- **Bombardero en línea recta y de una sola pasada**: el avión cruza el campo a velocidad constante y en **línea recta**, por la franja con más fuerza enemiga, y suelta una **alfombra de bombas**, una cada 40 px (34 por pasada) desde que pasa sobre el frente propio hasta el borde enemigo. Es **una sola pasada**: al salir del campo desaparece, sin dar la vuelta ni repetir. Cada bomba hace 300 de daño en un radio chico. Nunca daña a los tuyos, y los soportes del avión se van vaciando a medida que suelta.
+- **Un regalo = una intervención**: cada unidad de un regalo de avión es UN avión con UNA pasada. Hay como máximo **1 avión por lado en el aire**, con al menos 8 s entre dos lanzamientos del mismo lado, y la cola de aviones admite 5 (`limits.maxPlanesPerTeam`, `limits.planeGapSeconds` y `limits.maxQueuedPlanes`). Si llega un avión con la cola llena no se pierde: su valor sale como **tanques del mismo valor** (500 monedas = 5 tanques) y el feed del sim lo avisa con el evento `planeConverted`.
+- **HUD «en campo»**: el panel de cada equipo muestra cuántas unidades suyas hay en el campo en ese momento.
 
 ## Atajos del narrador
 

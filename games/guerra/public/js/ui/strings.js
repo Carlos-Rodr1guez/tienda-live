@@ -2,7 +2,7 @@
 // narrador. Español neutro, de "tú". Ninguna de las palabras de la lista prohibida del proyecto (se dice "en vivo" o
 // "transmisión"; la lista vive solo en `test/support/forbidden-words.js`); el escáner de `test/strings.test.js` recorre todo lo que sale de aquí, llamando cada plantilla con
 // nombres del peor caso, y `test/deviations.test.js` (CB-2) vigila además que este directorio no diga la palabra del
-// símbolo nacional. Por eso la leyenda de los íconos dice "Defensa" y "Ataque" y no nombra las formas dibujadas.
+// símbolo nacional. Por eso el rótulo del HUD dice «en campo» y no nombra las formas dibujadas.
 //
 // Las plantillas aceptan cualquier tipo de argumento y siempre devuelven un texto: lo que llega del público nunca debe
 // romper una pantalla. El recorte por ancho es del dibujo (`ui/text.js`), no de la plantilla.
@@ -147,13 +147,8 @@ export const S = deepFreeze({
     off: 'Movimiento reducido: desactivado',
   },
 
-  /** Leyenda de los íconos de rol: junto a los íconos dibujados, sin nombrar sus formas (nota 40). */
-  legend: {
-    defensa: 'Defensa',
-    ataque: 'Ataque',
-  },
-
   hud: {
+    inField: 'en campo',
     percent: (v) => `${Math.min(100, n(v))} %`,
     round: (r, total) => `Ronda ${Math.max(1, n(r))}/${Math.max(1, n(total))}`,
     /** Tiempo que queda de la ronda, "m:ss". */
@@ -178,6 +173,8 @@ export const S = deepFreeze({
     maxPerGift: (nombre) => `${t(nombre)}: máx. por regalo`,
     /** Los likes de un equipo juntaron refuerzos (el dueño es "Likes", no un usuario). */
     reinforcements: (pais, count) => `Refuerzos para ${t(pais)}: +${n(count)}`,
+    /** Ya había un lobo en campo (o en cola): el regalo se volvió pesados del mismo valor (v2.8, uno por lado). */
+    wolfConverted: (nombre, pesados) => `${t(nombre)}: el lobo ya está en campo, ${n(pesados)} pesados`,
   },
 
   banners: {
@@ -188,6 +185,8 @@ export const S = deepFreeze({
     plane: (nombre, regalo) => `${t(nombre)} envió ${t(regalo)}: bombardeo`,
     /** Cuando todavía no se conoce el nombre del regalo (el adaptador del público lo trae en el lote 6b). */
     planeNoGift: (nombre) => `${t(nombre)} lanzó un bombardeo`,
+    /** El héroe (v2.8): el cartel grande del Hombre lobo con el nombre del donante. */
+    wolf: (nombre) => `${t(nombre)} invocó al Hombre lobo`,
   },
 
   connection: {
@@ -271,7 +270,6 @@ export const S = deepFreeze({
     msFx: 'ms efectos (dentro de mundo)',
     msWork: 'ms trabajo por cuadro',
     units: 'unidades',
-    squads: 'grupos',
     planes: 'aviones',
     hits: 'golpes en vuelo',
     particles: 'partículas',
@@ -292,7 +290,6 @@ export const S = deepFreeze({
     labelsDrawn: 'etiquetas dibujadas',
     labelsSelected: 'etiquetas elegidas',
     labelsDropped: 'etiquetas descartadas por el layout',
-    iconsDrawn: 'íconos de rol dibujados',
     camK: 'cámara k (objetivo / mostrado)',
     camMode: 'cámara',
     camIdle: 'segundos sin entrada del narrador',

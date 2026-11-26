@@ -5,19 +5,57 @@
 // Orden de las capas 4 a 10 (las que van en LOW o en la pasada de dispositivo):
 //   shadows, units (unidades y restos por y), projectiles, airShadows, bombsPlanes (en y − z), effects, icons.
 
+import { ConfigError } from '@tienda/kit/sim/config.js';
 import { bombPosition, bombZ } from '../sim/plane.js';
 import { disc, ell } from './pixel.js';
 import { PALETA } from '../data/paleta.js';
-import { wreckAlpha } from './fx.js';
+import { A_PIE, wreckAlpha } from './fx.js';
 
 const INK = PALETA.ink;
-const SOMBRA = Object.freeze({ soldado: [4, 1], jeep: [10, 3], tanque: [12, 3], pesado: [17, 4] });
+/** Sombra elíptica de cada tipo: [radio en x, radio en y]. */
+export const SOMBRA = Object.freeze({
+  soldado: [4, 1],
+  francotirador: [5, 1],
+  jeep: [10, 3],
+  blindado: [11, 3],
+  tanque: [12, 3],
+  lanzacohetes: [14, 3],
+  pesado: [17, 4],
+  lobo: [11, 3],
+});
 /** Altura de impacto sobre el suelo de cada tipo (`TZ` del prototipo), para dibujar la trayectoria de una bala. */
-export const ALTURA = Object.freeze({ soldado: 6, jeep: 7, tanque: 8, pesado: 11 });
+export const ALTURA = Object.freeze({
+  soldado: 6,
+  francotirador: 6,
+  jeep: 7,
+  blindado: 8,
+  tanque: 8,
+  lanzacohetes: 9,
+  pesado: 11,
+  lobo: 14,
+});
 /** Paso del ciclo de marcha en px recorridos. */
-const ZANCADA = Object.freeze({ soldado: 3.2, jeep: 2.6, tanque: 2.2, pesado: 2.2 });
+export const ZANCADA = Object.freeze({
+  soldado: 3.2,
+  francotirador: 3.2,
+  jeep: 2.6,
+  blindado: 2.4,
+  tanque: 2.2,
+  lanzacohetes: 2.2,
+  pesado: 2.2,
+  lobo: 4.5,
+});
 /** Tamaño de las marcas del LOD (CB-18). */
-export const MARCAS = Object.freeze({ soldado: [3, 2], jeep: [6, 3], tanque: [8, 4], pesado: [10, 5] });
+export const MARCAS = Object.freeze({
+  soldado: [3, 2],
+  francotirador: [3, 2],
+  jeep: [6, 3],
+  blindado: [7, 3],
+  tanque: [8, 4],
+  lanzacohetes: [9, 4],
+  pesado: [10, 5],
+  lobo: [12, 6],
+});
 
 /**
  * Posición interpolada con `alpha` en [0, 1]. Escribe en `out` (se reutiliza: no reserva objetos por cuadro).
@@ -84,12 +122,44 @@ function trazo(P, x0, y0, x1, y1) {
 /** Entrada reutilizable de la lista ordenada por y. */
 const nuevaEntrada = () => ({ ref: null, wreck: false, x: 0, y: 0, key: 0, kind: '', side: 0, dir: 1 });
 
+/** Escala por defecto del bombardero en la vista (`render.planeScale`). */
+export const PLANE_SCALE = 2;
+
+/** Margen de recorte del bombardero: su sprite ×2 mide 88×68 y el avión no se corta antes de salir del todo. */
+const PLANE_CULL = 90;
+
+/**
+ * Valida `render.planeScale`: un entero de 1 a 4 (con píxel entero el sprite queda nítido).
+ * @param {unknown} v
+ * @returns {number}
+ */
+export function resolvePlaneScale(v) {
+  if (v === undefined) return PLANE_SCALE;
+  if (!(typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 4)) {
+    throw new ConfigError('render.planeScale debe ser un entero entre 1 y 4');
+  }
+  return v;
+}
+
+/**
+ * Cuántos de los `n` soportes del avión se dibujan: ceil(n·quedan/total), para que se vacíen en proporción a la
+ * alfombra. Sin total válido (dato roto) cae a las bombas que quedan, acotadas a `n`.
+ */
+export function soportesVisibles(n, quedan, total) {
+  const q = Math.max(0, Number.isFinite(quedan) ? quedan : 0);
+  if (!(total > 0)) return Math.min(n, Math.ceil(q));
+  return Math.min(n, Math.ceil((n * Math.min(q, total)) / total));
+}
+
 /**
  * La capa de entidades: se le pasa a `createRenderer({layers: {entities}})`. Lee `P.frame.scene`, `P.frame.alpha` y
  * `P.frame.time`; el modo de marcas lo decide el renderer (`P.stats.marks`).
- * @param {{bank: ReturnType<import('./sprites.js').createSpriteBank>, team: [number, number]}} o
+ * El bombardero se dibuja ×`planeScale` (v2.6, `render.planeScale`, 2 por defecto) con píxel de `K` px: es solo de la
+ * vista, no toca los datos horneados (44×34) ni sus regiones.
+ * @param {{bank: ReturnType<import('./sprites.js').createSpriteBank>, team: [number, number], planeScale?: number}} o
  */
-export function createEntityLayer({ bank, team }) {
+export function createEntityLayer({ bank, team, planeScale = PLANE_SCALE }) {
+  const K = resolvePlaneScale(planeScale);
   const out = { x: 0, y: 0 };
   const pool = Array.from({ length: 1100 }, nuevaEntrada);
   const sprites = bank.sprites;
@@ -139,7 +209,7 @@ export function createEntityLayer({ bank, team }) {
     const list = P.lists.entities;
     for (let i = 0; i < list.length; i++) {
       const e = list.items[i];
-      if (e.wreck && e.kind === 'soldado') continue;
+      if (e.wreck && A_PIE.has(e.kind)) continue;
       const s = SOMBRA[e.kind];
       P.stats.drawCalls += s[1] * 2 + 1;
       ell(ctx, P.x(e.x), P.y(e.y) + k, s[0], s[1], k);
@@ -159,22 +229,26 @@ export function createEntityLayer({ bank, team }) {
     const disparo = u.tgt !== null && u.tgt !== undefined && desde <= 10;
     let anim = 'idle';
     let idx = 0;
-    if (u.kind === 'soldado') {
+    if (A_PIE.has(u.kind)) {
+      // soldado, francotirador y lobo: el cuadro 1 de «shoot» es el fogonazo (o el zarpazo)
       if (disparo) {
         anim = 'shoot';
         idx = desde <= 3 ? 1 : 0;
       } else if (rapido) {
         anim = 'walk';
-        idx = Math.floor((Math.abs(e.x) + Math.abs(e.y)) / ZANCADA.soldado);
+        idx = Math.floor((Math.abs(e.x) + Math.abs(e.y)) / ZANCADA[u.kind]);
       } else if (u.tgt) anim = 'shoot';
-    } else if (u.kind === 'jeep') {
+    } else if (u.kind === 'jeep' || u.kind === 'blindado') {
       if (rapido) {
         anim = 'walk';
-        idx = Math.floor((Math.abs(e.x) + Math.abs(e.y)) / ZANCADA.jeep);
+        idx = Math.floor((Math.abs(e.x) + Math.abs(e.y)) / ZANCADA[u.kind]);
       } else if (u.tgt) {
         anim = 'shoot';
         idx = disparo ? Math.floor(time * 18) & 1 : 0;
       }
+    } else if (u.kind === 'lanzacohetes' && disparo && !rapido) {
+      anim = 'shoot';
+      idx = desde <= 3 ? 1 : 0;
     } else if (rapido) {
       anim = 'walk';
       idx = Math.floor((Math.abs(e.x) + Math.abs(e.y)) / ZANCADA[u.kind]);
@@ -207,7 +281,7 @@ export function createEntityLayer({ bank, team }) {
     const mul = P.mul;
     let anim;
     let idx = 0;
-    if (w.kind === 'soldado') {
+    if (A_PIE.has(w.kind)) {
       anim = 'death';
       idx = edad < 0.12 ? 0 : edad < 0.3 ? 1 : 2;
     } else anim = 'wreck';
@@ -262,7 +336,7 @@ export function createEntityLayer({ bank, team }) {
       const s = Math.max(0, Math.min(1, (ahora - p.step0) / 30 / p.dur));
       const x = p.x0 + (p.tx - p.x0) * s;
       const y = p.y0 + (p.ty - p.y0) * s;
-      const z = p.z0 + (p.tz - p.z0) * s + (p.kind === 1 ? (p.arc ?? 0) * 4 * s * (1 - s) : 0);
+      const z = p.z0 + (p.tz - p.z0) * s + (p.kind === 1 || p.kind === 3 ? (p.arc ?? 0) * 4 * s * (1 - s) : 0);
       if (!P.visible(x, y - z, 20)) continue;
       if (p.kind === 0) {
         const s2 = Math.max(0, s - 6 / (270 * p.dur));
@@ -271,6 +345,37 @@ export function createEntityLayer({ bank, team }) {
         const za = p.z0 + (p.tz - p.z0) * s2;
         ctx.fillStyle = '#FFE680';
         trazo(P, xa, ya - za, x, y - z);
+        ctx.fillStyle = '#FFFFFF';
+        P.rect(P.x(Math.round(x)), P.y(Math.round(y - z)), 1, 1);
+      } else if (p.kind === 2) {
+        // trazador del francotirador: línea larga y fina (36 px) que se apaga hacia atrás, con la punta blanca
+        const s2 = Math.max(0, s - 36 / (450 * p.dur));
+        const xa = p.x0 + (p.tx - p.x0) * s2;
+        const ya = p.y0 + (p.ty - p.y0) * s2;
+        const za = p.z0 + (p.tz - p.z0) * s2;
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = '#9DE0FF';
+        trazo(P, xa, ya - za, x, y - z);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#FFFFFF';
+        trazo(P, p.x0 + (p.tx - p.x0) * Math.max(s2, s - 10 / (450 * p.dur)), y - z, x, y - z);
+        P.rect(P.x(Math.round(x)), P.y(Math.round(y - z)), 1, 1);
+      } else if (p.kind === 3) {
+        // cohete: cuerpo de 3 px, llama y estela de humo gris que se afina hacia atrás
+        for (let k = 1; k <= 5; k++) {
+          const s3 = Math.max(0, s - (k * 3) / (230 * p.dur));
+          const xk = p.x0 + (p.tx - p.x0) * s3;
+          const yk = p.y0 + (p.ty - p.y0) * s3;
+          const zk = p.z0 + (p.tz - p.z0) * s3 + (p.arc ?? 0) * 4 * s3 * (1 - s3);
+          ctx.globalAlpha = 0.7 - k * 0.11;
+          ctx.fillStyle = k < 3 ? '#C7D0E2' : '#6C7890';
+          P.rect(P.x(Math.round(xk)), P.y(Math.round(yk - zk)), 1 + (k < 3 ? 1 : 0), 1);
+        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#FFB347';
+        P.rect(P.x(Math.round(x) - 1), P.y(Math.round(y - z)), 2, 1);
+        ctx.fillStyle = '#E5484D';
+        P.rect(P.x(Math.round(x) + 1), P.y(Math.round(y - z)), 1, 1);
         ctx.fillStyle = '#FFFFFF';
         P.rect(P.x(Math.round(x)), P.y(Math.round(y - z)), 1, 1);
       } else {
@@ -298,11 +403,11 @@ export function createEntityLayer({ bank, team }) {
     ctx.globalAlpha = 0.35;
     for (const p of scene.planes) {
       interpPos(p, alpha, out);
-      if (!P.visible(out.x, out.y, 60)) continue;
+      if (!P.visible(out.x, out.y, PLANE_CULL)) continue;
       const espejo = p.side === 1;
-      const ax = espejo ? av.w - 1 - av.ax : av.ax;
+      const ax = (espejo ? av.w - 1 - av.ax : av.ax) * K;
       const sh = bank.sombraAvion(espejo);
-      P.img(sh, P.x(out.x) - ax * mul, P.y(out.y) - (sh.height >> 1) * mul, av.w * mul, sh.height * mul);
+      P.img(sh, P.x(out.x) - ax * mul, P.y(out.y) - ((sh.height * K) >> 1) * mul, av.w * K * mul, sh.height * K * mul);
     }
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = INK;
@@ -329,23 +434,28 @@ export function createEntityLayer({ bank, team }) {
     const av = sprites.avion;
     for (const p of scene.planes) {
       interpPos(p, alpha, out);
-      if (!P.visible(out.x, out.y, 60)) continue;
+      if (!P.visible(out.x, out.y, PLANE_CULL)) continue;
       const espejo = p.side === 1;
-      const ax = espejo ? av.w - 1 - av.ax : av.ax;
+      const ax = (espejo ? av.w - 1 - av.ax : av.ax) * K;
       const X = P.x(out.x) - ax * mul;
-      const Y = P.y(out.y - p.z) - av.ay * mul;
-      // las bombas que quedan, en sus soportes, van bajo el cuerpo
-      const quedan = Math.max(0, Math.min(av.soportes.length, p.bombsLeft));
+      const Y = P.y(out.y - p.z) - av.ay * K * mul;
+      // las bombas que quedan, en sus soportes, van bajo el cuerpo: ceil(5·bombsLeft/N), así se vacían en proporción
+      const quedan = soportesVisibles(av.soportes.length, p.bombsLeft, p.bombsTotal);
       for (let i = 0; i < quedan; i++) {
         const sop = av.soportes[i];
         const sw = sop.rows[0].length;
         const sx = espejo ? av.w - sop.x - sw : sop.x;
-        P.img(bank.soporte(team[p.side], i, espejo), X + sx * mul, Y + sop.y * mul, sw * mul, sop.rows.length * mul);
+        P.img(
+          bank.soporte(team[p.side], i, espejo),
+          X + sx * K * mul,
+          Y + sop.y * K * mul,
+          sw * K * mul,
+          sop.rows.length * K * mul,
+        );
       }
-      const vy = p.vy ?? 0;
-      const alabeo = vy < -18 ? 1 : vy > 18 ? 2 : 0;
-      const img = bank.frame(team[p.side], 'avion', 'fly', alabeo * 2 + (Math.floor(time * 24) & 1), espejo);
-      P.img(img, X, Y, av.w * mul, av.h * mul);
+      // sin alabeo: el avión vuela recto (vy = 0); solo alterna los dos cuadros de la hélice
+      const img = bank.frame(team[p.side], 'avion', 'fly', Math.floor(time * 24) & 1, espejo);
+      P.img(img, X, Y, av.w * K * mul, av.h * K * mul);
     }
   }
 
@@ -367,8 +477,6 @@ export function createEntityLayer({ bank, team }) {
     bombasYAviones(P, scene, alpha, time);
     P.trace?.('effects');
     scene.drawEffects?.(P);
-    P.trace?.('icons');
-    scene.drawIcons?.(P);
   };
 }
 

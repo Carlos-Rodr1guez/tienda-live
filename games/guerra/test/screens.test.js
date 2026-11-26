@@ -16,6 +16,7 @@ import {
 } from '../public/js/ui/screens.js';
 import { createBanners } from '../public/js/ui/banners.js';
 import { S } from '../public/js/ui/strings.js';
+import { seedUnits } from '../public/js/sim/world.js';
 import { WORST_NAMES, findForbidden } from './support/forbidden-words.js';
 
 // 6.3 a 6.5: modelos de vista del HUD, las pantallas y los banners (CB-17, KIT-23, KIT-24, KIT-25, NM-1, NM-5, CB-20).
@@ -99,15 +100,17 @@ test('CB-17: el % de la base se redondea hacia arriba (1 HP es 1 %), se recorta 
   assert.equal(hudModel({ match, registry, camera: CAMARA, net: null }).panels[0].pct, 0, 'maxHp 0 no divide por cero');
 });
 
-test('CB-17 y CB-21: los grupos salidos DEFENSA y ATAQUE del HUD igualan los del sim, rotulados "Defensa" y "Ataque"', () => {
+test('CB-17 y CB-21: el HUD muestra «en campo» por equipo, contado de las unidades vivas del sim', () => {
   const { match, registry } = partido();
-  match.world.cmd[0].hud = { ...match.world.cmd[0].hud, defensa: 3, ataque: 7 };
-  match.world.cmd[1].hud = { ...match.world.cmd[1].hud, defensa: 1, ataque: 4 };
+  const w = match.world;
+  seedUnits(w, { side: 0, kind: 'soldado', count: 7, x: 300, y: 300, dy: 10 });
+  seedUnits(w, { side: 1, kind: 'jeep', count: 4, x: 900, y: 300, dy: 10 });
+  seedUnits(w, { side: 1, kind: 'soldado', count: 1, x: 900, y: 500 }).units[0].alive = false;
   const h = hudModel({ match, registry, camera: CAMARA, net: null });
-  assert.deepEqual(h.panels[0].departed, { defensa: 3, ataque: 7 });
-  assert.deepEqual(h.panels[1].departed, { defensa: 1, ataque: 4 });
-  assert.equal(h.legend.defensa, 'Defensa');
-  assert.equal(h.legend.ataque, 'Ataque');
+  assert.equal(h.panels[0].inField, 7);
+  assert.equal(h.panels[1].inField, 4);
+  assert.equal(h.panels[0].departed, undefined, 'ya no hay grupos salidos por rol');
+  assert.equal(h.legend, undefined, 'ya no hay leyenda Defensa / Ataque');
 });
 
 test('CB-17: rieles de unión, likes y energía por equipo salen del partido', () => {

@@ -103,22 +103,13 @@ test('CB-17: el HUD entra en sus paneles a todos los tamaños, sin tocar el marc
   }
 });
 
-test('CB-17: los textos del HUD salen de S: título del estado de la cámara, leyenda "Defensa" y "Ataque", marco y rótulos', () => {
+test('CB-17: los textos del HUD salen de S: título del estado de la cámara, «en campo», marco y rótulos', () => {
   const fx = fixtura();
   fx.match.state = 'battle';
   const ctx = createFakeCtx({ record: true });
   const { hud, screen } = modelos(fx);
   const textos = cuadro(fx.ui, ctx, { W: 1920, H: 1080 }, { hud, screen, feed: [], banner: null }).map((b) => b.text);
-  for (const esperado of [
-    S.camera.auto,
-    S.legend.defensa,
-    S.legend.ataque,
-    S.frame,
-    S.hud.joinPrefix(1),
-    'Perú',
-    'México',
-    S.feed.empty,
-  ]) {
+  for (const esperado of [S.camera.auto, S.hud.inField, S.frame, S.hud.joinPrefix(1), 'Perú', 'México', S.feed.empty]) {
     assert.ok(textos.includes(esperado), `falta "${esperado}"`);
   }
   // el rótulo de estado crece con u (S6): a 1080p la fuente del estado es de 28 px

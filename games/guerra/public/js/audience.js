@@ -18,21 +18,48 @@ import { compileRouter, routeGift } from '@tienda/kit/sim/router.js';
 import { DEFAULTS } from './sim/defaults.js';
 
 /** Las unidades que el router conoce: los tipos de tierra del juego y el avión. */
-export const UNIT_KINDS = Object.freeze(['soldado', 'jeep', 'tanque', 'avion', 'pesado']);
+export const UNIT_KINDS = Object.freeze([
+  'soldado',
+  'francotirador',
+  'jeep',
+  'blindado',
+  'tanque',
+  'lanzacohetes',
+  'avion',
+  'pesado',
+  'lobo',
+]);
 
 /** Poder de los regalos, proporcional a las monedas (diseño §4). El README explica cómo cambiarlos en `config.json`. */
 export const ROUTER_DEFAULTS = Object.freeze({
   tiers: [
-    { minCoins: 1, unit: 'soldado', coinsPerUnit: 1, maxPerGift: 9 },
-    { minCoins: 10, unit: 'jeep', coinsPerUnit: 10, maxPerGift: 5 },
-    { minCoins: 100, unit: 'tanque', coinsPerUnit: 100, maxPerGift: 4 },
+    { minCoins: 1, unit: 'soldado', coinsPerUnit: 1, maxPerGift: 4 },
+    { minCoins: 5, unit: 'francotirador', coinsPerUnit: 5, maxPerGift: 1 },
+    { minCoins: 10, unit: 'jeep', coinsPerUnit: 10, maxPerGift: 2 },
+    { minCoins: 30, unit: 'blindado', coinsPerUnit: 30, maxPerGift: 3 },
+    { minCoins: 100, unit: 'tanque', coinsPerUnit: 100, maxPerGift: 2 },
+    { minCoins: 300, unit: 'lanzacohetes', coinsPerUnit: 300, maxPerGift: 1 },
     { minCoins: 500, unit: 'avion', coinsPerUnit: 500, maxPerGift: 1 },
-    { minCoins: 1000, unit: 'pesado', coinsPerUnit: 1000, maxPerGift: 3 },
+    { minCoins: 1000, unit: 'pesado', coinsPerUnit: 1000, maxPerGift: 2 },
+    { minCoins: 3000, unit: 'lobo', coinsPerUnit: 3000, maxPerGift: 1 },
   ],
   giftOverrides: {},
   maxPerEvent: 40,
-  eventCaps: { soldado: 40, jeep: 8, tanque: 6, avion: 2, pesado: 3 },
-  bigUnits: ['tanque', 'avion', 'pesado'],
+  // v2.8: un avión por unidad de regalo (un combo ×5 da 5 aviones, que salen de a uno); más de 5 se recorta.
+  // v2.8 (precios por monedas de un solo regalo): un regalo único nunca se recorta (`maxPerGift` ≤ tope del evento); los
+  // topes cortan solo combos. El lobo es héroe: 2 por evento y, como mucho, 1 vivo por lado (sim/queue.js).
+  eventCaps: {
+    soldado: 40,
+    francotirador: 10,
+    jeep: 8,
+    blindado: 6,
+    tanque: 6,
+    lanzacohetes: 3,
+    avion: 5,
+    pesado: 3,
+    lobo: 2,
+  },
+  bigUnits: ['tanque', 'lanzacohetes', 'avion', 'pesado', 'lobo'],
   bannerCoins: 500,
 });
 
@@ -40,10 +67,17 @@ export const ROUTER_DEFAULTS = Object.freeze({
 export const SIM_GIFTS = Object.freeze([
   Object.freeze({ name: 'Rose', coins: 1, id: '5655' }),
   Object.freeze({ name: 'Finger Heart', coins: 5 }),
+  Object.freeze({ name: '10 monedas', coins: 10 }),
   Object.freeze({ name: 'Doughnut', coins: 30 }),
   Object.freeze({ name: 'Hand Hearts', coins: 100 }),
-  Object.freeze({ name: 'Airplane', coins: 500 }),
-  Object.freeze({ name: 'Galaxy', coins: 1000 }),
+  // v2.8: los tramos de 300 y 3000 monedas no tienen un regalo cuyo precio esté confirmado: botón por monedas, nombre neutro.
+  // Precios de TikTok sin verificar (fuente no oficial): Doughnut 30 y Airplane 500; confirmarlos en el panel de la app.
+  Object.freeze({ name: '300 monedas', coins: 300, autoWeight: 0.6 }),
+  // el avión pesa 0,2 en el tráfico automático (medio y alto): sigue en el botón manual, pero sale mucho menos
+  Object.freeze({ name: 'Airplane', coins: 500, autoWeight: 0.2 }),
+  Object.freeze({ name: 'Galaxy', coins: 1000, autoWeight: 0.4 }),
+  // el héroe: con 0,05 sale en ~1 de cada 20 regalos caros del tráfico automático (el nivel «máximo» no usa pesos)
+  Object.freeze({ name: '3000 monedas', coins: 3000, autoWeight: 0.05 }),
 ]);
 
 /** Las claves de `config.json → game` que mueven el router. */
@@ -170,6 +204,7 @@ export function createAudience({ registry, router }) {
               big: route.big,
               trimmed: route.trimmed,
               plane: route.orders.some((o) => o.kind === 'avion'),
+              wolf: route.orders.some((o) => o.kind === 'lobo'),
             },
           };
         }
@@ -232,9 +267,10 @@ export function createFlow({ audience, match, rig, banners, maxQueued = MAX_QUEU
             coins: r.cmd.coins,
             big: true,
             giftName: m.giftName,
+            hero: m.wolf ? 'lobo' : undefined,
             owner: m.owner,
             x: lado?.exitX ?? 720,
-            y: lado?.gates?.[1] ?? 405,
+            y: lado?.door?.y ?? 405,
           },
           w?.step ?? 0,
         );

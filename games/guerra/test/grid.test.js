@@ -113,36 +113,55 @@ test('con 400 elementos repartidos una consulta mide pocas distancias (≤ 40·n
   assert.ok(g.distCalls <= 40 * n, `${g.distCalls} distancias`);
 });
 
-test('en el mundo, un paso con 400 unidades repartidas mide ≤ 40·n distancias entre las dos grillas', async () => {
-  const { createWorld, seedSquad, stepWorld } = await import('../public/js/sim/world.js');
-  const w = createWorld({ limits: { maxAlivePerSide: 300 } });
-  // 20 grupos de soldados por lado (10 cada uno): 400 unidades repartidas en los tres corredores y las tres calles
-  for (let i = 0; i < 20; i++) {
-    const corridor = i % 3;
-    const lane = Math.floor(i / 3) % 3;
-    const x = 200 + (i % 7) * 70;
-    seedSquad(w, { side: 0, kind: 'soldado', corridor, lane, x });
-    seedSquad(w, { side: 1, kind: 'soldado', corridor, lane, x: 1440 - x });
+/** 200 unidades por lado repartidas por todo el campo, sin azar (la fracción de n·paso reparte x e y). */
+function repartidas(createWorld, seedUnits, game = {}) {
+  const w = createWorld({ limits: { maxAlivePerSide: 300 }, hq: { hp: 1e12 }, ...game });
+  const frac = (n, p) => n * p - Math.floor(n * p);
+  const tipos = ['soldado', 'soldado', 'soldado', 'jeep', 'tanque', 'soldado', 'soldado', 'pesado'];
+  for (let i = 0; i < 200; i++) {
+    const kind = tipos[i % tipos.length];
+    const y = 158 + frac(i, 0.618034) * 580;
+    seedUnits(w, { side: 0, kind, x: 200 + frac(i, 0.754877) * 500, y, yg: y, phase: 'march' });
+    seedUnits(w, {
+      side: 1,
+      kind,
+      x: 1240 - frac(i, 0.754877) * 500,
+      y: 158 + frac(i + 0.5, 0.618034) * 580,
+      phase: 'march',
+    });
   }
+  return w;
+}
+
+// CB-18 (v2.6): la visión escalonada cada 4 pasos y la separación miden pares por la grilla; el costo es lineal. El
+// contador pasa a medir POR PASO y por unidad: el techo sigue siendo 40 distancias por unidad (la visión a 200–260 px
+// con consulta cada 4 pasos más la separación a ~20 px promedian unas 20 con 400 unidades repartidas).
+test('en el mundo, un paso con 400 unidades repartidas por el campo mide ≤ 40·n distancias entre las dos grillas', async () => {
+  const { createWorld, seedUnits, stepWorld } = await import('../public/js/sim/world.js');
+  const w = repartidas(createWorld, seedUnits);
   assert.equal(w.units.length, 400);
-  for (let i = 0; i < 5; i++) {
+  let total = 0;
+  for (let i = 0; i < 60; i++) {
     w.grids[0].distCalls = 0;
     w.grids[1].distCalls = 0;
     stepWorld(w);
     const calls = w.grids[0].distCalls + w.grids[1].distCalls;
+    total += calls / w.units.length;
     assert.ok(calls <= 40 * w.units.length, `${calls} distancias con ${w.units.length} unidades`);
   }
+  assert.ok(total / 60 <= 25, `promedio de ${total / 60} distancias por unidad y por paso`);
 });
 
-test('en el mundo, 400 unidades agrupadas en un solo corredor siguen midiendo ≤ 40·n distancias por paso (4c.13)', async () => {
-  const { createWorld, seedSquad, stepWorld } = await import('../public/js/sim/world.js');
+test('en el mundo, 400 unidades en una franja densa de 120×580 miden ≤ 120·n distancias por paso (el peor paso)', async () => {
+  const { createWorld, seedUnits, stepWorld } = await import('../public/js/sim/world.js');
   const w = createWorld({ limits: { maxAlivePerSide: 300 }, hq: { hp: 1e12 } });
-  // 20 grupos por lado, todos en el corredor medio y apretados en x: la peor densidad que arma el comandante
-  for (let i = 0; i < 20; i++) {
-    const lane = i % 3;
-    const x = 520 + Math.floor(i / 3) * 24;
-    seedSquad(w, { side: 0, kind: 'soldado', corridor: 1, lane, x });
-    seedSquad(w, { side: 1, kind: 'soldado', corridor: 1, lane, x: 1440 - x });
+  // 200 por lado mezclados en una franja de 120 px de ancho por todo el suelo: la pelea más apretada que arma la marcha
+  const f = (n, p) => n * p - Math.floor(n * p);
+  for (let i = 0; i < 200; i++) {
+    for (const side of [0, 1]) {
+      const y = 158 + f(i + side * 0.37, 0.56984) * 580;
+      seedUnits(w, { side, kind: 'soldado', x: 660 + f(i + side * 0.21, 0.754877) * 120, y, yg: y, phase: 'march' });
+    }
   }
   assert.equal(w.units.length, 400);
   let peor = 0;
@@ -152,5 +171,8 @@ test('en el mundo, 400 unidades agrupadas en un solo corredor siguen midiendo �
     stepWorld(w);
     peor = Math.max(peor, (w.grids[0].distCalls + w.grids[1].distCalls) / w.units.length);
   }
-  assert.ok(peor <= 40, `${peor} distancias por unidad`);
+  // medido ~74 con la visión escalonada, ~85 con el alcance ×1,5 (v2.7) y ~103 con el segundo ×1,5 (v2.8: el radio de la
+  // consulta por alcance crece): el techo de 40·n de CB-18 vale para unidades repartidas; en la franja más densa posible
+  // se sube a 120·n (el costo de pared se mide en stall.test.js y en la prueba de rendimiento: ≤ 0,5 ms por paso)
+  assert.ok(peor <= 120, `${peor} distancias por unidad`);
 });

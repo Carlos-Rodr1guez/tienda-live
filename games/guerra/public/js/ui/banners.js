@@ -81,11 +81,13 @@ export function createBanners({ registry, ladder = DEFAULT_LADDER, cfg }) {
     if (f.kind === 'join') return S.feed.join(nombre(f.key), f.teamName ?? '');
     if (f.kind === 'trim') return S.feed.maxPerGift(nombre(f.key));
     if (f.kind === 'reinforce') return S.feed.reinforcements(f.teamName ?? '', f.count);
+    if (f.kind === 'wolf') return S.feed.wolfConverted(nombre(f.key), f.count);
     return S.banners.rankUp(nombre(f.key), rango(f.to));
   };
 
   function textOf(b) {
     if (b.kind === 'rank') return S.banners.rankUp(nombre(b.key), rango(b.to));
+    if (b.kind === 'wolf') return S.banners.wolf(nombre(b.key));
     if (b.kind === 'plane')
       return b.giftName ? S.banners.plane(nombre(b.key), b.giftName) : S.banners.planeNoGift(nombre(b.key));
     return b.giftName ? S.banners.gift(nombre(b.key), b.giftName) : S.banners.giftNoName(nombre(b.key));
@@ -119,6 +121,14 @@ export function createBanners({ registry, ladder = DEFAULT_LADDER, cfg }) {
         if (e.type === 'rankUp' && typeof e.key === 'string' && Number.isFinite(e.to)) {
           pushFeed({ kind: 'rank', key: e.key, to: e.to, team: e.team ?? null });
           if (e.to >= desde) enqueue({ kind: 'rank', key: e.key, to: e.to, team: e.team ?? null, rare: false });
+        } else if (e.type === 'loboConverted') {
+          // v2.8: el lobo que sobraba se volvió pesados; el feed lo cuenta con el nombre del dueño
+          pushFeed({
+            kind: 'wolf',
+            key: typeof e.owner === 'string' ? e.owner : null,
+            team: e.side + 1,
+            count: e.pesados,
+          });
         } else if (e.type === 'join' && typeof e.key === 'string') {
           // sin par elegido (selector) no hay país que nombrar: esa unión no deja línea ("se unió a ..." sin país)
           const teamName = String(teamNameOf?.(e.team) ?? '');
@@ -150,7 +160,7 @@ export function createBanners({ registry, ladder = DEFAULT_LADDER, cfg }) {
       for (const g of items) {
         if (g === null || typeof g !== 'object') continue;
         enqueue({
-          kind: g.kind === 'plane' ? 'plane' : 'gift',
+          kind: g.kind === 'plane' ? 'plane' : g.kind === 'wolf' ? 'wolf' : 'gift',
           key: typeof g.owner === 'string' ? g.owner : null,
           giftName: typeof g.giftName === 'string' ? g.giftName : '',
           team: null,

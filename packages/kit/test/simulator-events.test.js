@@ -194,6 +194,41 @@ test('KIT-27: el nivel "máximo" manda más regalos, y los caros, que el medio',
   assert.ok(gifts(max).some((e) => e.giftName === 'Corazón'));
 });
 
+test('KIT-27: autoWeight baja el peso de un regalo en los niveles medio y alto, no en "máximo" ni en los botones manuales', () => {
+  const gifts = [
+    { name: 'Rosa', coins: 1 },
+    { name: 'A', coins: 5 },
+    { name: 'B', coins: 30 },
+    { name: 'Avión', coins: 500, autoWeight: 0.2 },
+    { name: 'Gran', coins: 1000 },
+  ];
+  const model = panelModel({ teams: CONFIG.teams, simulator: { gifts } });
+  assert.equal(model.gifts.find((g) => g.name === 'Avión').autoWeight, 0.2, 'el modelo lo conserva');
+  const cuenta = (level, g) => {
+    const rng = mulberry32(9);
+    let n = 0;
+    for (let i = 0; i < 6000; i++)
+      for (const e of pickAuto(rng, { ...model, names: ['ana'], level }))
+        if (e.type === 'gift' && e.giftName === g) n++;
+    return n;
+  };
+  const sin = (level) => {
+    const m = panelModel({
+      teams: CONFIG.teams,
+      simulator: { gifts: gifts.map((g) => ({ name: g.name, coins: g.coins })) },
+    });
+    const rng = mulberry32(9);
+    let n = 0;
+    for (let i = 0; i < 6000; i++)
+      for (const e of pickAuto(rng, { ...m, names: ['ana'], level }))
+        if (e.type === 'gift' && e.giftName === 'Avión') n++;
+    return n;
+  };
+  for (const level of ['mid', 'high']) assert.ok(cuenta(level, 'Avión') < sin(level) * 0.5, `${level}: pesa menos`);
+  assert.equal(cuenta('max', 'Avión'), sin('max'), '"máximo" no cambia');
+  assert.ok(cuenta('mid', 'Avión') > 0, 'sigue saliendo alguno');
+});
+
 test('KIT-27: pickAuto sin regalos ni equipos no lanza y devuelve solo lo posible', () => {
   const rng = mulberry32(1);
   for (let i = 0; i < 100; i++) {
@@ -215,4 +250,29 @@ test('KIT-27: autoCount da lo esperado por nivel, repetible y 0 para "off"', () 
   assert.ok(total('low') < total('mid') && total('mid') < total('high') && total('high') < total('max'));
   assert.equal(total('mid'), total('mid'));
   assert.ok(total('max') >= 3000, 'el máximo da varios eventos por vuelta');
+});
+
+test('KIT-27: autoWeight también reparte entre los dos regalos más caros (el "grande"), y sin pesos sigue siendo el más caro', () => {
+  const regalos = (heroe) => [
+    { name: 'Rosa', coins: 1 },
+    { name: 'A', coins: 5 },
+    { name: 'Gran', coins: 1000, ...(heroe ? { autoWeight: 0.4 } : {}) },
+    { name: 'Héroe', coins: 3000, ...(heroe ? { autoWeight: 0.05 } : {}) },
+  ];
+  const cuentaGrandes = (heroe, level) => {
+    const m = panelModel({ teams: CONFIG.teams, simulator: { gifts: regalos(heroe) } });
+    const rng = mulberry32(5);
+    const n = { Gran: 0, Héroe: 0 };
+    for (let i = 0; i < 20000; i++)
+      for (const e of pickAuto(rng, { ...m, names: ['ana'], level }))
+        if (e.type === 'gift' && e.giftName in n && e.coins >= 1000) n[e.giftName]++;
+    return n;
+  };
+  const con = cuentaGrandes(true, 'mid');
+  assert.ok(con.Héroe > 0 && con.Héroe < con.Gran * 0.2, `con pesos el héroe sale poco: ${JSON.stringify(con)}`);
+  // sin pesos, el "grande" (5 % de los eventos) es siempre el más caro: el héroe sale mucho más que con pesos
+  const sin = cuentaGrandes(false, 'mid');
+  assert.ok(sin.Héroe > con.Héroe * 3, `sin pesos: ${JSON.stringify(sin)}`);
+  const max = cuentaGrandes(true, 'max');
+  assert.ok(max.Héroe > con.Héroe * 3, `"máximo" no usa pesos: ${JSON.stringify(max)}`);
 });

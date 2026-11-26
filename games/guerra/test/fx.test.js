@@ -183,7 +183,7 @@ test('un soldado se quita ≤ 3,5 s después de morir, un vehículo a los 7,5 s 
     [
       { type: 'death', id: 1, kind: 'soldado', side: 0, x: 10, y: 10 },
       { type: 'death', id: 2, kind: 'jeep', side: 1, x: 20, y: 10 },
-      { type: 'bombImpact', x: 5, y: 5, side: 0 },
+      { type: 'bombImpact', x: 5, y: 5, side: 0, hits: 1 },
     ],
     w,
   );
@@ -214,7 +214,7 @@ test('a los 30 s sin combate no queda ningún cuerpo, resto, cráter, explosión
       { type: 'death', id: 1, kind: 'soldado', side: 0, x: 10, y: 10 },
       { type: 'death', id: 2, kind: 'pesado', side: 1, x: 20, y: 10 },
       { type: 'death', id: 3, kind: 'tanque', side: 1, x: 60, y: 10 },
-      { type: 'bombImpact', x: 5, y: 5, side: 0 },
+      { type: 'bombImpact', x: 5, y: 5, side: 0, hits: 1 },
     ],
     w,
   );
@@ -245,8 +245,8 @@ const deTipo = (fx, ty) => fx.particles.filter((p) => p.a && p.ty === ty);
 const mundoConBases = (step = 10) => ({
   ...mundoFalso(step),
   bases: [
-    { frontX: 110, turrets: [{ x: 100, y: 242 }] },
-    { frontX: 1330, turrets: [{ x: 1340, y: 242 }] },
+    { frontX: 90, turrets: [{ x: 100, y: 242 }] },
+    { frontX: 1350, turrets: [{ x: 1340, y: 242 }] },
   ],
 });
 
@@ -318,7 +318,7 @@ test('un obús estalla al llegar (mediano; el pesado grande), deja cráter y no 
 
   const sc2 = escena();
   const w2 = mundoConBases(100);
-  sc2.consume([{ type: 'shot', id: 1, kind: 'pesado', x: 1000, y: 300, tx: 1330, ty: 300 }], w2); // a la base derecha
+  sc2.consume([{ type: 'shot', id: 1, kind: 'pesado', x: 1000, y: 300, tx: 1350, ty: 300 }], w2); // a la base derecha
   w2.step = 100 + Math.round(sc2.projectiles[0].dur * 30);
   sc2.consume([], w2);
   assert.equal(sc2.fx.booms.filter((b) => b.a)[0].R, 18, 'el pesado estalla grande');

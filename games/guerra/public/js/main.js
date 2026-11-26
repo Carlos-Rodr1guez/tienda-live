@@ -44,7 +44,7 @@ import { createBaseLayer } from './render/bases.js';
 import { drawF2, createTimer, f2Model } from './render/f2.js';
 import { createFx, FX_CAPS } from './render/fx.js';
 import { createRenderer } from './render/frame.js';
-import { createIconBank, createIconLayer, resolveIcons } from './render/icons.js';
+import { createIconBank } from './render/icons.js';
 import { hitLabel } from './render/labels.js';
 import { createLabelLayer } from './render/labels-layer.js';
 import { resolveLod } from './render/lod.js';
@@ -54,7 +54,8 @@ import { createMotion, MOTION_MEDIA } from './render/motion.js';
 import { createScene } from './render/scene.js';
 import { createSpriteBank } from './render/sprites.js';
 import { createTerrain } from './render/terrain.js';
-import { createEntityLayer, MARCAS } from './render/units.js';
+import { createEntityLayer, MARCAS, resolvePlaneScale } from './render/units.js';
+import { GROUND_KINDS } from './sim/defaults.js';
 import { hashMatch } from './sim/hash.js';
 import { createMatch } from './sim/match.js';
 import { applyPresence, createPresenceGuard } from './sim/presence.js';
@@ -261,6 +262,10 @@ const lodCfg = conFallback(
   () => resolveLod({ ...(render.lod ?? {}), ...(params.get('lod') === '0' ? { marks: false } : {}) }),
   () => resolveLod({}),
 );
+const planeScale = conFallback(
+  () => resolvePlaneScale(render.planeScale),
+  () => resolvePlaneScale(undefined),
+);
 const renderer = createRenderer({
   createCanvas,
   canvas,
@@ -272,21 +277,13 @@ const renderer = createRenderer({
     sky: (P) => terreno.drawClouds(P, P.frame.time, P.frame.reduced),
     craters: (P) => scene.drawCraters(P),
     bases: (P) => bases.layer(P),
-    entities: createEntityLayer({ bank, team }),
+    entities: createEntityLayer({ bank, team, planeScale }),
   },
 });
-// Íconos de rol (lote 5d): la capa 10 del mundo, que la escena llama tras los efectos. Se dibujan también con marcas.
-const spriteAy = Object.fromEntries(['soldado', 'jeep', 'tanque', 'pesado'].map((k) => [k, SPRITES[k].ay]));
+// Íconos del HUD y alturas de los sprites para las etiquetas. Ya no hay íconos de rol en el mundo (v2.6).
+const spriteAy = Object.fromEntries(GROUND_KINDS.map((k) => [k, SPRITES[k].ay]));
 const iconBank = createIconBank({ createCanvas });
 const iconTeam = [0, 0];
-const iconLayer = createIconLayer({
-  bank: iconBank,
-  team: iconTeam,
-  spriteAy,
-  marksSize: MARCAS,
-  formingAlpha: resolveIcons(render.icons).formingAlpha,
-});
-scene.drawIcons = (P) => iconLayer(P, scene.squads, scene.cfg, scene.field);
 // Etiquetas de donantes (lote 5d): en pantalla, tras las capas del mundo. Sin registro (`?golden`) no hay donantes.
 // El foco (S, Shift+S y el clic) y `N` (solo el rango) llegan de `ui/spotlight.js` y `ui/moderation.js`; el clic y el Alt+clic
 // responden en `labelLayer.hitRects`, también en las etiquetas que se están apagando.
@@ -385,13 +382,18 @@ const loop = createLoop({ step: pasoDelPartido });
 if (!golden && !errorUI && restaurada?.status === 'restored' && match.pair) prepararPartido();
 let carga = params.has('carga');
 function cargar() {
-  // 200 por lado: 150 soldados, 30 jeeps, 15 tanques y 5 pesados, para probar el tope
+  // 200 por lado (v2.8, con los tipos nuevos): 113 soldados, 20 francotiradores, 25 jeeps, 15 blindados, 15 tanques,
+  // 6 lanzacohetes, 5 pesados y 1 lobo, para probar el tope
   for (const team of [1, 2]) {
     for (const [kind, count] of [
-      ['soldado', 150],
-      ['jeep', 30],
+      ['soldado', 113],
+      ['francotirador', 20],
+      ['jeep', 25],
+      ['blindado', 15],
       ['tanque', 15],
+      ['lanzacohetes', 6],
       ['pesado', 5],
+      ['lobo', 1],
     ]) {
       match.command({ type: 'order', order: { kind, team, owner: null, count, unitValue: 0, source: 'baseline' } });
     }
@@ -758,7 +760,6 @@ function cuadro(ts) {
     now: ts / 1000,
     spotlight: spotlight.key,
     onlyRank: registry?.allNamesHidden() === true,
-    icons: { descs: iconLayer.descs, count: iconLayer.count },
     // el HUD del cuadro anterior: ningún cartel de donante lo cruza (rieles, banda inferior, marco, chip, aviso, paneles)
     blockers: ui.obstacles,
   });
@@ -767,7 +768,7 @@ function cuadro(ts) {
     const H = canvas.height;
     drawMinimap(ctx, minimapRect(W, H), {
       view: vista,
-      squads: match.world.squads,
+      units: match.world.units,
       teamHex: /** @type {[string, string]} */ (scene.teamHex),
       u: uiScale(W, H),
     });
@@ -833,13 +834,12 @@ function cuadro(ts) {
     const modelo = f2Model({
       timer,
       stats: renderer.stats,
-      counts: { units: w.units.length, squads: w.squads.length, planes: w.planes.length, hits: w.hits.length },
+      counts: { units: w.units.length, planes: w.planes.length, hits: w.hits.length },
       bakeCount: bank.bakeCount,
       hash,
       golden: golden ? goldenEstado : undefined,
       fx: { usage: fx.usage(), caps: FX_CAPS, recentLarge: fx.recentLarge() },
       labels: labelLayer.stats,
-      icons: iconLayer.stats,
       session: [...(sesion ? sesion.f2() : sesionApagada && !golden ? sessionOffLines() : []), ...avisosDeConfig],
       camera: {
         k: st.k,

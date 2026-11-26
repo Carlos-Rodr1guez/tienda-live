@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createRegistry } from '@tienda/kit/sim/registry.js';
 import { mulberry32, seedFrom } from '@tienda/kit/sim/rng.js';
 import { createMatch } from '../public/js/sim/match.js';
-import { createWorld, seedSquad, stepWorld } from '../public/js/sim/world.js';
+import { createWorld, seedUnits, stepWorld } from '../public/js/sim/world.js';
 import { hashWorld } from '../public/js/sim/hash.js';
 import { advance, createRecorder, replayLog, replayMatch } from '../public/js/sim/replay.js';
 import { hashMatch } from '../public/js/sim/hash.js';
@@ -15,25 +15,34 @@ import { GOLDEN } from '../public/js/data/golden.js';
 // CB-13, CB-18: paso fijo de 30 Hz, repetición exacta, hash estable y hash dorado. El dorado es un partido completo
 // de ~500 eventos (lote 4d, tarea 4d.7); se regenera a propósito con `npm run golden -w batalla-paises`.
 
-/** Log de prueba: grupos de los dos lados, un avión de cada uno y refuerzos a mitad de combate. */
+/** Log de prueba: unidades de los dos lados, un avión de cada uno y refuerzos a mitad de combate. */
+const sembrar = (side, kind, y, count = 3, x = 300) => ({
+  type: 'seedUnits',
+  side,
+  kind,
+  count,
+  x: side === 0 ? x : 1440 - x,
+  y,
+  dy: 20,
+});
 const LOG = [
-  { step: 0, kind: 'cmd', payload: { type: 'seedSquad', side: 0, kind: 'soldado', corridor: 1, lane: 0 } },
-  { step: 0, kind: 'cmd', payload: { type: 'seedSquad', side: 1, kind: 'soldado', corridor: 1, lane: 0 } },
-  { step: 20, kind: 'cmd', payload: { type: 'seedSquad', side: 0, kind: 'jeep', corridor: 0, lane: 1 } },
-  { step: 20, kind: 'cmd', payload: { type: 'seedSquad', side: 1, kind: 'jeep', corridor: 2, lane: 1 } },
-  { step: 60, kind: 'cmd', payload: { type: 'seedSquad', side: 0, kind: 'tanque', corridor: 2, lane: 2 } },
-  { step: 60, kind: 'cmd', payload: { type: 'seedSquad', side: 1, kind: 'tanque', corridor: 0, lane: 2 } },
+  { step: 0, kind: 'cmd', payload: sembrar(0, 'soldado', 448, 10) },
+  { step: 0, kind: 'cmd', payload: sembrar(1, 'soldado', 448, 10) },
+  { step: 20, kind: 'cmd', payload: sembrar(0, 'jeep', 242, 4) },
+  { step: 20, kind: 'cmd', payload: sembrar(1, 'jeep', 655, 4) },
+  { step: 60, kind: 'cmd', payload: sembrar(0, 'tanque', 600, 2) },
+  { step: 60, kind: 'cmd', payload: sembrar(1, 'tanque', 280, 2) },
   { step: 120, kind: 'cmd', payload: { type: 'launchPlane', side: 0 } },
   { step: 200, kind: 'cmd', payload: { type: 'launchPlane', side: 1 } },
-  { step: 300, kind: 'cmd', payload: { type: 'seedSquad', side: 0, kind: 'pesado', corridor: 1, lane: 2 } },
-  { step: 300, kind: 'cmd', payload: { type: 'seedSquad', side: 1, kind: 'pesado', corridor: 1, lane: 2 } },
+  { step: 300, kind: 'cmd', payload: sembrar(0, 'pesado', 448, 1) },
+  { step: 300, kind: 'cmd', payload: sembrar(1, 'pesado', 448, 1) },
 ];
 
 test('el reloj es step / 30 y los ids son monótonos y no se reciclan', () => {
   const w = createWorld();
   assert.equal(w.time, 0);
-  seedSquad(w, { side: 0, kind: 'soldado' });
-  seedSquad(w, { side: 1, kind: 'soldado' });
+  seedUnits(w, { side: 0, kind: 'soldado' });
+  seedUnits(w, { side: 1, kind: 'soldado' });
   const vistos = new Set();
   let ultimo = 0;
   for (let i = 0; i < 600; i++) {
@@ -48,7 +57,7 @@ test('el reloj es step / 30 y los ids son monótonos y no se reciclan', () => {
   assert.equal(w.time, 20);
   assert.ok(Number.isInteger(w.step));
   // los ids siguen creciendo aunque haya bajas
-  const nuevo = seedSquad(w, { side: 0, kind: 'jeep', count: 1 }).squad.members[0];
+  const nuevo = seedUnits(w, { side: 0, kind: 'jeep', count: 1 }).units[0];
   assert.ok(nuevo.id > ultimo);
 });
 
@@ -58,14 +67,14 @@ test('un log repetido da estados y hashes iguales (deepEqual)', () => {
   const foto = (w) => ({
     step: w.step,
     units: w.units.map((u) => [u.id, u.hp, u.x, u.y, u.vx, u.vy, u.dir, u.cd]),
-    squads: w.squads.map((s) => [s.id, s.state, s.anchor.x, s.anchor.y, s.members.length]),
+    marcha: w.units.map((u) => [u.id, u.phase, u.yg, u.seek === null ? 0 : u.seek.id, u.wx, u.wy]),
     bases: w.bases.map((x) => [x.hp, x.turrets.map((t) => t.hp)]),
   });
   assert.deepEqual(foto(a), foto(b));
   assert.equal(hashWorld(a), hashWorld(b));
 });
 
-const VACIO = 'b374913c';
+const VACIO = '41b7d8b8';
 
 test('el hash FNV-1a es estable y sensible a un solo bit de un float', () => {
   const w = createWorld();
@@ -104,12 +113,50 @@ test('el sim no tiene RNG: Math.random que lanza no rompe nada y dos semillas co
   assert.ok(!('rng' in a) && !('seed' in a));
 });
 
+test('inundación de 200 por lado: dos corridas con Math.random que lanza dan el mismo hash en cada 100 pasos', async () => {
+  const { submitOrder } = await import('../public/js/sim/queue.js');
+  const corrida = () => {
+    const w = createWorld({ hq: { hp: 1e12 } });
+    for (const team of [1, 2]) {
+      for (const [kind, count] of [
+        ['soldado', 120],
+        ['jeep', 30],
+        ['tanque', 40],
+        ['pesado', 10],
+      ]) {
+        submitOrder(w, { kind, team, owner: `${kind}${team}`, count, unitValue: 0, source: 'gift' });
+      }
+    }
+    const hashes = [];
+    let vivos600 = 0;
+    const alea = Math.random;
+    Math.random = () => {
+      throw new Error('el sim no usa Math.random');
+    };
+    try {
+      for (let i = 1; i <= 1800; i++) {
+        stepWorld(w);
+        if (i % 100 === 0) hashes.push(hashWorld(w));
+        if (i === 600) vivos600 = w.units.length;
+      }
+    } finally {
+      Math.random = alea;
+    }
+    return { hashes, vivos600 };
+  };
+  const a = corrida();
+  const b = corrida();
+  assert.deepEqual(a.hashes, b.hashes);
+  assert.equal(new Set(a.hashes.slice(0, 8)).size, 8, 'el hash cambia en cada tramo mientras hay combate');
+  assert.ok(a.vivos600 > 100, `${a.vivos600} unidades vivas a los 20 s`);
+});
+
 test('20 fps y 144 fps de cuadros simulados dan el mismo estado: depende de los pasos, no de los cuadros', () => {
   const objetivo = 420;
   const correr = (fps) => {
     const w = createWorld();
     let paso = 0;
-    for (const e of LOG) if (e.step === 0) seedSquad(w, e.payload);
+    for (const e of LOG) if (e.step === 0) seedUnits(w, e.payload);
     let acc = 0;
     let guardas = 0;
     while (w.step < objetivo && guardas++ < 100000) {
@@ -161,7 +208,7 @@ const foto = (m) => ({
   results: m.results,
   step: m.world.step,
   units: m.world.units.map((u) => [u.id, u.side, u.kind, u.hp, u.x, u.y, u.owner]),
-  squads: m.world.squads.map((s) => [s.id, s.role, s.state, s.corridor, s.members.length]),
+  marcha: m.world.units.map((u) => [u.id, u.phase, u.yg, u.seek === null ? 0 : u.seek.id]),
   bases: m.world.bases.map((b) => [b.hp, b.turrets.map((t) => t.hp)]),
   users: m.registry
     .users()
@@ -170,7 +217,7 @@ const foto = (m) => ({
 });
 
 test('hash dorado: el log versionado corrido en Node da el hash versionado', () => {
-  assert.equal(GOLDEN.version, 2);
+  assert.equal(GOLDEN.version, 5);
   assert.equal(
     hashMatch(dorado()),
     GOLDEN.hash,
@@ -198,7 +245,11 @@ test('el log dorado es un partido completo: ~500 eventos, todos los regalos, avi
   const regalos = new Set(
     GOLDEN.log.filter((e) => e.payload.type === 'gift').flatMap((e) => e.payload.orders.map((o) => o.kind)),
   );
-  assert.deepEqual([...regalos].sort(), ['avion', 'jeep', 'pesado', 'soldado', 'tanque']);
+  assert.deepEqual(
+    [...regalos].sort(),
+    ['avion', 'blindado', 'francotirador', 'jeep', 'lanzacohetes', 'lobo', 'pesado', 'soldado', 'tanque'],
+    'los nueve tipos de regalo (v2.8b)',
+  );
   assert.ok(GOLDEN.log.length >= 450 && GOLDEN.log.length <= 650, `${GOLDEN.log.length} eventos`);
   // cada entrada va en orden de tick y el log pausa y reanuda una vez
   assert.ok(GOLDEN.log.every((e, i, l) => i === 0 || l[i - 1].step <= e.step));
@@ -212,7 +263,7 @@ test('el log dorado es un partido completo: ~500 eventos, todos los regalos, avi
   );
 });
 
-test('repetir el log dorado dos veces da estados y hashes iguales, grupos y roles incluidos', () => {
+test('repetir el log dorado dos veces da estados y hashes iguales, fase, altura de destino y blanco de visión incluidos', () => {
   const b = jugar();
   assert.deepEqual(foto(b), foto(dorado()));
   assert.equal(hashMatch(b), hashMatch(dorado()));
@@ -324,7 +375,7 @@ test('la presentación no altera el sim: un log con temblor, cámara lenta y des
   assert.deepEqual(foto(b), foto(base));
 });
 
-test('la presentación de la cámara no altera el sim: cámara al azar, automática, R y momentos dan los mismos ganadores, bases, XP, rangos, grupos y roles (NM-2, 5c.6)', async () => {
+test('la presentación de la cámara no altera el sim: cámara al azar, automática, R y momentos dan los mismos ganadores, bases, XP, rangos y marcha (NM-2, 5c.6)', async () => {
   const { createCameraRig } = await import('../public/js/camera/rig.js');
   const { createGestures } = await import('../public/js/camera/gestures.js');
   const { minimapVisible } = await import('../public/js/camera/minimap.js');

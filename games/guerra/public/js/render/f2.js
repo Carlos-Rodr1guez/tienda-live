@@ -64,7 +64,7 @@ const f = (n, d) => Number(n).toFixed(d);
  * Modelo de F2: una lista de `{key, label, value}` (texto ya formateado) y el veredicto del presupuesto.
  * @param {{
  *   timer: {snapshot: () => {fps: number, ms: {sim: number, world: number, ui: number, work: number}}},
- *   stats: any, counts: {units: number, squads: number, planes: number, hits: number}, bakeCount: number,
+ *   stats: any, counts: {units: number, planes: number, hits: number}, bakeCount: number,
  *   hash: string, golden?: {expected: string, done: boolean, hash: string, step?: number, steps?: number},
  *   camera?: {k: number, kShown: number, text: string, mode: string, idle: number, auto: boolean, tx: number, ty: number},
  *   session?: {key: string, label: string, value: string}[],
@@ -72,7 +72,7 @@ const f = (n, d) => Number(n).toFixed(d);
  *     caps: {particles: number, booms: number, craters: number, wrecks: number}, recentLarge: number}
  * }} i
  */
-export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx, camera, labels, icons, session }) {
+export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx, camera, labels, session }) {
   const t = timer.snapshot();
   const lines = [
     { key: 'fps', label: S.f2.fps, value: f(t.fps, 1) },
@@ -82,7 +82,6 @@ export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx, cam
     { key: 'ms.fx', label: S.f2.msFx, value: f(t.ms.fx, 2) },
     { key: 'ms.work', label: S.f2.msWork, value: f(t.ms.work, 2) },
     { key: 'units', label: S.f2.units, value: String(counts.units) },
-    { key: 'squads', label: S.f2.squads, value: String(counts.squads) },
     { key: 'planes', label: S.f2.planes, value: String(counts.planes) },
     { key: 'hits', label: S.f2.hits, value: String(counts.hits) },
     { key: 'particles', label: S.f2.particles, value: String(stats.particles) },
@@ -113,7 +112,6 @@ export function f2Model({ timer, stats, counts, bakeCount, hash, golden, fx, cam
     lines.push({ key: 'labels.selected', label: S.f2.labelsSelected, value: String(labels.selected ?? 0) });
     lines.push({ key: 'labels.dropped', label: S.f2.labelsDropped, value: String(labels.dropped) });
   }
-  if (icons) lines.push({ key: 'icons.drawn', label: S.f2.iconsDrawn, value: String(icons.drawn) });
   // sesión de la transmisión (lote 5e): ya vienen armadas, con sus textos, desde `live-session.js`; sin sesión (?golden) no hay
   if (session) lines.push(...session);
   if (camera) {

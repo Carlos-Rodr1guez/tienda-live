@@ -90,9 +90,8 @@ test('importProgress: partido empezado vuelve a waitingNextRound con el par, las
   assert.deepEqual(m.wins, [0, 1]);
   assert.equal(m.pause, null);
   assert.deepEqual(exportProgress(m), exportProgress(origen));
-  // sin el campo de la ronda cortada: ni unidades ni grupos, bases enteras y la ronda siguiente es la 2... que arranca desde cero
+  // sin el campo de la ronda cortada: ni unidades, bases enteras y la ronda siguiente es la 2... que arranca desde cero
   assert.equal(m.world.units.length, 0);
-  assert.equal(m.world.squads.length, 0);
   assert.equal(m.world.over, null);
   for (const b of m.world.bases) assert.equal(b.hp, b.maxHp);
   // el narrador sigue desde acá: startRound, intro y batalla

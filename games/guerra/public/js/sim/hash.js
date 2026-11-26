@@ -35,7 +35,6 @@ const flag = (h, b) => byte(h, b ? 1 : 0);
 function foldWorld(h, w) {
   h = int(h, w.step);
   h = int(h, w.nextId);
-  h = int(h, w.nextSquadId);
   h = int(h, w.nextHitId);
   h = flag(h, w.over !== null);
   if (w.over !== null) {
@@ -62,6 +61,7 @@ function foldWorld(h, w) {
   for (const v of [c.teamValue[0], c.teamValue[1], c.teamCoins[0], c.teamCoins[1]]) h = num(h, v);
   for (const q of w.queues) {
     h = num(h, q.tokens);
+    h = int(h, q.wait);
     h = int(h, q.warnStep);
     for (const list of [q.ground, q.air]) {
       h = int(h, list.length);
@@ -73,24 +73,22 @@ function foldWorld(h, w) {
       }
     }
   }
-  for (const m of w.cmd) {
-    h = int(h, m.rebal);
-    h = int(h, m.lastConvert);
-    h = int(h, m.q);
-  }
+  h = int(h, w.doorN[0]);
+  h = int(h, w.doorN[1]);
 
   h = int(h, w.units.length);
   for (const u of w.units) {
     h = int(h, u.id);
     h = int(h, u.side);
     h = str(h, u.kind);
-    h = int(h, u.squad.id);
     h = flag(h, u.alive);
     h = num(h, u.hp);
     h = num(h, u.valueAlive);
-    h = flag(h, u.arrived);
-    h = int(h, u.slot);
-    h = int(h, u.fromSlot);
+    h = str(h, u.phase);
+    h = num(h, u.yg);
+    h = num(h, u.yoff);
+    h = int(h, u.seek === null ? 0 : u.seek.id);
+    h = int(h, u.shieldUntil);
     h = str(h, u.owner ?? '');
     h = num(h, u.x);
     h = num(h, u.y);
@@ -101,33 +99,6 @@ function foldWorld(h, w) {
     h = int(h, u.cd);
     h = str(h, u.tgtKind);
     h = int(h, u.tgt === null ? 0 : (u.tgt.id ?? u.tgt.k + 1));
-  }
-
-  h = int(h, w.squads.length);
-  for (const s of w.squads) {
-    h = int(h, s.id);
-    h = int(h, s.side);
-    h = str(h, s.kind);
-    h = str(h, s.role);
-    h = str(h, s.state);
-    h = int(h, s.corridor);
-    h = int(h, s.lane);
-    h = int(h, s.sector);
-    h = int(h, s.post);
-    h = int(h, s.firstArrivalStep);
-    h = flag(h, s.open);
-    h = num(h, s.anchor.x);
-    h = num(h, s.anchor.y);
-    h = num(h, s.anchor.vx);
-    h = num(h, s.anchor.vy);
-    h = flag(h, s.locked);
-    h = int(h, s.engagedSteps);
-    h = int(h, s.idleSteps);
-    h = int(h, s.blockedBy);
-    h = int(h, s.blockedSteps);
-    h = int(h, s.sideStep);
-    h = int(h, s.members.length);
-    for (const m of s.members) h = int(h, m.id);
   }
 
   h = int(h, w.hits.length);
@@ -160,7 +131,7 @@ function foldWorld(h, w) {
     h = num(h, p.vy);
     h = int(h, p.bombsLeft);
     h = num(h, p.value);
-    h = flag(h, p.decided);
+    h = int(h, p.nextDrop);
   }
 
   for (const b of w.bases) {

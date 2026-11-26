@@ -9,7 +9,7 @@
 
 import { mulberry32, seedFrom } from '@tienda/kit/sim/rng.js';
 import { PALETA } from '../data/paleta.js';
-import { HQY, MIDY, NEAR_Y, WALL_Y0 } from './base-art.js';
+import { BASE_STATE_THRESHOLDS, HANGAR_ART, MIDY, baseState } from './base-art.js';
 import { createFlashLimiter } from './flash.js';
 import { createMotion } from './motion.js';
 import { disc, ell } from './pixel.js';
@@ -20,6 +20,12 @@ export const FX_CAPS = Object.freeze({ particles: 600, booms: 40, craters: 60, w
 
 /** Vida de cada resto y cráter, en segundos de juego (CB-20). */
 export const LIFE = Object.freeze({ soldado: 3.1, soldadoFade: 2.5, vehiculo: 7.5, crater: 20, craterFade: 15 });
+
+/**
+ * Las unidades a pie (v2.8): al morir dejan un cuerpo que cae y se desvanece (3,1 s) y no arden; el resto son vehículos
+ * (carcasa quemada de 7,5 s con fuego y humo).
+ */
+export const A_PIE = Object.freeze(new Set(['soldado', 'francotirador', 'lobo']));
 
 /** Los vehículos parpadean (o se desvanecen con movimiento reducido) los últimos 1,2 s antes de irse. */
 const VEHICULO_AVISO = 6.3;
@@ -48,7 +54,7 @@ const T_MUZZLE = 6;
  * @param {boolean} [reduced] movimiento reducido: el vehículo se desvanece en vez de parpadear
  */
 export function wreckAlpha(kind, age, reduced = false) {
-  if (kind === 'soldado') {
+  if (A_PIE.has(kind)) {
     if (age <= LIFE.soldadoFade) return 1;
     return Math.max(0, 1 - (age - LIFE.soldadoFade) / (LIFE.soldado - LIFE.soldadoFade));
   }
@@ -99,7 +105,22 @@ const nuevaExplosion = () => ({
 });
 
 /** Fogonazo por tipo (tamaño del v3) y humo de boca: [tamaño, radio de humo]. */
-const BOCA = Object.freeze({ soldado: [1, 0], jeep: [1, 0], tanque: [2, 2], pesado: [3, 3] });
+const BOCA = Object.freeze({
+  soldado: [1, 0],
+  francotirador: [1, 1],
+  jeep: [1, 0],
+  blindado: [1, 0],
+  tanque: [2, 2],
+  lanzacohetes: [3, 4],
+  pesado: [3, 3],
+  lobo: [0, 0],
+});
+/** Explosiones secundarias del lanzacohetes al morir (sus cohetes revientan): [segundos, tamaño, desplazamiento en x]. */
+const SECUNDARIAS_COHETES = Object.freeze([
+  [0.2, 'small', -8],
+  [0.4, 'med', 6],
+  [0.65, 'small', -2],
+]);
 /** Explosiones secundarias del pesado al morir: [segundos, tamaño, desplazamiento en x]. */
 const SECUNDARIAS = Object.freeze([
   [0.25, 'med', -10],
@@ -110,7 +131,13 @@ const SECUNDARIAS = Object.freeze([
 /** x de un punto a `n` px del borde exterior de la base de esa secuencia (espejado en la derecha). */
 const enBase = (s, n) => (s.side === 1 ? s.worldW - n : n);
 /** Ancho y ancla en y de un vehículo para echar fuego, si no hay sprites a mano. */
-const CASCO = Object.freeze({ jeep: [22, 14], tanque: [28, 18], pesado: [40, 26] });
+const CASCO = Object.freeze({
+  jeep: [22, 14],
+  blindado: [26, 16],
+  tanque: [28, 18],
+  lanzacohetes: [32, 20],
+  pesado: [40, 26],
+});
 const FUEGO = ['#FFF3A0', '#FFD84A', '#FF9A3C', '#E5484D', '#7A1F25'];
 const HUMO = ['#4A5064', '#363B4B', '#262A37'];
 /** Radio del núcleo blanco respecto del radio de la explosión. */
@@ -158,7 +185,20 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
   const later = Array.from({ length: 16 }, () => ({ on: false, t: 0, x: 0, y: 0, size: 'med' }));
   const view = { W: 1920, H: 1080, s: 4 / 3, marks: false };
   const limiter = createFlashLimiter(flash);
-  const stats = { ruinPuffs: 0, spawned: 0, secondary: 0, largeGranted: 0, degraded: 0, coreArea: 0, coresDegraded: 0 };
+  const stats = {
+    ruinPuffs: 0,
+    spawned: 0,
+    secondary: 0,
+    largeGranted: 0,
+    degraded: 0,
+    coreArea: 0,
+    coresDegraded: 0,
+    faceSparks: 0,
+    hangarSmoke: 0,
+  };
+  /** Hangar: cuándo (reloj de vista) saltó la última chispa de cada cara y cuánto falta para la próxima bocanada de humo. */
+  const lastFace = [-1e9, -1e9];
+  const hangarAcc = [0, 0];
   let exhaustT = 0;
   let shakeMag = 0;
   let slowLeft = 0;
@@ -213,11 +253,24 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
   function muerte(e) {
     const col = fx.teamHex[e.side];
     const dir = e.side === 0 ? 1 : -1;
-    if (e.kind === 'soldado') {
+    if (e.kind === 'soldado' || e.kind === 'francotirador') {
       fx.dust(e.x, e.y - 1, 4, 0.3);
+    } else if (e.kind === 'lobo') {
+      // héroe: cae con una gran nube de polvo y un destello blanco (sin explosión, sin nada rojo)
+      fx.dust(e.x, e.y - 1, 10, 0.6);
+      fx.dust(e.x - dir * 6, e.y - 6, 6, 0.5);
+      fx.spark(e.x, e.y - 12, 8, '#FFFFFF');
     } else if (e.kind === 'jeep') {
       fx.boom(e.x, e.y, 'med', 6);
       fx.debris(e.x, e.y - 8, 6, col, e.y);
+    } else if (e.kind === 'blindado') {
+      fx.boom(e.x, e.y, 'med', 8);
+      fx.debris(e.x, e.y - 9, 8, col, e.y);
+      fx.chunk(e.x - dir * 2, e.y - 10, dir, col, 6, 3, e.y);
+    } else if (e.kind === 'lanzacohetes') {
+      fx.boom(e.x, e.y, 'large', 10);
+      fx.debris(e.x, e.y - 11, 10, col, e.y);
+      programar(e, SECUNDARIAS_COHETES);
     } else if (e.kind === 'tanque') {
       fx.boom(e.x, e.y, 'large', 9);
       fx.debris(e.x, e.y - 10, 9, col, e.y);
@@ -226,17 +279,22 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
       fx.boom(e.x, e.y, 'huge', 12);
       fx.debris(e.x, e.y - 12, 14, col, e.y);
       fx.chunk(e.x, e.y - 17, dir, col, 12, 5, e.y);
-      let n = 0;
-      for (const [t, size, dx] of SECUNDARIAS) {
-        while (n < later.length && later[n].on) n++;
-        if (n >= later.length) break;
-        const l = later[n];
-        l.on = true;
-        l.t = t;
-        l.x = e.x + dx;
-        l.y = e.y;
-        l.size = size;
-      }
+      programar(e, SECUNDARIAS);
+    }
+  }
+
+  /** Reserva las explosiones secundarias de una muerte (`later`): [segundos, tamaño, desplazamiento en x]. */
+  function programar(e, lista) {
+    let n = 0;
+    for (const [t, size, dx] of lista) {
+      while (n < later.length && later[n].on) n++;
+      if (n >= later.length) break;
+      const l = later[n];
+      l.on = true;
+      l.t = t;
+      l.x = e.x + dx;
+      l.y = e.y;
+      l.size = size;
     }
   }
 
@@ -244,7 +302,7 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
   function arden(dt, world) {
     for (let i = 0; i < wrecks.length; i++) {
       const w = wrecks[i];
-      if (w.kind === 'soldado' || (world.step - w.born) / 30 >= ARDE_HASTA) continue;
+      if (A_PIE.has(w.kind) || (world.step - w.born) / 30 >= ARDE_HASTA) continue;
       w.fl -= dt;
       if (w.fl > 0) continue;
       w.fl = 0.1;
@@ -260,6 +318,42 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
           -12,
           1.1,
         );
+      }
+    }
+  }
+
+  /**
+   * Humo (y de vez en cuando fuego) en la cara de un hangar dañado: con grietas (HP < 66 %) una bocanada cada 0,5 s y muy
+   * dañado (< 33 %) una cada 0,2 s, más una llama cada dos. Un hangar caído lo deja a su secuencia. Solo vista.
+   */
+  function humoDeHangar(dt, world) {
+    for (let side = 0; side < 2; side++) {
+      const b = world.bases?.[side];
+      if (!b || !(b.maxHp > 0) || b.fell || seqs[side]) continue;
+      const st = baseState(b.hp / b.maxHp, false, BASE_STATE_THRESHOLDS);
+      if (st < 1) {
+        hangarAcc[side] = 0;
+        continue;
+      }
+      const cada = st >= 2 ? 0.2 : 0.5;
+      hangarAcc[side] += dt;
+      const hg = world.field?.sides?.[side]?.hangar;
+      const y0 = hg?.y0 ?? HANGAR_ART.y0;
+      const y1 = hg?.y1 ?? HANGAR_ART.y1;
+      const w = world.field?.w ?? 1440;
+      while (hangarAcc[side] >= cada) {
+        hangarAcc[side] -= cada;
+        const n = ri(HANGAR_ART.x1 - 14, HANGAR_ART.x1 - 2); // pegado a la cara
+        const x = side === 1 ? w - n : n;
+        const y = ri(y0 + 12, y1 - 12);
+        const p = fx.smoke(x, y, 2 + (st >= 2 ? 1 : 0), (rnd() - 0.5) * 4, -14, 1.4);
+        if (politica.stillSmoke) {
+          p.vx = 0;
+          p.vy = 0;
+          p.gr = 0;
+        }
+        stats.hangarSmoke++;
+        if (st >= 2 && stats.hangarSmoke % 2 === 0) fx.fire(x, y);
       }
     }
   }
@@ -327,8 +421,10 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
     s.pops.length = s.turrets.length;
     s.pops.fill(-1);
     s.worldW = world.field?.w ?? 1440;
-    s.g0 = world.field?.ground?.[0] ?? 200;
-    s.g1 = world.field?.ground?.[1] ?? 700;
+    // las explosiones de la secuencia caen DENTRO del hangar (v2.8): su franja de y
+    const hg = world.field?.sides?.[side]?.hangar;
+    s.hy0 = hg?.y0 ?? HANGAR_ART.y0;
+    s.hy1 = hg?.y1 ?? HANGAR_ART.y1;
     for (let k = 0; k < s.turrets.length; k++) pending[side * 8 + k] = downed[side * 8 + k] ? 0 : 1;
     seqs[side] = s;
     fx.shake(3);
@@ -341,8 +437,8 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
     const dirIn = s.side === 0 ? 1 : -1;
     const col = fx.teamHex[s.side];
     while (s.nextB <= s.t && s.nextB < SEQ.boomsUntil) {
-      const x = enBase(s, ri(6, 104));
-      const y = ri(s.g0 - 8, s.g1 + 8);
+      const x = enBase(s, ri(HANGAR_ART.x0 + 2, HANGAR_ART.x1 - 2));
+      const y = ri(s.hy0 + 4, s.hy1 - 4);
       fx.boom(x, y, rnd() < 0.4 ? 'large' : 'med', ri(0, 6));
       fx.debris(x, y - 8, 5, col, y);
       s.boomTimes.push(s.nextB);
@@ -359,7 +455,7 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
       s.pops[k] = s.t;
     }
     if (!s.ruin && s.t >= SEQ.finalAt) {
-      const hx = enBase(s, 42);
+      const hx = enBase(s, 52); // el centro del hangar
       fx.boom(hx, MIDY - 7, 'huge', 8);
       fx.boom(hx + (rnd() - 0.5) * 30, MIDY - 42, 'large', 6);
       fx.boom(hx, MIDY + 38, 'large', 6);
@@ -372,9 +468,9 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
       s.sm -= dt;
       if (s.sm <= 0) {
         s.sm = 0.12;
-        const y = ri(WALL_Y0 + 28, NEAR_Y - 40);
-        puff(enBase(s, ri(10, 100)), y, 3, (rnd() - 0.5) * 4, -16, 1.8);
-        if (rnd() < 0.4) fx.fire(enBase(s, ri(14, 66)), ri(HQY + 4, HQY + 48));
+        const y = ri(s.hy0 + 10, s.hy1 - 10);
+        puff(enBase(s, ri(HANGAR_ART.x0 + 4, HANGAR_ART.x1 - 4)), y, 3, (rnd() - 0.5) * 4, -16, 1.8);
+        if (rnd() < 0.4) fx.fire(enBase(s, ri(HANGAR_ART.x0 + 4, HANGAR_ART.x1 - 4)), ri(s.hy0 + 20, s.hy1 - 20));
       }
     }
   }
@@ -725,6 +821,42 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
       if (sr > 0) fx.smoke(x + dir * sr, y, sr, dir * (kind === 'pesado' ? 14 : 12), -6, kind === 'pesado' ? 0.6 : 0.5);
     },
     /**
+     * Zarpazo del lobo (v2.8): un tajo de tres arcos de chispas blancas y amarillas delante de él, en la dirección `dir`.
+     * Son puntos quietos de 0,16 s: no parpadean, así que valen también con movimiento reducido.
+     * @param {number} x garra
+     * @param {number} y garra, ya con la altura
+     * @param {number} dir 1 o -1
+     */
+    claw(x, y, dir) {
+      if (view.marks) return;
+      for (let arco = 0; arco < 3; arco++) {
+        for (let i = 0; i < 6; i++) {
+          // tres tajos paralelos inclinados, de seis puntos quietos que duran 0,16 s
+          const p = np();
+          p.ty = T_SPARK;
+          p.x = x + dir * (3 + arco * 4 + (i >> 1));
+          p.y = y - 10 + arco + i * 3;
+          p.l = p.m = 0.16;
+          p.s = 1;
+          p.c = i & 1 ? '#FFD84A' : '#FFFFFF';
+        }
+      }
+    },
+    /**
+     * Una bala llegó a la cara del hangar (lado `side`): chispas y una nubecilla de polvo en el punto de impacto. Como mucho
+     * una cada 0,06 s de vista por cara, para que cientos de balas no llenen el pool de partículas.
+     * @param {number} side
+     * @param {number} x
+     * @param {number} y
+     */
+    faceSpark(side, x, y) {
+      if (fx.now - lastFace[side] < 0.06) return;
+      lastFace[side] = fx.now;
+      stats.faceSparks++;
+      fx.spark(x, y - 6, 2, '#FFE680');
+      fx.dust(x, y - 4, 1);
+    },
+    /**
      * Un obús llegó: explota (mediano; grande el del pesado) y, si no iba a la base, cava un cráter.
      * @param {number} tx
      * @param {number} ty
@@ -924,7 +1056,7 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
       for (let i = 0; i < wrecks.length; i++) {
         const r = wrecks[i];
         const edad = (step - r.born) / 30;
-        if (edad > (r.kind === 'soldado' ? LIFE.soldado : LIFE.vehiculo)) freeWrecks.push(r);
+        if (edad > (A_PIE.has(r.kind) ? LIFE.soldado : LIFE.vehiculo)) freeWrecks.push(r);
         else wrecks[k++] = r;
       }
       wrecks.length = k;
@@ -948,8 +1080,8 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
         case 'death':
           fx.addWreck(e, world.step);
           muerte(e);
-          if (e.kind === 'jeep') fx.shake(1);
-          else if (e.kind === 'tanque') fx.shake(2);
+          if (e.kind === 'jeep' || e.kind === 'blindado') fx.shake(1);
+          else if (e.kind === 'tanque' || e.kind === 'lanzacohetes' || e.kind === 'lobo') fx.shake(2);
           else if (e.kind === 'pesado') fx.shake(3);
           break;
         case 'baseHit':
@@ -969,8 +1101,14 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
           break;
         }
         case 'bombImpact':
-          fx.boom(e.x, e.y, 'med', 2);
-          fx.addCrater(e.x, e.y, 14, world.step);
+          // la alfombra suelta una bomba cada 40 px: sobre el vacío (hits 0) es un estallido pequeño y sin cráter; si
+          // dañó unidades, mediano y con cráter. Un evento sin `hits` cuenta como ninguna unidad.
+          if (e.hits > 0) {
+            fx.boom(e.x, e.y, 'med', 2);
+            fx.addCrater(e.x, e.y, 14, world.step);
+          } else {
+            fx.boom(e.x, e.y, 'small', 2);
+          }
           break;
         default:
           break;
@@ -1016,6 +1154,7 @@ export function createFx({ seed = 'efectos', sprites, flash, motion = createMoti
       if (world) {
         arden(dt, world);
         escape(dt, world);
+        humoDeHangar(dt, world);
       }
       const f = Math.pow(0.985, dt * 60);
       for (let i = 0; i < particles.length; i++) {
